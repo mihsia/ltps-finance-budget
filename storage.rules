@@ -1,0 +1,20 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isSignedIn() { return request.auth != null; }
+
+    // Archived budget-book PDFs are uploaded server-side only (via a Cloud
+    // Function using the Admin SDK, which bypasses these rules), since
+    // Storage rules cannot check a caller's Firestore role directly.
+    match /budget-books/{year}/{fileName} {
+      allow read: if true;
+      allow write: if false;
+    }
+
+    match /exports/{year}/{fileName} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn();
+    }
+  }
+}

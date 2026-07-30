@@ -1,0 +1,47 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    function userProfile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isAdmin() { return isSignedIn() && userProfile().role == 'admin'; }
+    function canEditModule(moduleKey) {
+      return isAdmin() || (isSignedIn() && moduleKey in userProfile().modules);
+    }
+    function yearLocked(year) {
+      return get(/databases/$(database)/documents/years/$(year)).data.get('locked', false);
+    }
+
+    // Staff profiles: readable by any signed-in user (needed to resolve
+    // names/roles in the UI), writable only by admins (accounts are actually
+    // created via the createAccount Cloud Function using the Admin SDK).
+    match /users/{uid} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /years/{year} {
+      // Budget data is presented to the county council and is meant to be
+      // publicly readable for transparency; only admins manage year metadata.
+      allow read: if true;
+      allow write: if isAdmin();
+
+      match /modules/{moduleKey} {
+        allow read: if true;
+        allow write: if canEditModule(moduleKey) && !yearLocked(year);
+      }
+
+      match /changeLogs/{logId} {
+        allow read: if true;
+        allow create: if isSignedIn();
+        allow update, delete: if false;
+      }
+
+      match /exports/{exportId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow update, delete: if false;
+      }
+    }
+  }
+}

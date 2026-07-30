@@ -1,0 +1,59 @@
+:root {
+  --bg-page: #F5F3EE;
+  --surface: #FFFFFF;
+  --surface-sunk: #FBFAF7;
+  --tint: #F5F3EE;
+  --border: #E3DFD3;
+  --border-input: #D8D3C4;
+  --divider: #EEEBE2;
+  --text-primary: #1E2420;
+  --text-secondary: #454B45;
+  --text-muted: #8A9089;
+  --text-muted-2: #6B726A;
+  --brand: #1F5F52;
+  --brand-tint: #E9F1EE;
+  --accent-amber: #C9832F;
+  --error: #B5533E;
+  --success: #2F8F5B;
+  --deadline-bg: #FDF3E7;
+  --deadline-border: #EFD9B3;
+  --deadline-text: #8A5A1E;
+  --font-tc: 'Noto Sans TC', sans-serif;
+  --font-en: 'Inter', sans-serif;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--bg-page);
+  font-family: var(--font-tc);
+  color: var(--text-primary);
+  text-wrap: pretty;
+  -webkit-font-smoothing: antialiased;
+}
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #D8D3C4; border-radius: 8px; }
+
+input:focus, textarea:focus, select:focus {
+  outline: 2px solid var(--brand);
+  outline-offset: 1px;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+input, textarea, select {
+  font-family: inherit;
+}
+
+a { color: inherit; }
