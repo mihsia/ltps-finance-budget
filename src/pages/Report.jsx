@@ -7,6 +7,7 @@ import { db, isFirebaseConfigured } from '../firebase';
 import { useYearModule } from '../hooks/useYearData';
 import { useAuth } from '../contexts/AuthContext';
 import { fmtNum, fmtDate } from '../lib/format';
+import { buildCouncilWorkbook } from '../lib/councilExport';
 import { pageTitle, sectionLabel, card, btnOutline, btnPrimary, chip } from '../styles';
 
 const MODULE_CHOICES = [
@@ -31,13 +32,21 @@ function useExportHistory(year) {
   return { entries, logExport };
 }
 
-export default function Report({ year }) {
+export default function Report({ year, years }) {
   const { data: basic } = useYearModule(year, 'basic');
   const { data: budget } = useYearModule(year, 'budget');
   const { data: language } = useYearModule(year, 'language');
   const { entries, logExport } = useExportHistory(year);
   const { profile, user } = useAuth();
   const who = profile?.name || user?.email || '未知使用者';
+
+  // Recent 3 fiscal years for the 基金用途明細表 comparison columns (fixed number
+  // of hook calls, same pattern as Budget.jsx's rA/rB/rC).
+  const recentYears = years.length >= 3 ? years.slice(-3) : [...Array(3 - years.length).fill(years[0]), ...years];
+  const yA = useYearModule(recentYears[0], 'budget');
+  const yB = useYearModule(recentYears[1], 'budget');
+  const yC = useYearModule(recentYears[2], 'budget');
+  const budgetByYear = { [recentYears[0]]: yA.data, [recentYears[1]]: yB.data, [recentYears[2]]: yC.data, [year]: budget };
 
   const [selected, setSelected] = useState(() => Object.fromEntries(MODULE_CHOICES.map((m) => [m.key, true])));
 
@@ -54,9 +63,14 @@ export default function Report({ year }) {
   ];
 
   const exportExcel = async (aligned) => {
-    const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.aoa_to_sheet([['項目', '五結鄉 · 利澤國小'], ...reportRows.map((r) => [r.label, r.val])]);
-    XLSX.utils.book_append_sheet(wb, ws, '議會報表');
+    const wb = aligned
+      ? buildCouncilWorkbook({ year, years: recentYears, budgetByYear })
+      : (() => {
+        const book = XLSX.utils.book_new();
+        const ws = XLSX.utils.aoa_to_sheet([['項目', '五結鄉 · 利澤國小'], ...reportRows.map((r) => [r.label, r.val])]);
+        XLSX.utils.book_append_sheet(book, ws, '議會報表');
+        return book;
+      })();
     const name = `${year}年度議會報表${aligned ? '（議會格式）' : ''}.xlsx`;
     XLSX.writeFile(wb, name);
     await logExport(name, who);
