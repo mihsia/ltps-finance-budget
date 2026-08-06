@@ -3,10 +3,29 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { createNextYear } from '../hooks/useYearData';
 import { useAuth } from '../contexts/AuthContext';
-import { parseImportFile } from '../lib/importParser';
-import { pageTitle, pageSubtitle, card, btnPrimary, btnSecondary, badge } from '../styles';
+import { parseImportFile, IMPORT_FIELDS } from '../lib/importParser';
+import { fmtNum } from '../lib/format';
+import { pageTitle, pageSubtitle, card, btnPrimary, btnSecondary, badge, input } from '../styles';
 
-const PLAN_LABELS = ['國民教育計畫', '一般行政管理計畫', '建築及設備計畫'];
+const EXPENSE_DEFAULTS = {
+  eduPlan: { label: '國民教育計畫', formula: '辦理校務行政、教學活動及各項專案計畫等' },
+  adminPlan: { label: '一般行政管理計畫', formula: '教職員工人事費、歷年退休金及遺屬年金業務等' },
+  buildingPlan: { label: '建築及設備計畫', formula: '改善並充實學校教學及行政環境、購置設備等' },
+};
+const GOV_GRANT_LABEL = '政府撥入收入（公庫撥款）';
+
+/** Builds the editable review-row state from a parse result + the prior year's saved figures (used as the starting value for anything the parser couldn't find, so nothing is left silently blank). */
+function buildReview(fields, missing, prevBudget) {
+  const prevExpenseByLabel = Object.fromEntries((prevBudget?.expense?.breakdown || []).map((r) => [r.label, r.amount]));
+  const prevGovGrant = (prevBudget?.revenue?.rows || []).find((r) => r.label === GOV_GRANT_LABEL)?.amount;
+  return IMPORT_FIELDS.map((f) => {
+    const matched = f.id in fields;
+    let value = matched ? fields[f.id] : '';
+    if (!matched && f.expenseLabel) value = prevExpenseByLabel[f.expenseLabel] ?? '';
+    if (!matched && f.id === 'govGrant') value = prevGovGrant ?? '';
+    return { id: f.id, label: f.label, group: f.group, matched, value: String(value) };
+  }).filter((r) => !(missing.includes(r.id) && r.group === 'info' && r.value === ''));
+}
 
 export default function Archive({ years, latestYear, setYear, setNav }) {
   const { isAdmin } = useAuth();
@@ -15,7 +34,8 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
 
   const [busy, setBusy] = useState(false);
   const [importFile, setImportFile] = useState(null);
-  const [preview, setPreview] = useState(null);
+  const [review, setReview] = useState(null);
+  const [missingCount, setMissingCount] = useState(0);
   const [error, setError] = useState(null);
 
   const view = (y) => { setYear(y); setNav('dashboard'); };
@@ -40,31 +60,52 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
     setError(null);
     setImportFile(file.name);
     try {
-      const rows = await parseImportFile(file);
-      setPreview(rows);
+      const { fields, missing } = await parseImportFile(file);
+      const prevSnap = await getDoc(doc(db, 'years', latestYear, 'modules', 'budget'));
+      setReview(buildReview(fields, missing, prevSnap.data()));
+      setMissingCount(missing.length);
     } catch (err) {
       setError(err.message);
       setImportFile(null);
     }
   };
 
-  const cancelImport = () => { setImportFile(null); setPreview(null); setError(null); };
+  const cancelImport = () => { setImportFile(null); setReview(null); setError(null); setMissingCount(0); };
+
+  const setReviewValue = (id, value) => {
+    setReview((rows) => rows.map((r) => (r.id === id ? { ...r, value } : r)));
+  };
+
+  const reviewValue = (id) => Number(String(review.find((r) => r.id === id)?.value ?? 0).replace(/[^\d.-]/g, '')) || 0;
 
   const confirmImport = async () => {
     setBusy(true);
     try {
       await setDoc(doc(db, 'years', nextYear), { locked: false, deadlines: {}, createdAt: serverTimestamp() }, { merge: true });
-      const existing = (await getDoc(doc(db, 'years', latestYear, 'modules', 'budget'))).data();
-      const baseBreakdown = existing?.expense?.breakdown || PLAN_LABELS.map((label) => ({ label, formula: '', amount: 0 }));
-      const updatedBreakdown = baseBreakdown.map((item) => {
-        const found = preview.find((p) => p.label === item.label);
-        return found ? { ...item, amount: Number(String(found.val).replace(/[^\d]/g, '')) } : item;
-      });
+
+      const prevSnap = await getDoc(doc(db, 'years', latestYear, 'modules', 'budget'));
+      const prev = prevSnap.data();
+
+      const expenseBreakdown = Object.entries(EXPENSE_DEFAULTS).map(([id, meta]) => ({
+        label: meta.label,
+        formula: meta.formula,
+        amount: reviewValue(id),
+      }));
+
+      // The 3 fine-grained revenue line items (財產處分收入／租金收入／利息收入)
+      // aren't reliably parseable from real-world budget-book layouts (see
+      // src/lib/importParser.js) — carry the prior year's figures forward
+      // instead of guessing, and rely on 財產收入合計 above as a cross-check
+      // total staff can use to redistribute them in 歲入歲出 afterward.
+      const carriedRevenueRows = (prev?.revenue?.rows || []).filter((r) => r.label !== GOV_GRANT_LABEL);
+      const revenueRows = [...carriedRevenueRows, { label: GOV_GRANT_LABEL, amount: reviewValue('govGrant') }];
+
       await setDoc(doc(db, 'years', nextYear, 'modules', 'budget'), {
-        expense: { breakdown: updatedBreakdown },
-        revenue: existing?.revenue || { rows: [] },
+        expense: { breakdown: expenseBreakdown },
+        revenue: { rows: revenueRows },
         updatedAt: serverTimestamp(),
       }, { merge: true });
+
       cancelImport();
       setYear(nextYear);
     } finally {
@@ -105,7 +146,7 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
         <>
           <div style={{ font: "700 14px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 4 }}>匯入新年度預算書（自動填入各模組）</div>
           <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 14 }}>
-            上傳議會版預算書（PDF／Word），系統自動解析歲入歲出金額，直接帶入 {nextYear} 年度的「歲入歲出」與「預算書表」模組，免重複輸入
+            上傳議會版預算書（PDF／Word），系統自動解析歲入歲出金額並帶入 {nextYear} 年度「歲入歲出」模組 — 匯入前請核對每一項金額，必要時直接修改
           </div>
 
           <div style={{ maxWidth: 640 }}>
@@ -120,22 +161,41 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
 
             {error && <div style={{ font: "500 12.5px 'Noto Sans TC', sans-serif", color: '#B5533E', marginTop: 10 }}>⚠ {error}</div>}
 
-            {importFile && preview && (
+            {importFile && review && (
               <div style={{ ...card, marginBottom: 14 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                   <span style={{ font: "700 13px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>📄 {importFile}</span>
                   <span style={{ font: '700 11px Inter, sans-serif', color: '#2F8F5B', background: '#EAF6EE', padding: '4px 10px', borderRadius: 5 }}>解析完成</span>
                 </div>
-                <div style={{ font: "400 12px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 10 }}>
-                  已擷取以下數值，將帶入 {nextYear} 年度（可於匯入後再行修改）：
+                {missingCount > 0 && (
+                  <div style={{ font: "600 12px 'Noto Sans TC', sans-serif", color: '#8A5A1E', background: '#FDF3E7', border: '1px solid #EFD9B3', borderRadius: 6, padding: '7px 10px', marginTop: 8 }}>
+                    ⚠ 有 {missingCount} 個項目未能自動辨識（已改用 {latestYear} 年度數值填入），請核對後修改再匯入
+                  </div>
+                )}
+                <div style={{ font: "400 12px 'Noto Sans TC', sans-serif", color: '#8A9089', margin: '10px 0' }}>
+                  請核對以下金額（單位：千元），確認無誤或修改後再匯入 {nextYear} 年度：
                 </div>
                 <div style={{ background: '#F5F3EE', borderRadius: 8, overflow: 'hidden' }}>
-                  {preview.map((ip) => (
-                    <div key={ip.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '9px 14px', borderTop: '1px solid #E9E5D8', font: "500 12.5px 'Noto Sans TC', sans-serif", color: '#454B45' }}>
-                      <span>{ip.label} <span style={{ color: '#B08A50' }}>→ {ip.target}</span></span>
-                      <span style={{ font: '700 12.5px Inter, sans-serif', color: '#1E2420' }}>{ip.val}</span>
+                  {review.map((r) => (
+                    <div key={r.id} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, padding: '9px 14px', borderTop: '1px solid #E9E5D8' }}>
+                      <span style={{ font: "500 12.5px 'Noto Sans TC', sans-serif", color: '#454B45', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {r.label}
+                        <span style={badge(r.matched, '#2F8F5B', '#EAF6EE', '#8A5A1E', '#FDF3E7')}>{r.matched ? '✓ 自動辨識' : '✎ 請確認'}</span>
+                      </span>
+                      {r.group === 'info' ? (
+                        <span style={{ font: '700 12.5px Inter, sans-serif', color: '#1E2420' }}>{fmtNum(r.value)} 千元</span>
+                      ) : (
+                        <input
+                          style={{ ...input, width: 120, padding: '6px 10px', font: '700 12.5px Inter, sans-serif', textAlign: 'right' }}
+                          value={r.value}
+                          onChange={(e) => setReviewValue(r.id, e.target.value)}
+                        />
+                      )}
                     </div>
                   ))}
+                </div>
+                <div style={{ font: "400 11.5px 'Noto Sans TC', sans-serif", color: '#8A9089', marginTop: 10 }}>
+                  財產處分收入／租金收入／利息收入等細項無法穩定自動辨識，已沿用 {latestYear} 年度數值，請於匯入後至「歲入歲出」模組核對並視需要重新分配。
                 </div>
                 <div style={{ display: 'flex', gap: 10, marginTop: 16 }}>
                   <div style={{ ...btnPrimary, opacity: busy ? .6 : 1, pointerEvents: busy ? 'none' : 'auto' }} onClick={confirmImport}>確認匯入 {nextYear} 年度</div>
