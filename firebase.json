@@ -6,6 +6,20 @@
       { "source": "**", "destination": "/index.html" }
     ]
   },
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "利澤國小基金預算管理系統",
+        "supportEmail": "mihsia@gmail.com",
+        "authorizedRedirectUris": [
+          "https://ltps-finance-budget.web.app",
+          "https://ltps-finance-budget.firebaseapp.com",
+          "http://localhost"
+        ]
+      }
+    }
+  },
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
