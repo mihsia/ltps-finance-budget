@@ -4,7 +4,13 @@ import { isFirebaseConfigured } from '../firebase';
 import { card, input, label, btnPrimary } from '../styles';
 
 export default function Login() {
-  const { login, loginWithGoogle, pendingGoogleEmail, error } = useAuth();
+  const {
+    login,
+    loginWithGoogle,
+    cancelGoogleLink,
+    pendingGoogleEmail,
+    error,
+  } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -70,6 +76,20 @@ export default function Login() {
             <button type="submit" style={{ ...btnPrimary, width: '100%', justifyContent: 'center', opacity: submitting ? .6 : 1 }} disabled={submitting}>
               {submitting ? '處理中…' : pendingGoogleEmail ? '驗證密碼並連結 Google' : '登入'}
             </button>
+            {pendingGoogleEmail && (
+              <button
+                type="button"
+                onClick={cancelGoogleLink}
+                disabled={submitting}
+                style={{
+                  width: '100%', marginTop: 10, border: 0, background: 'transparent',
+                  color: '#1F5F52', cursor: submitting ? 'default' : 'pointer',
+                  font: "700 12px 'Noto Sans TC', sans-serif",
+                }}
+              >
+                取消 Google 帳號連結
+              </button>
+            )}
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '18px 0', color: '#8A9089', fontSize: 12 }}>
               <span style={{ height: 1, background: '#E3DFD3', flex: 1 }} />
               或
@@ -78,12 +98,14 @@ export default function Login() {
             <button
               type="button"
               onClick={submitGoogle}
-              disabled={submitting}
+              disabled={submitting || Boolean(pendingGoogleEmail)}
               style={{
                 width: '100%', minHeight: 44, borderRadius: 8, border: '1px solid #D8D3C4',
                 background: '#fff', color: '#1E2420', display: 'flex', alignItems: 'center',
-                justifyContent: 'center', gap: 10, cursor: submitting ? 'default' : 'pointer',
-                font: "700 13px 'Noto Sans TC', sans-serif", opacity: submitting ? .6 : 1,
+                justifyContent: 'center', gap: 10,
+                cursor: submitting || pendingGoogleEmail ? 'default' : 'pointer',
+                font: "700 13px 'Noto Sans TC', sans-serif",
+                opacity: submitting || pendingGoogleEmail ? .6 : 1,
               }}
             >
               <span style={{ font: '700 16px Inter, sans-serif', color: '#4285F4' }}>G</span>

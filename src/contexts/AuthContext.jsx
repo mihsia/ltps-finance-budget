@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+import { createContext, useContext, useEffect, useReducer, useState } from 'react';
 import {
   GoogleAuthProvider,
   linkWithCredential,
@@ -12,19 +12,27 @@ import { auth, db, isFirebaseConfigured } from '../firebase';
 import {
   GoogleLinkRequiredError,
   completePasswordLogin,
+  initialGoogleLinkState,
   mapAuthError,
+  reduceGoogleLinkState,
   startGoogleLogin,
 } from '../lib/googleAuthFlow';
 
-const AuthContext = createContext(null);
+export const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(isFirebaseConfigured);
-  const [error, setError] = useState(null);
-  const [pendingGoogleCredential, setPendingGoogleCredential] = useState(null);
-  const [pendingGoogleEmail, setPendingGoogleEmail] = useState('');
+  const [googleLinkState, dispatchGoogleLink] = useReducer(
+    reduceGoogleLinkState,
+    initialGoogleLinkState,
+  );
+  const {
+    error,
+    pendingCredential: pendingGoogleCredential,
+    pendingEmail: pendingGoogleEmail,
+  } = googleLinkState;
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
@@ -42,7 +50,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = async (email, password) => {
-    setError(null);
+    dispatchGoogleLink({ type: 'set-error', error: null });
     try {
       await completePasswordLogin({
         auth,
@@ -51,17 +59,22 @@ export function AuthProvider({ children }) {
         pendingCredential: pendingGoogleCredential,
         signInWithEmailAndPassword,
         linkWithCredential,
+        signOut,
       });
-      setPendingGoogleCredential(null);
-      setPendingGoogleEmail('');
+      dispatchGoogleLink({ type: 'password-login-succeeded' });
     } catch (e) {
-      setError(mapAuthError(e.code));
+      dispatchGoogleLink({
+        type: 'set-error',
+        error: mapAuthError(e.code, { stage: e.stage }),
+      });
       throw e;
     }
   };
 
   const loginWithGoogle = async () => {
-    setError(null);
+    if (pendingGoogleCredential) return;
+
+    dispatchGoogleLink({ type: 'set-error', error: null });
     try {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
@@ -71,19 +84,29 @@ export function AuthProvider({ children }) {
         signInWithPopup,
         credentialFromError: GoogleAuthProvider.credentialFromError,
       });
+      dispatchGoogleLink({ type: 'google-login-succeeded' });
     } catch (e) {
       if (e instanceof GoogleLinkRequiredError) {
-        setPendingGoogleCredential(e.credential);
-        setPendingGoogleEmail(e.email);
-        setError('此 Email 已使用密碼註冊，請輸入原密碼完成 Google 帳號連結');
+        dispatchGoogleLink({
+          type: 'link-required',
+          credential: e.credential,
+          email: e.email,
+        });
       } else {
-        setError(mapAuthError(e.code));
+        dispatchGoogleLink({ type: 'set-error', error: mapAuthError(e.code) });
       }
       throw e;
     }
   };
 
-  const logout = () => signOut(auth);
+  const cancelGoogleLink = () => {
+    dispatchGoogleLink({ type: 'cancel-link' });
+  };
+
+  const logout = async () => {
+    dispatchGoogleLink({ type: 'logout' });
+    await signOut(auth);
+  };
 
   const isAdmin = profile?.role === 'admin';
   const canEditModule = (moduleKey) => isAdmin || profile?.modules?.includes(moduleKey);
@@ -91,7 +114,7 @@ export function AuthProvider({ children }) {
   return (
     <AuthContext.Provider value={{
       user, profile, loading, error, login, loginWithGoogle,
-      pendingGoogleEmail, logout, isAdmin, canEditModule,
+      pendingGoogleEmail, cancelGoogleLink, logout, isAdmin, canEditModule,
     }}>
       {children}
     </AuthContext.Provider>
