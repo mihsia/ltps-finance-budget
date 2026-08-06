@@ -1,13 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { isFirebaseConfigured } from '../firebase';
 import { card, input, label, btnPrimary } from '../styles';
 
 export default function Login() {
-  const { login, error } = useAuth();
+  const { login, loginWithGoogle, pendingGoogleEmail, error } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (pendingGoogleEmail) setEmail(pendingGoogleEmail);
+  }, [pendingGoogleEmail]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -16,6 +20,17 @@ export default function Login() {
       await login(email, password);
     } catch {
       // error surfaced via AuthContext.error
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const submitGoogle = async () => {
+    setSubmitting(true);
+    try {
+      await loginWithGoogle();
+    } catch {
+      // Error and link-account guidance are surfaced by AuthContext.
     } finally {
       setSubmitting(false);
     }
@@ -38,7 +53,14 @@ export default function Login() {
           <form onSubmit={submit}>
             <div style={{ marginBottom: 14 }}>
               <label style={label}>帳號（Email）</label>
-              <input style={input} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+              <input
+                style={{ ...input, background: pendingGoogleEmail ? '#F5F3EE' : '#fff' }}
+                type="email"
+                required
+                readOnly={Boolean(pendingGoogleEmail)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
             </div>
             <div style={{ marginBottom: 18 }}>
               <label style={label}>密碼</label>
@@ -46,7 +68,26 @@ export default function Login() {
             </div>
             {error && <div style={{ font: "500 12px 'Noto Sans TC', sans-serif", color: '#B5533E', marginBottom: 14 }}>⚠ {error}</div>}
             <button type="submit" style={{ ...btnPrimary, width: '100%', justifyContent: 'center', opacity: submitting ? .6 : 1 }} disabled={submitting}>
-              {submitting ? '登入中…' : '登入'}
+              {submitting ? '處理中…' : pendingGoogleEmail ? '驗證密碼並連結 Google' : '登入'}
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '18px 0', color: '#8A9089', fontSize: 12 }}>
+              <span style={{ height: 1, background: '#E3DFD3', flex: 1 }} />
+              或
+              <span style={{ height: 1, background: '#E3DFD3', flex: 1 }} />
+            </div>
+            <button
+              type="button"
+              onClick={submitGoogle}
+              disabled={submitting}
+              style={{
+                width: '100%', minHeight: 44, borderRadius: 8, border: '1px solid #D8D3C4',
+                background: '#fff', color: '#1E2420', display: 'flex', alignItems: 'center',
+                justifyContent: 'center', gap: 10, cursor: submitting ? 'default' : 'pointer',
+                font: "700 13px 'Noto Sans TC', sans-serif", opacity: submitting ? .6 : 1,
+              }}
+            >
+              <span style={{ font: '700 16px Inter, sans-serif', color: '#4285F4' }}>G</span>
+              使用 Google 帳號登入
             </button>
           </form>
         )}
