@@ -18,11 +18,17 @@ const firebaseConfig = useEmulator
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
   };
 
-// Firebase is considered "configured" once a projectId is present (or the
-// local emulator suite is explicitly requested). Until the school's real
-// project credentials are added to .env, the app runs in a disconnected
-// state and Login.jsx shows setup instructions instead of crashing.
-export const isFirebaseConfigured = useEmulator || Boolean(firebaseConfig.projectId && firebaseConfig.apiKey);
+// Firebase is considered "configured" once projectId/apiKey/authDomain are
+// all present (or the local emulator suite is explicitly requested).
+// authDomain is easy to leave out of a secrets setup and its absence doesn't
+// throw — it just makes Auth hang indefinitely instead of erroring, so it's
+// checked explicitly here rather than surfacing as a stuck loading screen.
+// Until the school's real project credentials are added to .env, the app
+// runs in a disconnected state and Login.jsx shows setup instructions
+// instead of crashing.
+export const isFirebaseConfigured = useEmulator || Boolean(
+  firebaseConfig.projectId && firebaseConfig.apiKey && firebaseConfig.authDomain,
+);
 
 const app = isFirebaseConfigured
   ? (getApps()[0] || initializeApp(firebaseConfig))

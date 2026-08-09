@@ -17,16 +17,33 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-    const unsub = onAuthStateChanged(auth, async (fbUser) => {
-      setUser(fbUser);
-      if (fbUser) {
-        const snap = await getDoc(doc(db, 'users', fbUser.uid));
-        setProfile(snap.exists() ? snap.data() : { role: 'editor', modules: [], name: fbUser.email, dept: '' });
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
-    });
+    const unsub = onAuthStateChanged(
+      auth,
+      async (fbUser) => {
+        setUser(fbUser);
+        if (fbUser) {
+          try {
+            const snap = await getDoc(doc(db, 'users', fbUser.uid));
+            setProfile(snap.exists() ? snap.data() : { role: 'editor', modules: [], name: fbUser.email, dept: '' });
+          } catch (e) {
+            // Don't let a failed profile fetch (offline, denied, etc.) leave
+            // the app stuck on the loading screen forever.
+            console.error('Failed to load user profile', e);
+            setProfile({ role: 'editor', modules: [], name: fbUser.email, dept: '' });
+          }
+        } else {
+          setProfile(null);
+        }
+        setLoading(false);
+      },
+      (err) => {
+        // Auth itself failed to initialize/observe (bad config, network to
+        // Google blocked, etc.) — surface it instead of spinning forever.
+        console.error('Auth state observer error', err);
+        setError('無法連接 Firebase Authentication，請確認網路連線或專案設定');
+        setLoading(false);
+      },
+    );
     return unsub;
   }, []);
 
