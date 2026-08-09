@@ -2,7 +2,7 @@ import { useYearModule, useYearMeta, useAuditLog } from '../hooks/useYearData';
 import { useFixedFieldEditor } from '../hooks/useFixedFieldEditor';
 import { useAuth } from '../contexts/AuthContext';
 import { runAuthorized } from '../lib/accessPolicy';
-import { parseLocalDeadlineEndOfDay, validateFixedFields } from '../lib/fixedFieldEditing';
+import { getDeadlineState, validateFixedFields } from '../lib/fixedFieldEditing';
 import { fmtDate } from '../lib/format';
 import {
   pageTitle, pageSubtitle, sectionLabel, card, input, label,
@@ -47,10 +47,10 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
     fields: AUDIT_FIELDS,
   });
 
-  const deadline = yearState.meta?.deadlines?.basic;
-  const parsedDeadline = parseLocalDeadlineEndOfDay(deadline);
-  const deadlineInvalid = Boolean(deadline) && !parsedDeadline;
-  const pastDeadline = Boolean(parsedDeadline && Date.now() > parsedDeadline.getTime());
+  const deadlineState = getDeadlineState(yearState.meta?.deadlines, 'basic');
+  const deadlineInvalid = deadlineState.invalid;
+  const pastDeadline = deadlineState.deadline !== null
+    && Date.now() > deadlineState.deadline.getTime();
   const writeVisible = canEditModule('basic')
     && yearState.exists
     && yearState.meta?.locked === false
@@ -68,13 +68,12 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
     const moduleDecision = moduleState.authorizeWrite();
     if (!moduleDecision.allowed) return moduleDecision;
 
-    const currentDeadline = yearDecision.meta?.deadlines?.basic;
-    if (!currentDeadline) return { allowed: true };
-    const parsed = parseLocalDeadlineEndOfDay(currentDeadline);
-    if (!parsed) {
+    const currentDeadlineState = getDeadlineState(yearDecision.meta?.deadlines, 'basic');
+    if (!currentDeadlineState.configured) return { allowed: true };
+    if (currentDeadlineState.invalid) {
       return { allowed: false, reason: '基本資料填報截止日格式錯誤，無法編輯。' };
     }
-    if (Date.now() > parsed.getTime()) {
+    if (Date.now() > currentDeadlineState.deadline.getTime()) {
       return { allowed: false, reason: '已超過基本資料填報截止日，無法編輯或儲存。' };
     }
     return { allowed: true };
@@ -161,10 +160,10 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
         <div style={lockedBanner}>此年度未開放編輯，無法編輯或儲存。</div>
       )}
       {!canEditModule('basic') && <div style={lockedBanner}>您沒有此模組的編輯權限。</div>}
-      {deadline && (
+      {deadlineState.configured && (
         <div style={(pastDeadline || deadlineInvalid) ? lockedBanner : deadlineBanner}>
-          <span>填報截止日：{deadline}</span>
-          <span>{deadlineInvalid ? '截止日格式錯誤，已停用編輯' : (pastDeadline ? '已超過填報期限' : '截止當日 23:59 前可儲存')}</span>
+          <span>填報截止日：{deadlineInvalid ? '設定無效' : yearState.meta.deadlines.basic}</span>
+          <span>{deadlineInvalid ? '基本資料填報截止日格式錯誤，已停用編輯' : (pastDeadline ? '已超過填報期限' : '截止當日 23:59 前可儲存')}</span>
         </div>
       )}
       {editor.message && <div style={messageStyle(editor.message)}>{editor.message}</div>}

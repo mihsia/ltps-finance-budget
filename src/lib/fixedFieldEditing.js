@@ -29,6 +29,20 @@ export function parseLocalDeadlineEndOfDay(value) {
   return parsed;
 }
 
+export function getDeadlineState(deadlines, moduleKey) {
+  if (
+    deadlines === null
+    || deadlines === undefined
+    || !Object.hasOwn(deadlines, moduleKey)
+  ) {
+    return { configured: false, invalid: false, deadline: null };
+  }
+
+  const deadline = parseLocalDeadlineEndOfDay(deadlines[moduleKey]);
+  if (deadline === null) return { configured: true, invalid: true, deadline: null };
+  return { configured: true, invalid: false, deadline };
+}
+
 export function exactValueEqual(left, right) {
   if (Object.is(left, right)) return true;
   if (typeof left !== typeof right || left === null || right === null) return false;

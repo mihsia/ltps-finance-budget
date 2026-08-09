@@ -295,19 +295,32 @@ describe('Basic fixed-field module', () => {
     mounted.unmount();
   });
 
-  it('rechecks the live deadline at callback invocation, including a retained cancel callback', async () => {
+  it('fails closed for own-property falsy deadlines in the UI and retained callbacks', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 7, 9, 12));
     hookMocks.meta.meta = { locked: false, deadlines: { basic: '2026-08-10' } };
+    const save = vi.fn();
+    hookMocks.modules.basic = { ...hookMocks.modules.basic, save };
     const mounted = mount(Basic);
     await act(async () => control(mounted.renderer, '編輯資料').props.onClick());
     const retainedCancel = control(mounted.renderer, '取消').props.onClick;
 
-    hookMocks.meta.meta = { locked: false, deadlines: { basic: '0099-01-01' } };
+    hookMocks.meta.meta = { locked: false, deadlines: { basic: false } };
     await act(async () => retainedCancel());
 
     expect(mounted.renderer.root.findAllByType('input')).toHaveLength(6);
-    expect(pageText(mounted.renderer)).toContain('已超過基本資料填報截止日');
+    expect(pageText(mounted.renderer)).toContain('基本資料填報截止日格式錯誤');
+    expect(control(mounted.renderer, '編輯資料')).toBeUndefined();
+
+    hookMocks.meta.meta = { locked: false, deadlines: {} };
+    mounted.rerender();
+    const retainedSave = control(mounted.renderer, '儲存草稿').props.onClick;
+    hookMocks.meta.meta = { locked: false, deadlines: { basic: undefined } };
+    await act(async () => retainedSave());
+
+    expect(save).not.toHaveBeenCalled();
+    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(6);
+    expect(pageText(mounted.renderer)).toContain('基本資料填報截止日格式錯誤');
     mounted.unmount();
   });
 });

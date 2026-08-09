@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   exactValueEqual,
+  getDeadlineState,
   isNonNegativeIntegerString,
   parseLocalDeadlineEndOfDay,
   validateFixedFields,
@@ -29,6 +30,25 @@ describe('fixed-field validation', () => {
 });
 
 describe('local deadline parsing', () => {
+  it('treats only an absent own deadline property as no deadline', () => {
+    const inheritedDeadline = Object.create({ basic: '2026-08-10' });
+
+    expect(getDeadlineState({}, 'basic')).toMatchObject({ configured: false, invalid: false, deadline: null });
+    expect(getDeadlineState(inheritedDeadline, 'basic')).toMatchObject({ configured: false, invalid: false, deadline: null });
+    expect(getDeadlineState({ basic: '2026-08-10' }, 'basic')).toMatchObject({ configured: true, invalid: false });
+  });
+
+  it.each(['', null, 0, false, Number.NaN, undefined, '2026-02-30', 'not-a-date'])(
+    'fails closed when the own deadline property has invalid value %s',
+    (value) => {
+      expect(getDeadlineState({ basic: value }, 'basic')).toEqual({
+        configured: true,
+        invalid: true,
+        deadline: null,
+      });
+    },
+  );
+
   it('uses local end-of-day and preserves years from 0000 through 0099', () => {
     const deadline = parseLocalDeadlineEndOfDay('0099-02-03');
 
