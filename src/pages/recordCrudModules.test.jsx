@@ -244,7 +244,7 @@ describe('Budget records CRUD page', () => {
     await act(async () => Promise.resolve());
     expect(active.update).toHaveBeenCalledOnce();
     expect(active.update).toHaveBeenCalledWith('expense-1', {
-      recordType: 'expense', label: '教育計畫', formula: '說明', amount: 250,
+      label: '教育計畫', formula: '說明', amount: 250,
     }, authMocks.actor);
     expect(field(mounted.renderer, '金額（千元）').props.disabled).toBe(true);
     write.resolve();
@@ -342,7 +342,7 @@ describe('Language variant records CRUD page', () => {
     change(mounted.renderer, '通過人數', '3');
     await act(async () => control(mounted.renderer, '儲存').props.onClick());
     expect(active.update).toHaveBeenCalledWith('cert-1', {
-      recordType: 'certification', lang: '客語', certifiedTeachers: 1,
+      lang: '客語', certifiedTeachers: 1,
       totalTeachers: 1, tested: 4, passed: 3,
     }, authMocks.actor);
 
@@ -417,7 +417,7 @@ describe('schema-driven Generic records CRUD page', () => {
     change(mounted.renderer, '等級', '特優');
     await act(async () => control(mounted.renderer, '儲存').props.onClick());
     expect(active.update).toHaveBeenCalledWith('award-1', {
-      recordType: 'award', item: '縣科展', level: '特優', date: '2025-09-20',
+      item: '縣科展', level: '特優', date: '2025-09-20',
     }, authMocks.actor);
     await act(async () => control(mounted.renderer, '停用').props.onClick());
     expect(active.delete).toHaveBeenCalledWith('award-1', authMocks.actor);
@@ -542,6 +542,100 @@ describe('record page invocation guards', () => {
     mounted.unmount();
   });
 
+  it('writes nothing through a retained save after latestYear advances past the still-unlocked selected year', async () => {
+    const records = readyRecords([
+      { id: 'award-1', recordType: 'award', item: '縣科展', level: '優等', date: '2025-09-20', deletedAt: null },
+    ]);
+    installRecords('awards', records);
+    const mounted = mount(Generic, { moduleKey: 'awards' });
+
+    await act(async () => control(mounted.renderer, '編輯').props.onClick());
+    const retainedSave = control(mounted.renderer, '儲存').props.onClick;
+    mounted.rerender({ moduleKey: 'awards', latestYear: '116' });
+    await act(async () => retainedSave());
+
+    expect(records.update).not.toHaveBeenCalled();
+    mounted.unmount();
+  });
+
+  it('requires the invocation-current actor for edit, cancel, and recovery scope toggles', async () => {
+    const active = readyRecords([
+      { id: 'award-1', recordType: 'award', item: '縣科展', level: '優等', date: '2025-09-20', deletedAt: null },
+    ]);
+    const recovery = readyRecords([
+      { id: 'award-old', recordType: 'award', item: '舊獎項', level: '佳作', date: '2024-01-10', deletedAt: { seconds: 2 } },
+    ]);
+    installRecords('awards', active, recovery);
+    const mounted = mount(Generic, { moduleKey: 'awards' });
+
+    authMocks.actor = null;
+    await act(async () => control(mounted.renderer, '編輯').props.onClick());
+    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(0);
+
+    authMocks.actor = { uid: 'actor-now', name: '即時操作者' };
+    await act(async () => control(mounted.renderer, '編輯').props.onClick());
+    expect(mounted.renderer.root.findAllByType('input').length).toBeGreaterThan(0);
+
+    authMocks.actor = null;
+    await act(async () => control(mounted.renderer, '取消').props.onClick());
+    expect(mounted.renderer.root.findAllByType('input').length).toBeGreaterThan(0);
+
+    authMocks.actor = { uid: 'actor-now', name: '即時操作者' };
+    await act(async () => control(mounted.renderer, '取消').props.onClick());
+    authMocks.actor = null;
+    await act(async () => control(mounted.renderer, '顯示已停用資料').props.onClick());
+    expect(pageText(mounted.renderer)).not.toContain('舊獎項');
+    expect(pageText(mounted.renderer)).toContain('無法確認操作者身分');
+    mounted.unmount();
+  });
+
+  it('fully freezes conflicting row, recovery, and form controls while either operation kind is pending', async () => {
+    const formWrite = deferred();
+    const rowWrite = deferred();
+    const records = readyRecords([
+      { id: 'award-1', recordType: 'award', item: '縣科展', level: '優等', date: '2025-09-20', deletedAt: null },
+      { id: 'award-2', recordType: 'award', item: '縣語文競賽', level: '特優', date: '2025-10-20', deletedAt: null },
+    ], {
+      update: vi.fn(() => formWrite.promise),
+      delete: vi.fn((recordId) => (recordId === 'award-2' ? rowWrite.promise : Promise.resolve())),
+    });
+    installRecords('awards', records);
+    const mounted = mount(Generic, { moduleKey: 'awards' });
+
+    await act(async () => control(mounted.renderer, '編輯').props.onClick());
+    let pendingForm;
+    act(() => { pendingForm = control(mounted.renderer, '儲存').props.onClick(); });
+    await act(async () => Promise.resolve());
+
+    expect(control(mounted.renderer, '顯示已停用資料').props.disabled).toBe(true);
+    expect(mounted.renderer.root.findAll(
+      (node) => typeof node.props.onClick === 'function' && textOf(node).trim() === '停用',
+    ).every((node) => node.props.disabled)).toBe(true);
+
+    formWrite.resolve();
+    await act(async () => pendingForm);
+
+    await act(async () => control(mounted.renderer, '編輯').props.onClick());
+    const stopButtons = mounted.renderer.root.findAll(
+      (node) => typeof node.props.onClick === 'function' && textOf(node).trim() === '停用',
+    );
+    let pendingRow;
+    act(() => { pendingRow = stopButtons[1].props.onClick(); });
+    await act(async () => Promise.resolve());
+
+    expect(field(mounted.renderer, '等級').props.disabled).toBe(true);
+    expect(control(mounted.renderer, '儲存').props.disabled).toBe(true);
+    expect(control(mounted.renderer, '取消').props.disabled).toBe(true);
+    expect(pageText(mounted.renderer)).toContain('停用中…');
+    expect(mounted.renderer.root.findAll(
+      (node) => typeof node.props.onClick === 'function' && ['停用', '停用中…'].includes(textOf(node).trim()),
+    ).every((node) => node.props.disabled)).toBe(true);
+
+    rowWrite.resolve();
+    await act(async () => pendingRow);
+    mounted.unmount();
+  });
+
   it('requires an invocation-current actor and deduplicates a pending row operation synchronously', async () => {
     const remove = deferred();
     const records = readyRecords([
@@ -572,7 +666,7 @@ describe('record page invocation guards', () => {
       'award-1',
       { uid: 'row-current', name: '列操作人員' },
     );
-    expect(control(mounted.renderer, '停用').props.disabled).toBe(true);
+    expect(control(mounted.renderer, '停用中…').props.disabled).toBe(true);
     remove.resolve();
     await act(async () => { await first; await duplicate; });
     mounted.unmount();

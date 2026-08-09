@@ -1,14 +1,15 @@
-import { useYearMeta, useYearModule } from '../hooks/useYearData';
+import { useYearMeta, useYearModule, useYearRecords } from '../hooks/useYearData';
 import { useFixedFieldEditor } from '../hooks/useFixedFieldEditor';
 import { useAuth } from '../contexts/AuthContext';
 import { runAuthorized } from '../lib/accessPolicy';
 import { fmtNum } from '../lib/format';
+import { budgetRecordSummary } from '../lib/recordDerivations';
 import { pageTitle, pageSubtitle, card, btnOutline, btnPrimary, btnSecondary, input, label, lockedBanner, progressBar } from '../styles';
 
 const FIELDS = ['fundName', 'reviewAuthority'];
 
 export default function BudgetBook({ year, hasCurrentYear = () => false }) {
-  const budgetState = useYearModule(year, 'budget');
+  const budgetState = useYearRecords(year, 'budget');
   const moduleState = useYearModule(year, 'budgetbook');
   const yearState = useYearMeta(year);
   const { canEditModule, authorizeModule, authorizeModuleActor } = useAuth();
@@ -81,11 +82,12 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
     return <div><div style={pageTitle}>{year}年度預算書</div><div style={card}>正在載入預算書基本資料…</div></div>;
   }
 
-  const budget = budgetState.data;
-  const expenseRows = budget?.expense?.breakdown || [];
-  const revenueRows = budget?.revenue?.rows || [];
-  const expenseTotal = expenseRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
-  const revenueTotal = revenueRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const {
+    expenseRows,
+    revenueTotal,
+    expenseTotal,
+  } = budgetRecordSummary(budgetState.data);
+  const budgetReady = !budgetState.loading && !budgetState.error;
   const shortfall = revenueTotal - expenseTotal;
   const canStartEditing = canEditModule('budgetbook')
     && yearState.exists
@@ -105,9 +107,9 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, maxWidth: 720, marginBottom: 20 }}>
         <div style={card}>
           <div style={{ fontWeight: 700, marginBottom: 10 }}>收支平衡表</div>
-          <div>基金來源合計（歲入） <b>{fmtNum(revenueTotal)} 千元</b></div>
-          <div>基金用途合計（歲出） <b>{fmtNum(expenseTotal)} 千元</b></div>
-          <div>本期{shortfall < 0 ? '短絀' : '賸餘'} <b>{fmtNum(shortfall)}</b></div>
+          <div>基金來源合計（歲入） <b>{budgetReady ? fmtNum(revenueTotal) : '—'} 千元</b></div>
+          <div>基金用途合計（歲出） <b>{budgetReady ? fmtNum(expenseTotal) : '—'} 千元</b></div>
+          <div>本期{budgetReady && shortfall < 0 ? '短絀' : '賸餘'} <b>{budgetReady ? fmtNum(shortfall) : '—'}</b></div>
         </div>
         <div style={card}>
           {editor.editing ? (

@@ -54,7 +54,7 @@ export default function Budget({
   const [tab, setTab] = useState('expense');
   const [formState, setFormState] = useState(null);
   const actions = useRecordCrudActions({
-    scopeKey: `${year}\0budget\0${includeDeleted ? 1 : 0}`,
+    scopeKey: `${year}\0${latestYear}\0budget\0${includeDeleted ? 1 : 0}`,
     moduleKey: 'budget',
     hasCurrentYear,
     yearState,
@@ -98,9 +98,11 @@ export default function Budget({
   const commit = () => actions.runMutation({
     pendingKey: 'form',
     validate: () => validateBudgetRecord(formState?.recordType, formState?.values || {}),
-    mutate: (actor, payload) => formState.mode === 'create'
-      ? recordState.create(payload, actor)
-      : recordState.update(formState.recordId, payload, actor),
+    mutate: (actor, payload) => {
+      if (formState.mode === 'create') return recordState.create(payload, actor);
+      const { recordType: _recordType, ...editableFields } = payload;
+      return recordState.update(formState.recordId, editableFields, actor);
+    },
     onSuccess: () => setFormState(null),
     successMessage: formState?.mode === 'create' ? '新增成功。' : '更新成功。',
   });
@@ -214,7 +216,7 @@ export default function Budget({
               {writeVisible && (
                 <span style={{ display: 'flex', gap: 8 }}>
                   <button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯</button>
-                  <button type="button" disabled={actions.isRowPending(record.id)} onClick={() => softDelete(record.id)}>停用</button>
+                  <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用中…' : '停用'}</button>
                 </span>
               )}
             </div>
@@ -234,7 +236,7 @@ export default function Budget({
               <span>{record.recordType === 'expense' ? '歲出' : '歲入'}</span>
               <span>{record.label}</span>
               <span>{fmtNum(record.amount)}</span>
-              <button type="button" disabled={actions.isRowPending(record.id)} onClick={() => restore(record.id)}>復原</button>
+              <button type="button" disabled={actions.pending} onClick={() => restore(record.id)}>{actions.isRowPending(record.id) ? '復原中…' : '復原'}</button>
             </div>
           ))}
         </div>
@@ -250,7 +252,7 @@ export default function Budget({
                   aria-label={fieldSchema.inputLabel || fieldSchema.label}
                   type={fieldSchema.kind === 'number' ? 'number' : 'text'}
                   min={fieldSchema.kind === 'number' ? 0 : undefined}
-                  disabled={actions.formPending}
+                  disabled={actions.pending}
                   style={{ ...input, marginTop: 5 }}
                   value={formState.values[fieldSchema.key]}
                   onChange={(event) => setFormState((current) => ({
@@ -262,7 +264,7 @@ export default function Budget({
             ))}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button type="button" disabled={actions.formPending} style={{ ...btnPrimary, border: 0 }} onClick={commit}>{formState.mode === 'create' ? '新增' : '儲存'}</button>
+            <button type="button" disabled={actions.pending} style={{ ...btnPrimary, border: 0 }} onClick={commit}>{formState.mode === 'create' ? '新增' : '儲存'}</button>
             <button type="button" disabled={actions.pending} style={btnSecondary} onClick={cancel}>取消</button>
           </div>
         </div>

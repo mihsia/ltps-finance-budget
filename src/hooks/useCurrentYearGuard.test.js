@@ -44,4 +44,33 @@ describe('useCurrentYearGuard', () => {
     secondShell.unmount();
     expect(new115()).toBe(false);
   });
+
+  it('invalidates a retained handler when the latest year advances even if the selected year stays mounted', () => {
+    const seen = [];
+    function Probe({ selectedYear, latestYear }) {
+      seen.push(useCurrentYearGuard(selectedYear, latestYear));
+      return null;
+    }
+
+    let renderer;
+    act(() => {
+      renderer = TestRenderer.create(createElement(Probe, {
+        selectedYear: '115',
+        latestYear: '115',
+      }));
+    });
+    const retained = seen.at(-1);
+    expect(retained()).toBe(true);
+
+    act(() => {
+      renderer.update(createElement(Probe, {
+        selectedYear: '115',
+        latestYear: '116',
+      }));
+    });
+
+    expect(retained()).toBe(false);
+    expect(seen.at(-1)()).toBe(false);
+    act(() => renderer.unmount());
+  });
 });

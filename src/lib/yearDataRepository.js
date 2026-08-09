@@ -16,11 +16,24 @@ const defaultFirestore = {
 };
 
 const RECORD_METADATA_FIELDS = new Set([
+  'recordType',
   'createdAt',
   'updatedAt',
   'deletedAt',
   'deletedBy',
 ]);
+
+function assertRecordTypeUnchanged(before, data) {
+  if (
+    Object.hasOwn(before, 'recordType')
+    && Object.hasOwn(data, 'recordType')
+    && data.recordType !== before.recordType
+  ) {
+    const error = new Error('Record type cannot be changed by an ordinary update.');
+    error.code = 'record-type-immutable';
+    throw error;
+  }
+}
 
 function editableRecordData(data) {
   return Object.fromEntries(
@@ -133,6 +146,58 @@ export function createYearDataRepository({
     return { id: recordRef.id, ...after };
   };
 
+  const importRecords = async ({
+    year,
+    moduleKey,
+    records,
+    actor,
+    yearData = null,
+    assertCurrent = () => {},
+  }) => {
+    assertCurrent();
+    const timestamp = firestore.serverTimestamp();
+    const batch = firestore.writeBatch(database);
+    if (yearData) {
+      const yearRef = firestore.doc(database, 'years', year);
+      batch.set(yearRef, { ...yearData, createdAt: timestamp }, { merge: true });
+    }
+
+    const imported = records.map((data) => {
+      const recordRef = firestore.doc(firestore.collection(
+        database,
+        'years',
+        year,
+        'modules',
+        moduleKey,
+        'records',
+      ));
+      const auditRef = firestore.doc(
+        firestore.collection(database, 'years', year, 'auditLogs'),
+      );
+      const after = {
+        ...data,
+        createdAt: timestamp,
+        updatedAt: timestamp,
+        deletedAt: null,
+        deletedBy: null,
+      };
+      batch.set(recordRef, after);
+      batch.set(auditRef, auditData({
+        moduleKey,
+        recordId: recordRef.id,
+        action: 'create',
+        actor,
+        before: null,
+        after,
+        timestamp,
+      }));
+      return { id: recordRef.id, ...after };
+    });
+
+    await batch.commit();
+    return imported;
+  };
+
   const updateRecord = async ({
     year,
     moduleKey,
@@ -156,9 +221,10 @@ export function createYearDataRepository({
     const snapshot = await firestore.getDocFromServer(recordRef);
     if (!snapshot.exists()) throw new Error(`Record not found: ${recordId}`);
     assertCurrent();
+    const before = snapshot.data();
+    assertRecordTypeUnchanged(before, data);
     const batch = firestore.writeBatch(database);
     const timestamp = firestore.serverTimestamp();
-    const before = snapshot.data();
     const after = { ...before, ...editableRecordData(data), updatedAt: timestamp };
     batch.set(recordRef, after);
     batch.set(auditRef, auditData({
@@ -267,6 +333,7 @@ export function createYearDataRepository({
   return {
     saveModule,
     createRecord,
+    importRecords,
     updateRecord,
     deleteRecord,
     restoreRecord,

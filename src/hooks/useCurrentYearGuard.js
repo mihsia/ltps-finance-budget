@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 
-export function useCurrentYearGuard(selectedYear) {
+export function useCurrentYearGuard(selectedYear, latestYear = selectedYear) {
   const lifetimeToken = useMemo(() => ({}), []);
   const scopeToken = useMemo(
-    () => ({ lifetimeToken, selectedYear }),
-    [lifetimeToken, selectedYear],
+    () => ({ lifetimeToken, selectedYear, latestYear }),
+    [latestYear, lifetimeToken, selectedYear],
   );
   const activeScopeRef = useRef(null);
   activeScopeRef.current = scopeToken;
@@ -14,7 +14,7 @@ export function useCurrentYearGuard(selectedYear) {
   }, [scopeToken]);
 
   return useCallback(
-    () => activeScopeRef.current === scopeToken,
-    [scopeToken],
+    () => activeScopeRef.current === scopeToken && selectedYear === latestYear,
+    [latestYear, scopeToken, selectedYear],
   );
 }

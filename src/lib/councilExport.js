@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import { budgetRecordSummary } from './recordDerivations';
 
 // Reproduces the column order / sheet structure of the school's actual
 // 地方教育發展基金 submission to 宜蘭縣議會 (see 115年利澤國小預算(說明)給校長-議會用.xls
@@ -27,11 +28,10 @@ function sumAmount(rows) {
   return (rows || []).reduce((s, r) => s + Number(r.amount || 0), 0);
 }
 
-function buildSummarySheet(year, prevYear, budgetByYear) {
-  const cur = budgetByYear[year] || {};
-  const prev = budgetByYear[prevYear] || {};
-  const revenueRows = cur.revenue?.rows || [];
-  const expenseRows = cur.expense?.breakdown || [];
+function buildSummarySheet(year, prevYear, budgetRecordsByYear) {
+  const cur = budgetRecordSummary(budgetRecordsByYear[year]);
+  const prev = budgetRecordSummary(budgetRecordsByYear[prevYear]);
+  const { revenueRows, expenseRows } = cur;
   const revenueTotal = sumAmount(revenueRows);
   const expenseTotal = sumAmount(expenseRows);
 
@@ -40,10 +40,10 @@ function buildSummarySheet(year, prevYear, budgetByYear) {
   // all — an empty array there means "not recorded", not "recorded as zero",
   // so the comparison column must stay blank rather than show a fabricated
   // 100%-drop delta against a phantom 0.
-  const hasPrevRevenue = (prev.revenue?.rows || []).length > 0;
-  const hasPrevExpense = (prev.expense?.breakdown || []).length > 0;
-  const prevRevenueTotal = hasPrevRevenue ? sumAmount(prev.revenue.rows) : null;
-  const prevExpenseTotal = hasPrevExpense ? sumAmount(prev.expense.breakdown) : null;
+  const hasPrevRevenue = prev.revenueRows.length > 0;
+  const hasPrevExpense = prev.expenseRows.length > 0;
+  const prevRevenueTotal = hasPrevRevenue ? prev.revenueTotal : null;
+  const prevExpenseTotal = hasPrevExpense ? prev.expenseTotal : null;
   const hasPrevBoth = hasPrevRevenue && hasPrevExpense;
 
   const rows = [
@@ -86,8 +86,8 @@ function buildRevenueDetailSheet(year, revenueRows) {
   return ws;
 }
 
-function buildExpenseDetailSheet(year, years, budgetByYear) {
-  const expenseRows = budgetByYear[year]?.expense?.breakdown || [];
+function buildExpenseDetailSheet(year, years, budgetRecordsByYear) {
+  const expenseRows = budgetRecordSummary(budgetRecordsByYear[year]).expenseRows;
   const yearCols = years.length ? years : [year];
 
   const rows = [
@@ -98,7 +98,8 @@ function buildExpenseDetailSheet(year, years, budgetByYear) {
     rows.push([
       item.label,
       ...yearCols.map((y) => {
-        const match = (budgetByYear[y]?.expense?.breakdown || []).find((r) => r.label === item.label);
+        const match = budgetRecordSummary(budgetRecordsByYear[y]).expenseRows
+          .find((record) => record.label === item.label);
         return match ? Number(match.amount || 0) : '';
       }),
       item.formula || '',
@@ -106,7 +107,7 @@ function buildExpenseDetailSheet(year, years, budgetByYear) {
   }
   rows.push([
     '合　計',
-    ...yearCols.map((y) => sumAmount(budgetByYear[y]?.expense?.breakdown)),
+    ...yearCols.map((y) => budgetRecordSummary(budgetRecordsByYear[y]).expenseTotal),
     '',
   ]);
 
@@ -117,15 +118,16 @@ function buildExpenseDetailSheet(year, years, budgetByYear) {
 
 /**
  * Builds a workbook mirroring the council's own submission format.
- * `budgetByYear` maps year -> that year's `modules/budget` doc data
- * ({ expense: { breakdown }, revenue: { rows } }); `years` is the set of
+ * `budgetRecordsByYear` maps year -> active/inactive typed budget records. Soft-deleted
+ * records are excluded while building every sheet. `years` is the set of
  * years to show as comparison columns in the 基金用途明細表 sheet (ascending).
  */
-export function buildCouncilWorkbook({ year, years, budgetByYear }) {
+export function buildCouncilWorkbook({ year, years, budgetRecordsByYear }) {
   const prevYear = String(Number(year) - 1);
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, buildSummarySheet(year, prevYear, budgetByYear), '基金來源用途餘絀表');
-  XLSX.utils.book_append_sheet(wb, buildRevenueDetailSheet(year, budgetByYear[year]?.revenue?.rows || []), '基金來源明細表');
-  XLSX.utils.book_append_sheet(wb, buildExpenseDetailSheet(year, years, budgetByYear), '基金用途明細表');
+  const current = budgetRecordSummary(budgetRecordsByYear[year]);
+  XLSX.utils.book_append_sheet(wb, buildSummarySheet(year, prevYear, budgetRecordsByYear), '基金來源用途餘絀表');
+  XLSX.utils.book_append_sheet(wb, buildRevenueDetailSheet(year, current.revenueRows), '基金來源明細表');
+  XLSX.utils.book_append_sheet(wb, buildExpenseDetailSheet(year, years, budgetRecordsByYear), '基金用途明細表');
   return wb;
 }

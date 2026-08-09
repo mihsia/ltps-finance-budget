@@ -48,7 +48,7 @@ export default function Generic({
   const recordState = useYearRecords(year, moduleKey, { includeDeleted });
   const [formState, setFormState] = useState(null);
   const actions = useRecordCrudActions({
-    scopeKey: `${year}\0${moduleKey}\0${includeDeleted ? 1 : 0}`,
+    scopeKey: `${year}\0${latestYear}\0${moduleKey}\0${includeDeleted ? 1 : 0}`,
     moduleKey,
     hasCurrentYear,
     yearState,
@@ -86,9 +86,11 @@ export default function Generic({
   const commit = () => actions.runMutation({
     pendingKey: 'form',
     validate: () => validateGenericRecord(moduleKey, formState?.values || {}),
-    mutate: (actor, payload) => formState.mode === 'create'
-      ? recordState.create(payload, actor)
-      : recordState.update(formState.recordId, payload, actor),
+    mutate: (actor, payload) => {
+      if (formState.mode === 'create') return recordState.create(payload, actor);
+      const { recordType: _recordType, ...editableFields } = payload;
+      return recordState.update(formState.recordId, editableFields, actor);
+    },
     onSuccess: () => setFormState(null),
     successMessage: formState?.mode === 'create' ? '新增成功。' : '更新成功。',
   });
@@ -157,7 +159,7 @@ export default function Generic({
               {writeVisible && (
                 <span style={{ display: 'flex', gap: 8 }}>
                   <button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯</button>
-                  <button type="button" disabled={actions.isRowPending(record.id)} onClick={() => softDelete(record.id)}>停用</button>
+                  <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用中…' : '停用'}</button>
                 </span>
               )}
             </div>
@@ -175,7 +177,7 @@ export default function Generic({
           {deletedRecords.map((record) => (
             <div key={record.id} style={{ ...tableRow(columns), opacity: 0.72 }}>
               {schema.fields.map((field) => <span key={field.key}>{record[field.key]}</span>)}
-              <button type="button" disabled={actions.isRowPending(record.id)} onClick={() => restore(record.id)}>復原</button>
+              <button type="button" disabled={actions.pending} onClick={() => restore(record.id)}>{actions.isRowPending(record.id) ? '復原中…' : '復原'}</button>
             </div>
           ))}
         </div>
@@ -192,7 +194,7 @@ export default function Generic({
                   type={inputType(fieldSchema.kind)}
                   min={fieldSchema.kind === 'number' || fieldSchema.kind === 'integer' ? 0 : undefined}
                   step={fieldSchema.kind === 'integer' ? 1 : undefined}
-                  disabled={actions.formPending}
+                  disabled={actions.pending}
                   style={{ ...input, marginTop: 5 }}
                   value={formState.values[fieldSchema.key]}
                   onChange={(event) => setFormState((current) => ({
@@ -204,7 +206,7 @@ export default function Generic({
             ))}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button type="button" disabled={actions.formPending} style={{ ...btnPrimary, border: 0 }} onClick={commit}>
+            <button type="button" disabled={actions.pending} style={{ ...btnPrimary, border: 0 }} onClick={commit}>
               {formState.mode === 'create' ? '新增' : '儲存'}
             </button>
             <button type="button" disabled={actions.pending} style={btnSecondary} onClick={cancel}>取消</button>

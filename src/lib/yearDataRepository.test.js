@@ -138,6 +138,63 @@ describe('year data repository', () => {
     expect(result).toEqual({ id: 'generated-1', ...recordWrite.data });
   });
 
+  it('imports typed records with the target year and every audit entry in one atomic batch', async () => {
+    const harness = createFirestoreHarness();
+    const repository = repositoryModule.createYearDataRepository({
+      database: harness.database,
+      firestore: harness.firestore,
+    });
+
+    const result = await repository.importRecords({
+      year: '116',
+      moduleKey: 'budget',
+      records: [
+        { recordType: 'expense', label: '國民教育計畫', formula: '說明', amount: 100 },
+        { recordType: 'revenue', label: '政府撥入收入', amount: 120 },
+      ],
+      actor: { uid: 'admin-import', name: '匯入管理員' },
+      yearData: { locked: false, deadlines: {} },
+    });
+
+    expect(harness.firestore.serverTimestamp).toHaveBeenCalledOnce();
+    expect(harness.firestore.writeBatch).toHaveBeenCalledOnce();
+    expect(harness.batches[0].commit).toHaveBeenCalledOnce();
+    expect(harness.batches[0].operations).toHaveLength(5);
+
+    const [yearWrite, firstRecordWrite, firstAuditWrite, secondRecordWrite, secondAuditWrite]
+      = harness.batches[0].operations;
+    expect(yearWrite).toEqual(expect.objectContaining({
+      ref: expect.objectContaining({ path: ['years', '116'] }),
+      data: { locked: false, deadlines: {}, createdAt: harness.timestamp },
+      options: { merge: true },
+    }));
+    for (const recordWrite of [firstRecordWrite, secondRecordWrite]) {
+      expect(recordWrite.ref.path.slice(0, 6)).toEqual([
+        'years', '116', 'modules', 'budget', 'records', recordWrite.ref.id,
+      ]);
+      expect(recordWrite.data).toEqual(expect.objectContaining({
+        createdAt: harness.timestamp,
+        updatedAt: harness.timestamp,
+        deletedAt: null,
+        deletedBy: null,
+      }));
+    }
+    for (const auditWrite of [firstAuditWrite, secondAuditWrite]) {
+      expect(auditWrite.data).toEqual(expect.objectContaining({
+        moduleKey: 'budget',
+        action: 'create',
+        actorUid: 'admin-import',
+        actorName: '匯入管理員',
+        before: null,
+        createdAt: harness.timestamp,
+      }));
+    }
+    expect(harness.batches[0].operations.some(
+      (operation) => operation.ref.path.join('/') === 'years/116/modules/budget',
+    )).toBe(false);
+    expect(result).toHaveLength(2);
+  });
+
   it('re-reads an update from the server immediately before batching its before and after audit', async () => {
     const harness = createFirestoreHarness();
     const serverBefore = {
@@ -226,6 +283,61 @@ describe('year data repository', () => {
       title: '一般欄位可更新',
       updatedAt: harness.timestamp,
     });
+  });
+
+  it('rejects a stale variant update that disagrees with the server-current recordType before batching', async () => {
+    const harness = createFirestoreHarness();
+    harness.firestore.getDocFromServer.mockResolvedValue(documentSnapshot({
+      recordType: 'certification',
+      lang: '客語',
+      tested: 4,
+      passed: 2,
+      deletedAt: null,
+    }));
+    const repository = repositoryModule.createYearDataRepository({
+      database: harness.database,
+      firestore: harness.firestore,
+    });
+
+    await expect(repository.updateRecord({
+      year: '115',
+      moduleKey: 'language',
+      recordId: 'variant-stale',
+      data: { recordType: 'class', lang: '客語', classes: 1, students: 3 },
+      actor: { uid: 'editor-variant', name: '承辦人' },
+    })).rejects.toMatchObject({ code: 'record-type-immutable' });
+
+    expect(harness.firestore.writeBatch).not.toHaveBeenCalled();
+  });
+
+  it('preserves the server-current recordType when an ordinary page update omits it', async () => {
+    const harness = createFirestoreHarness();
+    harness.firestore.getDocFromServer.mockResolvedValue(documentSnapshot({
+      recordType: 'certification',
+      lang: '客語',
+      tested: 4,
+      passed: 2,
+      deletedAt: null,
+    }));
+    const repository = repositoryModule.createYearDataRepository({
+      database: harness.database,
+      firestore: harness.firestore,
+    });
+
+    await repository.updateRecord({
+      year: '115',
+      moduleKey: 'language',
+      recordId: 'variant-current',
+      data: { lang: '閩南語', tested: 4, passed: 3 },
+      actor: { uid: 'editor-variant', name: '承辦人' },
+    });
+
+    expect(harness.batches[0].operations[0].data).toEqual(expect.objectContaining({
+      recordType: 'certification',
+      lang: '閩南語',
+      tested: 4,
+      passed: 3,
+    }));
   });
 
   it('soft-deletes the server value and audits it without a hard delete', async () => {

@@ -50,7 +50,7 @@ export default function Language({
   const recordState = useYearRecords(year, 'language', { includeDeleted });
   const [formState, setFormState] = useState(null);
   const actions = useRecordCrudActions({
-    scopeKey: `${year}\0language\0${includeDeleted ? 1 : 0}`,
+    scopeKey: `${year}\0${latestYear}\0language\0${includeDeleted ? 1 : 0}`,
     moduleKey: 'language',
     hasCurrentYear,
     yearState,
@@ -110,9 +110,11 @@ export default function Language({
   const commit = () => actions.runMutation({
     pendingKey: 'form',
     validate: () => validateLanguageRecord(formState?.recordType, formState?.values || {}),
-    mutate: (actor, payload) => formState.mode === 'create'
-      ? recordState.create(payload, actor)
-      : recordState.update(formState.recordId, payload, actor),
+    mutate: (actor, payload) => {
+      if (formState.mode === 'create') return recordState.create(payload, actor);
+      const { recordType: _recordType, ...editableFields } = payload;
+      return recordState.update(formState.recordId, editableFields, actor);
+    },
     onSuccess: () => setFormState(null),
     successMessage: formState?.mode === 'create' ? '新增成功。' : '更新成功。',
   });
@@ -176,7 +178,7 @@ export default function Language({
             {classRows.map((record) => (
               <div key={record.id} style={{ ...tableRow(writeVisible ? '2fr 1fr 1fr 150px' : '2fr 1fr 1fr'), alignItems: 'center' }}>
                 <span>{record.lang}</span><span>{record.classes}</span><span>{record.students}</span>
-                {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯開班資料</button> <button type="button" disabled={actions.isRowPending(record.id)} onClick={() => softDelete(record.id)}>停用開班資料</button></span>}
+                {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯開班資料</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用開班資料中…' : '停用開班資料'}</button></span>}
               </div>
             ))}
           </div>
@@ -193,7 +195,7 @@ export default function Language({
             {certificationRows.map((record) => (
               <div key={record.id} style={{ ...tableRow(writeVisible ? '1.3fr 1fr 1fr 1fr 160px' : '1.3fr 1fr 1fr 1fr'), alignItems: 'center' }}>
                 <span>{record.lang}</span><span>{record.certifiedTeachers} / {record.totalTeachers}</span><span>{record.tested}</span><span>{record.passed}</span>
-                {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯認證統計</button> <button type="button" disabled={actions.isRowPending(record.id)} onClick={() => softDelete(record.id)}>停用認證統計</button></span>}
+                {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯認證統計</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用認證統計中…' : '停用認證統計'}</button></span>}
               </div>
             ))}
           </div>
@@ -205,7 +207,7 @@ export default function Language({
             {rosterRows.map((record) => (
               <div key={record.id} style={{ ...tableRow(writeVisible ? '1.2fr 1fr 1fr 140px' : '1.2fr 1fr 1fr'), alignItems: 'center' }}>
                 <span>{record.lang}</span><span>{record.level}</span><span>{record.name}</span>
-                {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯名冊</button> <button type="button" disabled={actions.isRowPending(record.id)} onClick={() => softDelete(record.id)}>停用名冊</button></span>}
+                {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯名冊</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用名冊中…' : '停用名冊'}</button></span>}
               </div>
             ))}
           </div>
@@ -220,7 +222,7 @@ export default function Language({
             <div key={record.id} style={{ ...tableRow('1fr 2fr 72px'), opacity: 0.72 }}>
               <span>{TYPE_LABELS[record.recordType]}</span>
               <span>{record.lang} · {record.name || `${record.classes ?? record.certifiedTeachers} / ${record.students ?? record.totalTeachers}`}</span>
-              <button type="button" disabled={actions.isRowPending(record.id)} onClick={() => restore(record.id)}>復原</button>
+              <button type="button" disabled={actions.pending} onClick={() => restore(record.id)}>{actions.isRowPending(record.id) ? '復原中…' : '復原'}</button>
             </div>
           ))}
         </div>
@@ -236,7 +238,7 @@ export default function Language({
                 {fieldSchema.key === 'lang' || fieldSchema.key === 'level' ? (
                   <select
                     aria-label={fieldSchema.label}
-                    disabled={actions.formPending}
+                    disabled={actions.pending}
                     style={{ ...input, marginTop: 5 }}
                     value={formState.values[fieldSchema.key]}
                     onChange={(event) => setFormState((current) => ({
@@ -255,7 +257,7 @@ export default function Language({
                     type={numericInput(fieldSchema) ? 'number' : 'text'}
                     min={numericInput(fieldSchema) ? 0 : undefined}
                     step={numericInput(fieldSchema) ? 1 : undefined}
-                    disabled={actions.formPending}
+                    disabled={actions.pending}
                     style={{ ...input, marginTop: 5 }}
                     value={formState.values[fieldSchema.key]}
                     onChange={(event) => setFormState((current) => ({
@@ -268,7 +270,7 @@ export default function Language({
             ))}
           </div>
           <div style={{ display: 'flex', gap: 10 }}>
-            <button type="button" disabled={actions.formPending} style={{ ...btnPrimary, border: 0 }} onClick={commit}>{formState.mode === 'create' ? '新增' : '儲存'}</button>
+            <button type="button" disabled={actions.pending} style={{ ...btnPrimary, border: 0 }} onClick={commit}>{formState.mode === 'create' ? '新增' : '儲存'}</button>
             <button type="button" disabled={actions.pending} style={btnSecondary} onClick={cancel}>取消</button>
           </div>
         </div>

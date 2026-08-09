@@ -83,6 +83,23 @@ export function createAuthorizationSource(initialAccess = DENIALS.loading, initi
   let currentAccess = initialAccess;
   let currentActor = initialActor;
 
+  const withCurrentActor = (decision) => {
+    if (!decision.allowed) return decision;
+    if (
+      typeof currentActor?.uid !== 'string'
+      || !currentActor.uid
+      || typeof currentActor?.name !== 'string'
+      || !currentActor.name
+    ) {
+      return {
+        allowed: false,
+        code: 'actor-missing',
+        reason: '無法確認操作者身分，請重新登入。',
+      };
+    }
+    return { ...decision, actor: { ...currentActor } };
+  };
+
   return {
     replace(nextAccess, nextActor = null) {
       currentAccess = nextAccess || DENIALS.error;
@@ -90,24 +107,11 @@ export function createAuthorizationSource(initialAccess = DENIALS.loading, initi
     },
     current: () => currentAccess,
     authorizeModule: (moduleKey) => checkModuleAccess(currentAccess, moduleKey),
-    authorizeModuleActor: (moduleKey) => {
-      const decision = checkModuleAccess(currentAccess, moduleKey);
-      if (!decision.allowed) return decision;
-      if (
-        typeof currentActor?.uid !== 'string'
-        || !currentActor.uid
-        || typeof currentActor?.name !== 'string'
-        || !currentActor.name
-      ) {
-        return {
-          allowed: false,
-          code: 'actor-missing',
-          reason: '無法確認操作者身分，請重新登入。',
-        };
-      }
-      return { ...decision, actor: { ...currentActor } };
-    },
+    authorizeModuleActor: (moduleKey) => withCurrentActor(
+      checkModuleAccess(currentAccess, moduleKey),
+    ),
     authorizeAdmin: () => checkAdminAccess(currentAccess),
+    authorizeAdminActor: () => withCurrentActor(checkAdminAccess(currentAccess)),
   };
 }
 

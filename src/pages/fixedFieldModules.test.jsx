@@ -5,11 +5,13 @@ import { createAuthorizationSource } from '../lib/accessPolicy';
 
 const hookMocks = vi.hoisted(() => ({
   modules: {},
+  records: {},
   meta: {},
   audit: {},
   moduleDecision: { allowed: true, code: 'module-writable', reason: null },
   yearDecision: { allowed: true, code: 'year-writable', reason: null, meta: null },
   useYearModule: vi.fn((_, moduleKey) => hookMocks.modules[moduleKey]),
+  useYearRecords: vi.fn((_, moduleKey) => hookMocks.records[moduleKey]),
   useYearMeta: vi.fn(() => ({
     ...hookMocks.meta,
     authorizeWrite: () => ({ ...hookMocks.yearDecision, meta: hookMocks.meta.meta }),
@@ -32,6 +34,7 @@ const authMocks = vi.hoisted(() => ({
 
 vi.mock('../hooks/useYearData', () => ({
   useYearModule: hookMocks.useYearModule,
+  useYearRecords: hookMocks.useYearRecords,
   useYearMeta: hookMocks.useYearMeta,
   useAuditLog: hookMocks.useAuditLog,
 }));
@@ -136,6 +139,13 @@ beforeEach(() => {
       pdfUrl: 'https://example.test/budget.pdf',
       unrelated: { keep: true },
     }),
+  };
+  hookMocks.records = {
+    budget: {
+      data: [],
+      loading: false,
+      error: null,
+    },
   };
   authMocks.decision = {
     allowed: true,

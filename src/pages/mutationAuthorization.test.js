@@ -31,8 +31,8 @@ describe('page mutation authorization audit', () => {
       expect(source).toContain("import { useRecordCrudActions } from '../hooks/useRecordCrudActions';");
       expect(source).toContain('actions.runControl(');
       expect(source).toContain('actions.runMutation(');
-      expect(guardSource).toContain('runAuthorized(() => authorizeModule(moduleKey)');
-      expect(guardSource).toContain('runAuthorized(() => authorizeModuleActor(moduleKey)');
+      expect(guardSource.match(/runAuthorized\(\(\) => authorizeModuleActor\(moduleKey\)/g))
+        .toHaveLength(2);
     },
   );
 });

@@ -24,7 +24,7 @@ function Shell() {
   const [nav, setNav] = useState('dashboard');
 
   const effectiveYear = years.includes(year) ? year : latestYear;
-  const hasCurrentYear = useCurrentYearGuard(effectiveYear);
+  const hasCurrentYear = useCurrentYearGuard(effectiveYear, latestYear);
 
   const pageProps = { year: effectiveYear, years, latestYear, setYear, setNav, hasCurrentYear };
 

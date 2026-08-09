@@ -49,13 +49,16 @@ export function useRecordCrudActions({
   const setMessage = useCallback((message) => publish({ message }), [publish]);
 
   const checkInvocation = useCallback(() => {
+    if (activeScopeRef.current !== scopeToken) {
+      return { allowed: false, reason: '目前選擇的年度已變更，請重新操作。' };
+    }
     if (!hasCurrentYear()) {
       return { allowed: false, reason: '目前選擇的年度已變更，請重新操作。' };
     }
     const yearDecision = yearState.authorizeWrite();
     if (!yearDecision.allowed) return yearDecision;
     return recordState.authorizeWrite();
-  }, [hasCurrentYear, recordState, yearState]);
+  }, [hasCurrentYear, recordState, scopeToken, yearState]);
 
   const applyGuardResult = useCallback((result) => {
     if (!result.executed) {
@@ -70,7 +73,7 @@ export function useRecordCrudActions({
   }, [setMessage]);
 
   const runControl = useCallback(async (action) => {
-    const result = await runAuthorized(() => authorizeModule(moduleKey), async () => {
+    const result = await runAuthorized(() => authorizeModuleActor(moduleKey), async () => {
       const decision = checkInvocation();
       if (!decision.allowed) return decision;
       if (pendingRef.current.keys.size > 0) {
@@ -80,7 +83,7 @@ export function useRecordCrudActions({
       return { allowed: true };
     });
     return applyGuardResult(result);
-  }, [applyGuardResult, authorizeModule, checkInvocation, moduleKey]);
+  }, [applyGuardResult, authorizeModuleActor, checkInvocation, moduleKey]);
 
   const runMutation = useCallback(async ({
     pendingKey,

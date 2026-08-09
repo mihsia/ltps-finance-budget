@@ -200,6 +200,7 @@ export function AuthProvider({ children }) {
       authorizeModule: authorization.authorizeModule,
       authorizeModuleActor: authorization.authorizeModuleActor,
       authorizeAdmin: authorization.authorizeAdmin,
+      authorizeAdminActor: authorization.authorizeAdminActor,
     }}>
       {children}
     </AuthContext.Provider>

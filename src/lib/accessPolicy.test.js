@@ -82,6 +82,26 @@ describe('evaluateProfileAccess', () => {
 });
 
 describe('imperative authorization source', () => {
+  it('binds admin-only state changes to an invocation-current audit actor', () => {
+    const source = policy.createAuthorizationSource?.(
+      evaluate({
+        profileState: 'ready',
+        profile: { role: 'admin', status: 'active', modules: [] },
+      }),
+    );
+
+    expect(source.authorizeAdminActor()).toEqual(expect.objectContaining({
+      allowed: false,
+      code: 'actor-missing',
+    }));
+
+    source.replace(source.current(), { uid: 'admin-now', name: '即時管理員' });
+    expect(source.authorizeAdminActor()).toEqual(expect.objectContaining({
+      allowed: true,
+      actor: { uid: 'admin-now', name: '即時管理員' },
+    }));
+  });
+
   it('rechecks the latest state when a retained module callback is invoked', () => {
     const source = policy.createAuthorizationSource?.();
     expect(source).toBeDefined();
