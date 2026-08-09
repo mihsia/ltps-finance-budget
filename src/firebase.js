@@ -3,9 +3,9 @@ import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
-import firestoreConfig from '../functions/firestoreConfig.cjs';
+import { FIRESTORE_DATABASE_ID } from './lib/firestoreConfig.js';
 
-export const { FIRESTORE_DATABASE_ID } = firestoreConfig;
+export { FIRESTORE_DATABASE_ID };
 
 const useEmulator = import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true';
 
