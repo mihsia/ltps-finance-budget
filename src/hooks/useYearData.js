@@ -272,20 +272,33 @@ export function useAvailableYears() {
   return years;
 }
 
-/** Creates the next fiscal year by copying every module doc from `fromYear`, then unlocking it. */
+/**
+ * Creates the next fiscal year by copying every module doc from `fromYear`,
+ * then unlocking it.
+ *
+ * This is two sequential batch commits, not one: the module-doc security
+ * rule checks the target year is unlocked via a `get()`, and that read does
+ * not see a sibling write's still-uncommitted document from the same
+ * WriteBatch (unlike a transaction, a batch gives rules no such visibility).
+ * The year doc is committed first so it exists by the time the module copy
+ * is rule-checked.
+ */
 export async function createNextYear(fromYear) {
   const nextYear = String(Number(fromYear) + 1);
-  const batch = writeBatch(db);
-  batch.set(doc(db, 'years', nextYear), { locked: false, deadlines: {}, createdAt: serverTimestamp() });
-  batch.set(doc(db, 'years', fromYear), { locked: true }, { merge: true });
+  const yearBatch = writeBatch(db);
+  yearBatch.set(doc(db, 'years', nextYear), { locked: false, deadlines: {}, createdAt: serverTimestamp() });
+  yearBatch.set(doc(db, 'years', fromYear), { locked: true }, { merge: true });
+  await yearBatch.commit();
+
+  const moduleBatch = writeBatch(db);
   for (const key of MODULE_KEYS) {
     const fromSnap = await getDoc(doc(db, 'years', fromYear, 'modules', key));
     if (fromSnap.exists()) {
       const { updatedAt: _updatedAt, ...rest } = fromSnap.data();
-      batch.set(doc(db, 'years', nextYear, 'modules', key), rest);
+      moduleBatch.set(doc(db, 'years', nextYear, 'modules', key), rest);
     }
   }
-  await batch.commit();
+  await moduleBatch.commit();
   return nextYear;
 }
 

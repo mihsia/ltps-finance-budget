@@ -4,6 +4,9 @@ dist
 .env.local
 .firebase
 firebase-debug.log
+firestore-debug.log
+ui-debug.log
+storage-debug.log
 *.local
 serviceAccountKey.json
 .superpowers/

@@ -175,6 +175,43 @@ async function expectRecordMutationsDenied(result) {
   });
 }
 
+describe('createNextYear', () => {
+  it('commits the year doc (unlocked) before starting a separate batch for the module copy', async () => {
+    const { batches } = installMountedFirestoreHarness();
+    firestoreMocks.getDoc.mockImplementation((ref) => Promise.resolve(
+      ref.id === 'budget'
+        ? moduleSnapshot({ fundName: 'x', updatedAt: { seconds: 1 } })
+        : moduleSnapshot(null),
+    ));
+
+    const nextYear = await hookModule.createNextYear('115');
+
+    expect(nextYear).toBe('116');
+    expect(firestoreMocks.writeBatch).toHaveBeenCalledTimes(2);
+    expect(batches).toHaveLength(2);
+
+    const [yearBatch, moduleBatch] = batches;
+    expect(yearBatch.set).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '116' }),
+      expect.objectContaining({ locked: false }),
+    );
+    expect(yearBatch.set).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '115' }),
+      expect.objectContaining({ locked: true }),
+      { merge: true },
+    );
+    expect(yearBatch.commit).toHaveBeenCalledOnce();
+
+    // Only the module that actually had a prior doc ('budget') is copied.
+    expect(moduleBatch.set).toHaveBeenCalledOnce();
+    expect(moduleBatch.set).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'budget', path: ['years', '116', 'modules', 'budget'] }),
+      expect.objectContaining({ fundName: 'x' }),
+    );
+    expect(moduleBatch.commit).toHaveBeenCalledOnce();
+  });
+});
+
 describe('useYearRecords listener', () => {
   beforeEach(() => {
     vi.clearAllMocks();
