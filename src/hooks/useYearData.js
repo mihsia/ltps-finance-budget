@@ -1,9 +1,10 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  doc, onSnapshot, setDoc, collection, addDoc, serverTimestamp,
+  doc, documentId, onSnapshot, collection, addDoc, serverTimestamp,
   query, orderBy, limit as fsLimit, getDoc, writeBatch,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase';
+import { yearDataRepository } from '../lib/yearDataRepository';
 
 // Fallback used only until the /years collection has documents of its own
 // (i.e. before the school's Firebase project has been seeded).
@@ -11,6 +12,170 @@ export const YEARS = ['113', '114', '115'];
 export const CURRENT_YEAR = '115';
 
 const MODULE_KEYS = ['basic', 'budget', 'library', 'language', 'awards', 'club', 'land', 'inquiry', 'budgetbook'];
+
+export function yearRecordsScopeTag(year, moduleKey, includeDeleted = false) {
+  return `${year}\0${moduleKey}\0${includeDeleted ? 1 : 0}`;
+}
+
+export function selectYearRecordsState(state, scopeTag, configured = isFirebaseConfigured) {
+  if (!configured) return { data: [], loading: false, error: null };
+  if (state.scopeTag !== scopeTag) return { data: [], loading: true, error: null };
+  return { data: state.data, loading: state.loading, error: state.error };
+}
+
+export function selectYearModuleState(state, scopeTag, configured = isFirebaseConfigured) {
+  if (!configured) {
+    return { data: null, loading: false, exists: false, error: null };
+  }
+  if (state.scopeTag !== scopeTag) {
+    return { data: null, loading: true, exists: false, error: null };
+  }
+  return {
+    data: state.data,
+    loading: state.loading,
+    exists: state.exists,
+    error: state.error,
+  };
+}
+
+export class StaleYearRecordsScopeError extends Error {
+  constructor() {
+    super('The year records scope is no longer active.');
+    this.name = 'StaleYearRecordsScopeError';
+    this.code = 'stale-year-records-scope';
+  }
+}
+
+export function createScopedYearRecordMutations({
+  year,
+  moduleKey,
+  scopeTag,
+  getActiveScope,
+  repository = yearDataRepository,
+}) {
+  const assertCurrent = () => {
+    if (getActiveScope() !== scopeTag) throw new StaleYearRecordsScopeError();
+  };
+  const run = async (method, values) => {
+    assertCurrent();
+    return repository[method]({
+      year,
+      moduleKey,
+      ...values,
+      assertCurrent,
+    });
+  };
+
+  return {
+    create: (data, actor) => run('createRecord', { data, actor }),
+    update: (recordId, data, actor) => run('updateRecord', { recordId, data, actor }),
+    delete: (recordId, actor) => run('deleteRecord', { recordId, actor }),
+    restore: (recordId, actor) => run('restoreRecord', { recordId, actor }),
+  };
+}
+
+export function createScopedYearModuleSave({
+  year,
+  moduleKey,
+  scopeTag,
+  getActiveScope,
+  repository = yearDataRepository,
+}) {
+  const assertCurrent = () => {
+    if (getActiveScope() !== scopeTag) throw new StaleYearRecordsScopeError();
+  };
+
+  return async (data, audit) => {
+    assertCurrent();
+    const mutation = {
+      year,
+      moduleKey,
+      data,
+      assertCurrent,
+    };
+    if (audit) mutation.audit = audit;
+    return repository.saveModule(mutation);
+  };
+}
+
+export function listenToYearRecords({
+  database = db,
+  year,
+  moduleKey,
+  includeDeleted = false,
+  onState,
+  collectionImpl = collection,
+  queryImpl = query,
+  orderByImpl = orderBy,
+  documentIdImpl = documentId,
+  onSnapshotImpl = onSnapshot,
+}) {
+  const scopeTag = yearRecordsScopeTag(year, moduleKey, includeDeleted);
+  let active = true;
+  onState({ scopeTag, data: [], loading: true, error: null });
+
+  const recordsQuery = queryImpl(
+    collectionImpl(database, 'years', year, 'modules', moduleKey, 'records'),
+    orderByImpl('createdAt', 'asc'),
+    orderByImpl(documentIdImpl(), 'asc'),
+  );
+  const unsubscribe = onSnapshotImpl(
+    recordsQuery,
+    (snapshot) => {
+      if (!active) return;
+      const data = snapshot.docs
+        .map((record) => ({ ...record.data(), id: record.id }))
+        .filter((record) => includeDeleted || !record.deletedAt);
+      onState({ scopeTag, data, loading: false, error: null });
+    },
+    (error) => {
+      if (!active) return;
+      onState({ scopeTag, data: [], loading: false, error });
+    },
+  );
+
+  return () => {
+    active = false;
+    unsubscribe?.();
+  };
+}
+
+export function useYearRecords(year, moduleKey, { includeDeleted = false } = {}) {
+  const scopeTag = yearRecordsScopeTag(year, moduleKey, includeDeleted);
+  const activeScopeRef = useRef(null);
+  activeScopeRef.current = isFirebaseConfigured ? scopeTag : null;
+  const [state, setState] = useState(() => ({
+    scopeTag,
+    data: [],
+    loading: isFirebaseConfigured,
+    error: null,
+  }));
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) return undefined;
+    activeScopeRef.current = scopeTag;
+    const stop = listenToYearRecords({
+      year,
+      moduleKey,
+      includeDeleted,
+      onState: setState,
+    });
+    return () => {
+      stop();
+      if (activeScopeRef.current === scopeTag) activeScopeRef.current = null;
+    };
+  }, [year, moduleKey, includeDeleted, scopeTag]);
+
+  const mutations = useMemo(() => createScopedYearRecordMutations({
+    year,
+    moduleKey,
+    scopeTag,
+    getActiveScope: () => activeScopeRef.current,
+  }), [year, moduleKey, scopeTag]);
+  const visibleState = selectYearRecordsState(state, scopeTag);
+
+  return { ...visibleState, ...mutations };
+}
 
 /** Live list of fiscal years that exist under /years, sorted ascending. Falls back to the static defaults above. */
 export function useAvailableYears() {
@@ -66,35 +231,67 @@ export function useYearMeta(year) {
 
 /** Live-subscribes to /years/{year}/modules/{moduleKey}; save() writes back with merge. */
 export function useYearModule(year, moduleKey) {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(isFirebaseConfigured);
-  const [exists, setExists] = useState(false);
+  const scopeTag = yearRecordsScopeTag(year, moduleKey);
+  const activeScopeRef = useRef(null);
+  activeScopeRef.current = isFirebaseConfigured ? scopeTag : null;
+  const [state, setState] = useState(() => ({
+    scopeTag,
+    data: null,
+    loading: isFirebaseConfigured,
+    exists: false,
+    error: null,
+  }));
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-    setLoading(true);
+    activeScopeRef.current = scopeTag;
+    setState({ scopeTag, data: null, loading: true, exists: false, error: null });
     const ref = doc(db, 'years', year, 'modules', moduleKey);
-    const unsub = onSnapshot(ref, (snap) => {
-      setData(snap.exists() ? snap.data() : null);
-      setExists(snap.exists());
-      setLoading(false);
-    });
-    return unsub;
-  }, [year, moduleKey]);
+    const unsub = onSnapshot(
+      ref,
+      (snap) => {
+        if (activeScopeRef.current !== scopeTag) return;
+        setState({
+          scopeTag,
+          data: snap.exists() ? snap.data() : null,
+          exists: snap.exists(),
+          loading: false,
+          error: null,
+        });
+      },
+      (error) => {
+        if (activeScopeRef.current !== scopeTag) return;
+        setState({
+          scopeTag,
+          data: null,
+          exists: false,
+          loading: false,
+          error,
+        });
+      },
+    );
+    return () => {
+      unsub();
+      if (activeScopeRef.current === scopeTag) activeScopeRef.current = null;
+    };
+  }, [year, moduleKey, scopeTag]);
 
-  const save = useCallback(async (next) => {
-    const ref = doc(db, 'years', year, 'modules', moduleKey);
-    await setDoc(ref, { ...next, updatedAt: serverTimestamp() }, { merge: true });
-  }, [year, moduleKey]);
+  const save = useMemo(() => createScopedYearModuleSave({
+    year,
+    moduleKey,
+    scopeTag,
+    getActiveScope: () => activeScopeRef.current,
+  }), [year, moduleKey, scopeTag]);
 
   const copyFrom = useCallback(async (fromYear) => {
+    if (activeScopeRef.current !== scopeTag) throw new StaleYearRecordsScopeError();
     const fromSnap = await getDoc(doc(db, 'years', fromYear, 'modules', moduleKey));
     if (!fromSnap.exists()) return;
     const { updatedAt, ...rest } = fromSnap.data();
     await save(rest);
-  }, [moduleKey, save]);
+  }, [moduleKey, save, scopeTag]);
 
-  return { data, loading, exists, save, copyFrom };
+  return { ...selectYearModuleState(state, scopeTag), save, copyFrom };
 }
 
 /**
