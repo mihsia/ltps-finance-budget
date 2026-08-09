@@ -17,17 +17,35 @@ export function yearRecordsScopeTag(year, moduleKey, includeDeleted = false) {
   return `${year}\0${moduleKey}\0${includeDeleted ? 1 : 0}`;
 }
 
-export function selectYearRecordsState(state, scopeTag, configured = isFirebaseConfigured) {
+export function selectYearRecordsState(
+  state,
+  scopeTag,
+  configured = isFirebaseConfigured,
+  scopeGeneration,
+) {
   if (!configured) return { data: [], loading: false, error: null };
-  if (state.scopeTag !== scopeTag) return { data: [], loading: true, error: null };
+  if (
+    state.scopeTag !== scopeTag
+    || (scopeGeneration && state.scopeGeneration !== scopeGeneration)
+  ) {
+    return { data: [], loading: true, error: null };
+  }
   return { data: state.data, loading: state.loading, error: state.error };
 }
 
-export function selectYearModuleState(state, scopeTag, configured = isFirebaseConfigured) {
+export function selectYearModuleState(
+  state,
+  scopeTag,
+  configured = isFirebaseConfigured,
+  scopeGeneration,
+) {
   if (!configured) {
     return { data: null, loading: false, exists: false, error: null };
   }
-  if (state.scopeTag !== scopeTag) {
+  if (
+    state.scopeTag !== scopeTag
+    || (scopeGeneration && state.scopeGeneration !== scopeGeneration)
+  ) {
     return { data: null, loading: true, exists: false, error: null };
   }
   return {
@@ -49,12 +67,12 @@ export class StaleYearRecordsScopeError extends Error {
 export function createScopedYearRecordMutations({
   year,
   moduleKey,
-  scopeTag,
+  scopeGeneration,
   getActiveScope,
   repository = yearDataRepository,
 }) {
   const assertCurrent = () => {
-    if (getActiveScope() !== scopeTag) throw new StaleYearRecordsScopeError();
+    if (getActiveScope() !== scopeGeneration) throw new StaleYearRecordsScopeError();
   };
   const run = async (method, values) => {
     assertCurrent();
@@ -77,12 +95,12 @@ export function createScopedYearRecordMutations({
 export function createScopedYearModuleSave({
   year,
   moduleKey,
-  scopeTag,
+  scopeGeneration,
   getActiveScope,
   repository = yearDataRepository,
 }) {
   const assertCurrent = () => {
-    if (getActiveScope() !== scopeTag) throw new StaleYearRecordsScopeError();
+    if (getActiveScope() !== scopeGeneration) throw new StaleYearRecordsScopeError();
   };
 
   return async (data, audit) => {
@@ -142,10 +160,15 @@ export function listenToYearRecords({
 
 export function useYearRecords(year, moduleKey, { includeDeleted = false } = {}) {
   const scopeTag = yearRecordsScopeTag(year, moduleKey, includeDeleted);
-  const activeScopeRef = useRef(null);
-  activeScopeRef.current = isFirebaseConfigured ? scopeTag : null;
+  const scopeGeneration = useMemo(() => ({ scopeTag }), [scopeTag]);
+  const currentGenerationRef = useRef(null);
+  const activeSubscriptionRef = useRef(null);
+  const mutationReadyRef = useRef(null);
+  currentGenerationRef.current = isFirebaseConfigured ? scopeGeneration : null;
+  if (mutationReadyRef.current !== scopeGeneration) mutationReadyRef.current = null;
   const [state, setState] = useState(() => ({
     scopeTag,
+    scopeGeneration,
     data: [],
     loading: isFirebaseConfigured,
     error: null,
@@ -153,26 +176,48 @@ export function useYearRecords(year, moduleKey, { includeDeleted = false } = {})
 
   useEffect(() => {
     if (!isFirebaseConfigured) return undefined;
-    activeScopeRef.current = scopeTag;
+    const subscriptionToken = {};
+    activeSubscriptionRef.current = subscriptionToken;
+    mutationReadyRef.current = null;
     const stop = listenToYearRecords({
       year,
       moduleKey,
       includeDeleted,
-      onState: setState,
+      onState: (nextState) => {
+        if (
+          currentGenerationRef.current !== scopeGeneration
+          || activeSubscriptionRef.current !== subscriptionToken
+        ) return;
+        if (nextState.loading || nextState.error) {
+          mutationReadyRef.current = null;
+        } else {
+          mutationReadyRef.current = scopeGeneration;
+        }
+        if (nextState.error) activeSubscriptionRef.current = null;
+        setState({ ...nextState, scopeGeneration });
+      },
     });
     return () => {
       stop();
-      if (activeScopeRef.current === scopeTag) activeScopeRef.current = null;
+      if (activeSubscriptionRef.current === subscriptionToken) {
+        activeSubscriptionRef.current = null;
+        if (mutationReadyRef.current === scopeGeneration) mutationReadyRef.current = null;
+      }
     };
-  }, [year, moduleKey, includeDeleted, scopeTag]);
+  }, [year, moduleKey, includeDeleted, scopeGeneration]);
 
   const mutations = useMemo(() => createScopedYearRecordMutations({
     year,
     moduleKey,
+    scopeGeneration,
+    getActiveScope: () => mutationReadyRef.current,
+  }), [year, moduleKey, scopeGeneration]);
+  const visibleState = selectYearRecordsState(
+    state,
     scopeTag,
-    getActiveScope: () => activeScopeRef.current,
-  }), [year, moduleKey, scopeTag]);
-  const visibleState = selectYearRecordsState(state, scopeTag);
+    isFirebaseConfigured,
+    scopeGeneration,
+  );
 
   return { ...visibleState, ...mutations };
 }
@@ -232,10 +277,15 @@ export function useYearMeta(year) {
 /** Live-subscribes to /years/{year}/modules/{moduleKey}; save() writes back with merge. */
 export function useYearModule(year, moduleKey) {
   const scopeTag = yearRecordsScopeTag(year, moduleKey);
-  const activeScopeRef = useRef(null);
-  activeScopeRef.current = isFirebaseConfigured ? scopeTag : null;
+  const scopeGeneration = useMemo(() => ({ scopeTag }), [scopeTag]);
+  const currentGenerationRef = useRef(null);
+  const activeSubscriptionRef = useRef(null);
+  const mutationReadyRef = useRef(null);
+  currentGenerationRef.current = isFirebaseConfigured ? scopeGeneration : null;
+  if (mutationReadyRef.current !== scopeGeneration) mutationReadyRef.current = null;
   const [state, setState] = useState(() => ({
     scopeTag,
+    scopeGeneration,
     data: null,
     loading: isFirebaseConfigured,
     exists: false,
@@ -244,15 +294,29 @@ export function useYearModule(year, moduleKey) {
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-    activeScopeRef.current = scopeTag;
-    setState({ scopeTag, data: null, loading: true, exists: false, error: null });
+    const subscriptionToken = {};
+    activeSubscriptionRef.current = subscriptionToken;
+    mutationReadyRef.current = null;
+    setState({
+      scopeTag,
+      scopeGeneration,
+      data: null,
+      loading: true,
+      exists: false,
+      error: null,
+    });
     const ref = doc(db, 'years', year, 'modules', moduleKey);
     const unsub = onSnapshot(
       ref,
       (snap) => {
-        if (activeScopeRef.current !== scopeTag) return;
+        if (
+          currentGenerationRef.current !== scopeGeneration
+          || activeSubscriptionRef.current !== subscriptionToken
+        ) return;
+        mutationReadyRef.current = scopeGeneration;
         setState({
           scopeTag,
+          scopeGeneration,
           data: snap.exists() ? snap.data() : null,
           exists: snap.exists(),
           loading: false,
@@ -260,9 +324,15 @@ export function useYearModule(year, moduleKey) {
         });
       },
       (error) => {
-        if (activeScopeRef.current !== scopeTag) return;
+        if (
+          currentGenerationRef.current !== scopeGeneration
+          || activeSubscriptionRef.current !== subscriptionToken
+        ) return;
+        mutationReadyRef.current = null;
+        activeSubscriptionRef.current = null;
         setState({
           scopeTag,
+          scopeGeneration,
           data: null,
           exists: false,
           loading: false,
@@ -272,26 +342,38 @@ export function useYearModule(year, moduleKey) {
     );
     return () => {
       unsub();
-      if (activeScopeRef.current === scopeTag) activeScopeRef.current = null;
+      if (activeSubscriptionRef.current === subscriptionToken) {
+        activeSubscriptionRef.current = null;
+        if (mutationReadyRef.current === scopeGeneration) mutationReadyRef.current = null;
+      }
     };
-  }, [year, moduleKey, scopeTag]);
+  }, [year, moduleKey, scopeTag, scopeGeneration]);
 
   const save = useMemo(() => createScopedYearModuleSave({
     year,
     moduleKey,
-    scopeTag,
-    getActiveScope: () => activeScopeRef.current,
-  }), [year, moduleKey, scopeTag]);
+    scopeGeneration,
+    getActiveScope: () => mutationReadyRef.current,
+  }), [year, moduleKey, scopeGeneration]);
 
   const copyFrom = useCallback(async (fromYear) => {
-    if (activeScopeRef.current !== scopeTag) throw new StaleYearRecordsScopeError();
+    if (mutationReadyRef.current !== scopeGeneration) throw new StaleYearRecordsScopeError();
     const fromSnap = await getDoc(doc(db, 'years', fromYear, 'modules', moduleKey));
     if (!fromSnap.exists()) return;
     const { updatedAt, ...rest } = fromSnap.data();
     await save(rest);
-  }, [moduleKey, save, scopeTag]);
+  }, [moduleKey, save, scopeGeneration]);
 
-  return { ...selectYearModuleState(state, scopeTag), save, copyFrom };
+  return {
+    ...selectYearModuleState(
+      state,
+      scopeTag,
+      isFirebaseConfigured,
+      scopeGeneration,
+    ),
+    save,
+    copyFrom,
+  };
 }
 
 /**
