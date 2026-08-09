@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useAvailableYears } from './hooks/useYearData';
+import { useCurrentYearGuard } from './hooks/useCurrentYearGuard';
 import { genericModuleKeys } from './lib/nav';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
@@ -23,8 +24,9 @@ function Shell() {
   const [nav, setNav] = useState('dashboard');
 
   const effectiveYear = years.includes(year) ? year : latestYear;
+  const hasCurrentYear = useCurrentYearGuard(effectiveYear);
 
-  const pageProps = { year: effectiveYear, years, latestYear, setYear, setNav };
+  const pageProps = { year: effectiveYear, years, latestYear, setYear, setNav, hasCurrentYear };
 
   const renderPage = () => {
     if (nav === 'dashboard') return <Dashboard {...pageProps} />;

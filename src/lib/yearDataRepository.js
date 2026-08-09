@@ -41,6 +41,16 @@ function auditData({ moduleKey, recordId, action, actor, before, after, timestam
   };
 }
 
+function auditFields(data, fields) {
+  if (!Array.isArray(fields)) return data;
+  if (data === null) return null;
+  return Object.fromEntries(
+    fields
+      .filter((field) => Object.hasOwn(data, field))
+      .map((field) => [field, data[field]]),
+  );
+}
+
 export function createYearDataRepository({
   database = db,
   firestore = defaultFirestore,
@@ -71,8 +81,8 @@ export function createYearDataRepository({
         recordId: null,
         action: audit.action || (snapshot.exists() ? 'update' : 'create'),
         actor: audit.actor,
-        before,
-        after,
+        before: auditFields(before, audit.fields),
+        after: auditFields(after, audit.fields),
         timestamp,
       }));
     }

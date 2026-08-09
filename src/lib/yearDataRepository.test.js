@@ -403,6 +403,53 @@ describe('year data repository', () => {
     expect(harness.batches[0].commit).toHaveBeenCalledOnce();
   });
 
+  it('limits fixed-field module audit snapshots to exact typed fields while preserving unrelated server data', async () => {
+    const harness = createFirestoreHarness();
+    const serverBefore = {
+      classes: 13,
+      students: '262',
+      status: 'draft',
+      unrelated: { keep: true },
+      updatedAt: { seconds: 4 },
+    };
+    harness.firestore.getDocFromServer.mockResolvedValue(documentSnapshot(serverBefore));
+    const repository = repositoryModule.createYearDataRepository({
+      database: harness.database,
+      firestore: harness.firestore,
+    });
+
+    await repository.saveModule({
+      year: '115',
+      moduleKey: 'basic',
+      data: { classes: '13', students: '263', status: 'submitted' },
+      audit: {
+        actor: { uid: 'admin-fields', name: '欄位管理員' },
+        fields: ['classes', 'students', 'status'],
+      },
+    });
+
+    const [moduleWrite, auditWrite] = harness.batches[0].operations;
+    expect(moduleWrite.data).toEqual({
+      ...serverBefore,
+      classes: '13',
+      students: '263',
+      status: 'submitted',
+      updatedAt: harness.timestamp,
+    });
+    expect(auditWrite.data.before).toEqual({
+      classes: 13,
+      students: '262',
+      status: 'draft',
+    });
+    expect(auditWrite.data.after).toEqual({
+      classes: '13',
+      students: '263',
+      status: 'submitted',
+    });
+    expect(auditWrite.data).not.toHaveProperty('before.unrelated');
+    expect(auditWrite.data).not.toHaveProperty('after.unrelated');
+  });
+
   it.each(['updateRecord', 'deleteRecord', 'restoreRecord', 'saveModule'])(
     'rechecks the active scope after the server read before %s creates a batch',
     async (method) => {

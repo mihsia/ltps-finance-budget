@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   doc, documentId, onSnapshot, collection, addDoc, serverTimestamp,
-  query, orderBy, limit as fsLimit, getDoc, writeBatch,
+  query, where, orderBy, limit as fsLimit, getDoc, writeBatch,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase';
 import { yearDataRepository } from '../lib/yearDataRepository';
@@ -258,20 +258,128 @@ export async function createNextYear(fromYear) {
 
 /** Live-subscribes to /years/{year}, giving lock state + per-module deadlines. */
 export function useYearMeta(year) {
-  const [meta, setMeta] = useState(null);
-  const [loading, setLoading] = useState(isFirebaseConfigured);
+  const scopeGeneration = useMemo(() => ({ year }), [year]);
+  const currentGenerationRef = useRef(null);
+  const activeSubscriptionRef = useRef(null);
+  const accessStateRef = useRef(null);
+  currentGenerationRef.current = isFirebaseConfigured ? scopeGeneration : null;
+  if (accessStateRef.current?.scopeGeneration !== scopeGeneration) {
+    accessStateRef.current = {
+      scopeGeneration,
+      status: isFirebaseConfigured ? 'loading' : 'unavailable',
+      meta: null,
+    };
+  }
+  const [state, setState] = useState(() => ({
+    scopeGeneration,
+    meta: null,
+    loading: isFirebaseConfigured,
+    exists: false,
+    error: null,
+  }));
 
   useEffect(() => {
-    if (!isFirebaseConfigured) return;
-    setLoading(true);
-    const unsub = onSnapshot(doc(db, 'years', year), (snap) => {
-      setMeta(snap.exists() ? snap.data() : { locked: false, deadlines: {} });
-      setLoading(false);
+    if (!isFirebaseConfigured) return undefined;
+    const subscriptionToken = {};
+    activeSubscriptionRef.current = subscriptionToken;
+    accessStateRef.current = { scopeGeneration, status: 'loading', meta: null };
+    setState({
+      scopeGeneration,
+      meta: null,
+      loading: true,
+      exists: false,
+      error: null,
     });
-    return unsub;
-  }, [year]);
+    const unsub = onSnapshot(
+      doc(db, 'years', year),
+      (snap) => {
+        if (
+          currentGenerationRef.current !== scopeGeneration
+          || activeSubscriptionRef.current !== subscriptionToken
+        ) return;
+        const exists = snap.exists();
+        const meta = exists ? snap.data() : null;
+        accessStateRef.current = {
+          scopeGeneration,
+          status: exists ? (meta?.locked ? 'locked' : 'ready') : 'missing',
+          meta,
+        };
+        setState({
+          scopeGeneration,
+          meta,
+          loading: false,
+          exists,
+          error: null,
+        });
+      },
+      (error) => {
+        if (
+          currentGenerationRef.current !== scopeGeneration
+          || activeSubscriptionRef.current !== subscriptionToken
+        ) return;
+        activeSubscriptionRef.current = null;
+        accessStateRef.current = { scopeGeneration, status: 'error', meta: null };
+        setState({
+          scopeGeneration,
+          meta: null,
+          loading: false,
+          exists: false,
+          error,
+        });
+      },
+    );
+    return () => {
+      unsub?.();
+      if (activeSubscriptionRef.current === subscriptionToken) {
+        activeSubscriptionRef.current = null;
+        if (accessStateRef.current?.scopeGeneration === scopeGeneration) {
+          accessStateRef.current = { scopeGeneration, status: 'stale', meta: null };
+        }
+      }
+      if (currentGenerationRef.current === scopeGeneration) currentGenerationRef.current = null;
+    };
+  }, [year, scopeGeneration]);
 
-  return { meta, loading };
+  const authorizeWrite = useCallback(() => {
+    const current = accessStateRef.current;
+    if (
+      currentGenerationRef.current !== scopeGeneration
+      || current?.scopeGeneration !== scopeGeneration
+    ) {
+      return { allowed: false, code: 'year-stale', reason: '目前選擇的年度已變更，請重新操作。' };
+    }
+    if (current.status === 'ready') {
+      return { allowed: true, code: 'year-writable', reason: null, meta: current.meta };
+    }
+    if (current.status === 'missing') {
+      return { allowed: false, code: 'year-missing', reason: '找不到此年度設定，無法儲存。' };
+    }
+    if (current.status === 'locked') {
+      return { allowed: false, code: 'year-locked', reason: '此年度已鎖定，無法編輯或儲存。' };
+    }
+    if (current.status === 'error') {
+      return { allowed: false, code: 'year-error', reason: '無法確認年度狀態，請稍後再試。' };
+    }
+    return { allowed: false, code: 'year-loading', reason: '正在確認年度狀態，請稍候。' };
+  }, [scopeGeneration]);
+
+  const visibleState = state.scopeGeneration === scopeGeneration
+    ? state
+    : {
+      scopeGeneration,
+      meta: null,
+      loading: isFirebaseConfigured,
+      exists: false,
+      error: null,
+    };
+
+  return {
+    meta: visibleState.meta,
+    loading: visibleState.loading,
+    exists: visibleState.exists,
+    error: visibleState.error,
+    authorizeWrite,
+  };
 }
 
 /** Live-subscribes to /years/{year}/modules/{moduleKey}; save() writes back with merge. */
@@ -281,8 +389,15 @@ export function useYearModule(year, moduleKey) {
   const currentGenerationRef = useRef(null);
   const activeSubscriptionRef = useRef(null);
   const mutationReadyRef = useRef(null);
+  const accessStateRef = useRef(null);
   currentGenerationRef.current = isFirebaseConfigured ? scopeGeneration : null;
   if (mutationReadyRef.current !== scopeGeneration) mutationReadyRef.current = null;
+  if (accessStateRef.current?.scopeGeneration !== scopeGeneration) {
+    accessStateRef.current = {
+      scopeGeneration,
+      status: isFirebaseConfigured ? 'loading' : 'unavailable',
+    };
+  }
   const [state, setState] = useState(() => ({
     scopeTag,
     scopeGeneration,
@@ -297,6 +412,7 @@ export function useYearModule(year, moduleKey) {
     const subscriptionToken = {};
     activeSubscriptionRef.current = subscriptionToken;
     mutationReadyRef.current = null;
+    accessStateRef.current = { scopeGeneration, status: 'loading' };
     setState({
       scopeTag,
       scopeGeneration,
@@ -314,6 +430,7 @@ export function useYearModule(year, moduleKey) {
           || activeSubscriptionRef.current !== subscriptionToken
         ) return;
         mutationReadyRef.current = scopeGeneration;
+        accessStateRef.current = { scopeGeneration, status: 'ready' };
         setState({
           scopeTag,
           scopeGeneration,
@@ -330,6 +447,7 @@ export function useYearModule(year, moduleKey) {
         ) return;
         mutationReadyRef.current = null;
         activeSubscriptionRef.current = null;
+        accessStateRef.current = { scopeGeneration, status: 'error' };
         setState({
           scopeTag,
           scopeGeneration,
@@ -345,7 +463,11 @@ export function useYearModule(year, moduleKey) {
       if (activeSubscriptionRef.current === subscriptionToken) {
         activeSubscriptionRef.current = null;
         if (mutationReadyRef.current === scopeGeneration) mutationReadyRef.current = null;
+        if (accessStateRef.current?.scopeGeneration === scopeGeneration) {
+          accessStateRef.current = { scopeGeneration, status: 'stale' };
+        }
       }
+      if (currentGenerationRef.current === scopeGeneration) currentGenerationRef.current = null;
     };
   }, [year, moduleKey, scopeTag, scopeGeneration]);
 
@@ -364,6 +486,23 @@ export function useYearModule(year, moduleKey) {
     await save(rest);
   }, [moduleKey, save, scopeGeneration]);
 
+  const authorizeWrite = useCallback(() => {
+    const current = accessStateRef.current;
+    if (
+      currentGenerationRef.current !== scopeGeneration
+      || current?.scopeGeneration !== scopeGeneration
+    ) {
+      return { allowed: false, code: 'module-stale', reason: '目前模組資料已變更，請重新操作。' };
+    }
+    if (current.status === 'ready' && mutationReadyRef.current === scopeGeneration) {
+      return { allowed: true, code: 'module-writable', reason: null };
+    }
+    if (current.status === 'error') {
+      return { allowed: false, code: 'module-error', reason: '無法確認模組資料狀態，請稍後再試。' };
+    }
+    return { allowed: false, code: 'module-loading', reason: '正在確認模組資料，請稍候。' };
+  }, [scopeGeneration]);
+
   return {
     ...selectYearModuleState(
       state,
@@ -373,7 +512,73 @@ export function useYearModule(year, moduleKey) {
     ),
     save,
     copyFrom,
+    authorizeWrite,
   };
+}
+
+export function auditLogScopeTag(year, moduleKey, max) {
+  return `${year}\0${moduleKey}\0${max}`;
+}
+
+export function useAuditLog(year, { moduleKey, max = 20 } = {}) {
+  const scopeTag = auditLogScopeTag(year, moduleKey, max);
+  const scopeGeneration = useMemo(() => ({ scopeTag }), [scopeTag]);
+  const currentGenerationRef = useRef(scopeGeneration);
+  const activeSubscriptionRef = useRef(null);
+  currentGenerationRef.current = scopeGeneration;
+  const [state, setState] = useState(() => ({
+    scopeGeneration,
+    entries: [],
+    loading: isFirebaseConfigured,
+    error: null,
+  }));
+
+  useEffect(() => {
+    if (!isFirebaseConfigured) return undefined;
+    const subscriptionToken = {};
+    activeSubscriptionRef.current = subscriptionToken;
+    setState({ scopeGeneration, entries: [], loading: true, error: null });
+    const auditQuery = query(
+      collection(db, 'years', year, 'auditLogs'),
+      where('moduleKey', '==', moduleKey),
+      orderBy('createdAt', 'desc'),
+      fsLimit(max),
+    );
+    const unsub = onSnapshot(
+      auditQuery,
+      (snapshot) => {
+        if (
+          currentGenerationRef.current !== scopeGeneration
+          || activeSubscriptionRef.current !== subscriptionToken
+        ) return;
+        setState({
+          scopeGeneration,
+          entries: snapshot.docs.map((entry) => ({ id: entry.id, ...entry.data() })),
+          loading: false,
+          error: null,
+        });
+      },
+      (error) => {
+        if (
+          currentGenerationRef.current !== scopeGeneration
+          || activeSubscriptionRef.current !== subscriptionToken
+        ) return;
+        activeSubscriptionRef.current = null;
+        setState({ scopeGeneration, entries: [], loading: false, error });
+      },
+    );
+    return () => {
+      unsub?.();
+      if (activeSubscriptionRef.current === subscriptionToken) {
+        activeSubscriptionRef.current = null;
+      }
+    };
+  }, [year, moduleKey, max, scopeGeneration]);
+
+  if (state.scopeGeneration !== scopeGeneration) {
+    return { entries: [], loading: isFirebaseConfigured, error: null };
+  }
+  return { entries: state.entries, loading: state.loading, error: state.error };
 }
 
 /**

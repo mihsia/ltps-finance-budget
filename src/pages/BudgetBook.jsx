@@ -1,65 +1,159 @@
-import { useYearModule } from '../hooks/useYearData';
+import { useYearMeta, useYearModule } from '../hooks/useYearData';
+import { useFixedFieldEditor } from '../hooks/useFixedFieldEditor';
+import { useAuth } from '../contexts/AuthContext';
+import { runAuthorized } from '../lib/accessPolicy';
 import { fmtNum } from '../lib/format';
-import { pageTitle, pageSubtitle, card, btnOutline, progressBar } from '../styles';
+import { pageTitle, pageSubtitle, card, btnOutline, btnPrimary, btnSecondary, input, label, lockedBanner, progressBar } from '../styles';
 
-export default function BudgetBook({ year }) {
-  const { data: budget } = useYearModule(year, 'budget');
-  const { data: meta } = useYearModule(year, 'budgetbook');
+const FIELDS = ['fundName', 'reviewAuthority'];
 
+export default function BudgetBook({ year, hasCurrentYear = () => false }) {
+  const budgetState = useYearModule(year, 'budget');
+  const moduleState = useYearModule(year, 'budgetbook');
+  const yearState = useYearMeta(year);
+  const { profile, user, canEditModule, authorizeModule } = useAuth();
+  const editor = useFixedFieldEditor({
+    scopeKey: `${year}\0budgetbook`,
+    data: moduleState.data,
+    fields: FIELDS,
+  });
+  const actor = {
+    uid: user?.uid || '',
+    name: profile?.name || user?.email || '未知使用者',
+  };
+
+  const checkInvocation = () => {
+    if (!hasCurrentYear()) return { allowed: false, reason: '目前選擇的年度已變更，請重新操作。' };
+    const yearDecision = yearState.authorizeWrite();
+    if (!yearDecision.allowed) return yearDecision;
+    return moduleState.authorizeWrite();
+  };
+  const applyGuardResult = (result) => {
+    if (!result.executed) editor.setMessage(result.reason);
+    else if (result.value?.allowed === false) editor.setMessage(result.value.reason);
+  };
+
+  const beginEditing = async () => {
+    const result = await runAuthorized(() => authorizeModule('budgetbook'), async () => {
+      const decision = checkInvocation();
+      if (!decision.allowed) return decision;
+      editor.beginEditing();
+      return { allowed: true };
+    });
+    applyGuardResult(result);
+  };
+  const cancelEditing = async () => {
+    const result = await runAuthorized(() => authorizeModule('budgetbook'), async () => {
+      const decision = checkInvocation();
+      if (!decision.allowed) return decision;
+      editor.cancelEditing();
+      return { allowed: true };
+    });
+    applyGuardResult(result);
+  };
+  const commit = async () => {
+    const result = await runAuthorized(() => authorizeModule('budgetbook'), async () => {
+      const decision = checkInvocation();
+      if (!decision.allowed) return decision;
+      const payload = {
+        fundName: editor.form.fundName.trim(),
+        reviewAuthority: editor.form.reviewAuthority.trim(),
+      };
+      if (!payload.fundName || !payload.reviewAuthority) {
+        return { allowed: false, reason: '基金別與審議機關不得留白。' };
+      }
+      if (payload.fundName.length > 100 || payload.reviewAuthority.length > 100) {
+        return { allowed: false, reason: '基金別與審議機關不得超過 100 個字。' };
+      }
+      const token = editor.beginSave(payload);
+      if (!token) return { allowed: true };
+      try {
+        await moduleState.save(payload, { actor, fields: FIELDS });
+        editor.saveSucceeded(token);
+      } catch {
+        editor.saveFailed(token);
+      }
+      return { allowed: true };
+    });
+    applyGuardResult(result);
+  };
+
+  if (moduleState.loading || yearState.loading) {
+    return <div><div style={pageTitle}>{year}年度預算書</div><div style={card}>正在載入預算書基本資料…</div></div>;
+  }
+  if (moduleState.error || yearState.error) {
+    return <div><div style={pageTitle}>{year}年度預算書</div><div style={lockedBanner}>無法載入預算書基本資料，請稍後再試。</div></div>;
+  }
+
+  const budget = budgetState.data;
   const expenseRows = budget?.expense?.breakdown || [];
   const revenueRows = budget?.revenue?.rows || [];
-  const expenseTotal = expenseRows.reduce((s, r) => s + Number(r.amount || 0), 0);
-  const revenueTotal = revenueRows.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const expenseTotal = expenseRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const revenueTotal = revenueRows.reduce((sum, row) => sum + Number(row.amount || 0), 0);
   const shortfall = revenueTotal - expenseTotal;
+  const canStartEditing = canEditModule('budgetbook')
+    && yearState.exists
+    && !yearState.meta?.locked;
 
   return (
     <div>
       <div style={pageTitle}>{year}年度預算書</div>
-      <div style={pageSubtitle}>依原始預算書內容摘要陳現，供議會對照全文 PDF</div>
+      <div style={pageSubtitle}>依原始預算書內容摘要呈現，供議會對照全文 PDF</div>
+      {!yearState.exists && <div style={lockedBanner}>找不到此年度設定，無法編輯或儲存。</div>}
+      {yearState.meta?.locked && <div style={lockedBanner}>此年度已鎖定，無法編輯或儲存。</div>}
+      {!canEditModule('budgetbook') && <div style={lockedBanner}>您沒有此模組的編輯權限。</div>}
+      {editor.message && <div style={{ color: editor.message === '儲存成功。' ? '#2F7D55' : '#B5533E', marginBottom: 14 }}>{editor.message}</div>}
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, maxWidth: 720, marginBottom: 20 }}>
         <div style={card}>
-          <div style={{ font: "700 13px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 10 }}>收支平衡表</div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #EEEBE2', font: "500 13px 'Noto Sans TC', sans-serif", color: '#454B45' }}>
-            <span>基金來源合計（歲入）</span><span style={{ font: '700 13px Inter, sans-serif', color: '#1E2420' }}>{fmtNum(revenueTotal)} 千元</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '1px solid #EEEBE2', font: "500 13px 'Noto Sans TC', sans-serif", color: '#454B45' }}>
-            <span>基金用途合計（歲出）</span><span style={{ font: '700 13px Inter, sans-serif', color: '#1E2420' }}>{fmtNum(expenseTotal)} 千元</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderTop: '2px solid #1F5F52', font: "800 13px 'Noto Sans TC', sans-serif", color: '#1F5F52' }}>
-            <span>本期{shortfall < 0 ? '短絀' : '賸餘'}（{shortfall < 0 ? '移用以前年度基金餘額支應' : '併入以後年度基金餘額'}）</span>
-            <span style={{ font: '800 13px Inter, sans-serif' }}>{fmtNum(shortfall)}</span>
-          </div>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>收支平衡表</div>
+          <div>基金來源合計（歲入） <b>{fmtNum(revenueTotal)} 千元</b></div>
+          <div>基金用途合計（歲出） <b>{fmtNum(expenseTotal)} 千元</b></div>
+          <div>本期{shortfall < 0 ? '短絀' : '賸餘'} <b>{fmtNum(shortfall)}</b></div>
         </div>
         <div style={card}>
-          <div style={{ font: "700 13px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 4 }}>基金別</div>
-          <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 10 }}>{meta?.fundName || '利澤國小校務基金'}</div>
-          <div style={{ font: "700 13px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 4 }}>審議機關</div>
-          <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>{meta?.reviewAuthority || '宜蘭縣議會'}</div>
+          {editor.editing ? (
+            <>
+              <label style={label}>基金別</label>
+              <input disabled={editor.pending} value={editor.form.fundName} onChange={(event) => editor.updateField('fundName', event.target.value)} style={{ ...input, marginBottom: 12 }} />
+              <label style={label}>審議機關</label>
+              <input disabled={editor.pending} value={editor.form.reviewAuthority} onChange={(event) => editor.updateField('reviewAuthority', event.target.value)} style={input} />
+              <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+                <button type="button" disabled={editor.pending} onClick={commit} style={{ ...btnPrimary, border: 0 }}>儲存</button>
+                <button type="button" disabled={editor.pending} onClick={cancelEditing} style={btnSecondary}>取消</button>
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontWeight: 700 }}>基金別</div>
+              <div style={{ marginBottom: 10 }}>{editor.form.fundName || '尚未填寫'}</div>
+              <div style={{ fontWeight: 700 }}>審議機關</div>
+              <div>{editor.form.reviewAuthority || '尚未填寫'}</div>
+              {canStartEditing && (
+                <button type="button" onClick={beginEditing} style={{ ...btnPrimary, border: 0, marginTop: 14 }}>編輯基金資料</button>
+              )}
+            </>
+          )}
         </div>
       </div>
 
-      <div style={{ font: "700 14px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 10 }}>業務計畫別預算分析（歲出，依原預算書分類）</div>
-      <div style={{ ...card, maxWidth: 640, marginBottom: 20 }}>
-        {expenseRows.length === 0 && <div style={{ font: "400 13px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>尚無資料</div>}
-        {expenseRows.map((bi) => {
-          const pct = expenseTotal ? Math.round((Number(bi.amount || 0) / expenseTotal) * 100) : 0;
-          const { track, fill } = progressBar(pct, '#1F5F52');
-          return (
-            <div key={bi.label} style={{ marginBottom: 12 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', font: "500 12.5px 'Noto Sans TC', sans-serif", color: '#454B45', marginBottom: 5 }}>
-                <span>{bi.label}</span><span>{fmtNum(bi.amount)} 千元（{pct}%）</span>
-              </div>
-              <div style={{ ...track, height: 8 }}><div style={fill} /></div>
-            </div>
-          );
-        })}
-      </div>
+      {budgetState.loading && <div style={{ ...card, maxWidth: 640, marginBottom: 20 }}>正在載入預算摘要…</div>}
+      {budgetState.error && <div style={{ ...lockedBanner, maxWidth: 640 }}>無法載入預算摘要。</div>}
+      {!budgetState.loading && !budgetState.error && (
+        <div style={{ ...card, maxWidth: 640, marginBottom: 20 }}>
+          {expenseRows.length === 0 && <div>尚無資料</div>}
+          {expenseRows.map((row) => {
+            const percentage = expenseTotal ? Math.round((Number(row.amount || 0) / expenseTotal) * 100) : 0;
+            const { track, fill } = progressBar(percentage, '#1F5F52');
+            return <div key={row.label}><span>{row.label} {fmtNum(row.amount)} 千元</span><div style={track}><div style={fill} /></div></div>;
+          })}
+        </div>
+      )}
 
-      {meta?.pdfUrl ? (
-        <a href={meta.pdfUrl} target="_blank" rel="noreferrer" style={btnOutline}>下載原始預算書 PDF 全文</a>
+      {moduleState.data?.pdfUrl ? (
+        <a href={moduleState.data.pdfUrl} target="_blank" rel="noreferrer" style={btnOutline}>下載原始預算書 PDF 全文</a>
       ) : (
-        <div style={{ ...btnOutline, opacity: .6, cursor: 'not-allowed' }} title="尚未上傳 PDF 全文">下載原始預算書 PDF 全文</div>
+        <div style={{ ...btnOutline, opacity: 0.6, cursor: 'not-allowed' }} title="尚未上傳 PDF 全文">下載原始預算書 PDF 全文</div>
       )}
     </div>
   );
