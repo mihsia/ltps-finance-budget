@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
+import { MAX_PDF_BYTES as SERVER_MAX_PDF_BYTES } from '../../functions/pdfStorage.cjs';
 import { MAX_PDF_BYTES, fileToBase64, validatePdfFile } from './pdfUpload';
+
+it('keeps the client-side size limit in sync with functions/pdfStorage.cjs', () => {
+  expect(MAX_PDF_BYTES).toBe(SERVER_MAX_PDF_BYTES);
+});
 
 function fakeFile({ type = 'application/pdf', size = 10, bytes = null } = {}) {
   const content = bytes || new Uint8Array(size).fill(65);

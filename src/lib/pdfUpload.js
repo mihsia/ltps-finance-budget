@@ -1,9 +1,14 @@
 // Client-side half of the budget-book PDF upload flow. Rejecting an obviously
 // bad file here saves a slow base64 round trip — functions/pdfStorage.cjs
 // re-checks everything server-side since this is presentation-only.
-import pdfStorage from '../../functions/pdfStorage.cjs';
-
-export const { MAX_PDF_BYTES } = pdfStorage;
+//
+// MAX_PDF_BYTES is duplicated from functions/pdfStorage.cjs rather than
+// cross-imported: Vite's dev server (unlike its production/Rollup build, and
+// unlike Vitest) does not apply CommonJS interop to a bare .cjs file in the
+// source tree, so importing it directly throws "does not provide an export
+// named 'default'" at runtime in `npm run dev` specifically.
+// pdfUpload.test.js asserts these stay in sync.
+export const MAX_PDF_BYTES = 6 * 1024 * 1024;
 
 export function validatePdfFile(file) {
   if (!file) return { valid: false, error: '請選擇檔案' };
