@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useYearModule } from '../hooks/useYearData';
 import { useAuth } from '../contexts/AuthContext';
+import { runAuthorized } from '../lib/accessPolicy';
 import { pageTitle, pageSubtitle, card, input, label, btnPrimary, chip, emptyState, tableHeadRow, tableRow } from '../styles';
 
 const LANG_OPTIONS = ['閩南語', '客語', '賽考利克泰雅語', '太魯閣語'];
@@ -8,7 +9,7 @@ const LEVEL_OPTIONS = ['A級（初級）', 'B級（中級）', 'C級（高級）
 
 export default function Language({ year, latestYear }) {
   const { data, save, copyFrom } = useYearModule(year, 'language');
-  const { canEditModule } = useAuth();
+  const { canEditModule, authorizeModule } = useAuth();
   const isEditableYear = year === latestYear;
   const canEdit = canEditModule('language') && isEditableYear;
 
@@ -26,13 +27,20 @@ export default function Language({ year, latestYear }) {
 
   const addCertRecord = async () => {
     if (!certForm.name.trim()) return;
-    const next = [...certRecords, { id: Date.now(), ...certForm }];
-    await save({ certRecords: next });
-    setCertForm((s) => ({ ...s, name: '' }));
+    return runAuthorized(() => authorizeModule('language'), async () => {
+      const next = [...certRecords, { id: Date.now(), ...certForm }];
+      await save({ certRecords: next });
+      setCertForm((s) => ({ ...s, name: '' }));
+    });
   };
-  const removeCertRecord = async (id) => {
-    await save({ certRecords: certRecords.filter((r) => r.id !== id) });
-  };
+  const removeCertRecord = (id) => runAuthorized(
+    () => authorizeModule('language'),
+    () => save({ certRecords: certRecords.filter((r) => r.id !== id) }),
+  );
+  const copyLatestYear = () => runAuthorized(
+    () => authorizeModule('language'),
+    () => copyFrom(latestYear),
+  );
 
   if (!isEditableYear && !data) {
     return (
@@ -42,7 +50,7 @@ export default function Language({ year, latestYear }) {
         <div style={emptyState}>
           <div style={{ font: "700 14px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 6 }}>{year}年度尚未建立此模組資料</div>
           <div style={{ font: "400 13px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 16 }}>可從 {latestYear} 年度複製資料後再修改，或手動新增</div>
-          <div style={btnPrimary} onClick={() => copyFrom(latestYear)}>從 {latestYear} 年度複製資料</div>
+          <div style={btnPrimary} onClick={copyLatestYear}>從 {latestYear} 年度複製資料</div>
         </div>
       </div>
     );

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useYearModule } from '../hooks/useYearData';
 import { useAuth } from '../contexts/AuthContext';
+import { runAuthorized } from '../lib/accessPolicy';
 import { genericModuleMeta } from '../lib/nav';
 import { pageTitle, pageSubtitle, card, input, btnPrimary, btnOutline, emptyState, tableHeadRow, tableRow } from '../styles';
 
 export default function Generic({ year, latestYear, moduleKey }) {
   const meta = genericModuleMeta[moduleKey];
   const { data, save, copyFrom } = useYearModule(year, moduleKey);
-  const { canEditModule } = useAuth();
+  const { canEditModule, authorizeModule } = useAuth();
   const isEditableYear = year === latestYear;
   const canEdit = canEditModule(moduleKey) && isEditableYear;
 
@@ -20,12 +21,19 @@ export default function Generic({ year, latestYear, moduleKey }) {
   const startAdd = () => { setDraft(meta.columns.map(() => '')); setAdding(true); };
   const commitAdd = async () => {
     if (draft.every((c) => !c.trim())) return;
-    await save({ rows: [...rows, { cells: draft }] });
-    setAdding(false);
+    return runAuthorized(() => authorizeModule(moduleKey), async () => {
+      await save({ rows: [...rows, { cells: draft }] });
+      setAdding(false);
+    });
   };
-  const removeRow = async (idx) => {
-    await save({ rows: rows.filter((_, i) => i !== idx) });
-  };
+  const removeRow = (idx) => runAuthorized(
+    () => authorizeModule(moduleKey),
+    () => save({ rows: rows.filter((_, i) => i !== idx) }),
+  );
+  const copyLatestYear = () => runAuthorized(
+    () => authorizeModule(moduleKey),
+    () => copyFrom(latestYear),
+  );
 
   if (!isEditableYear && !data) {
     return (
@@ -36,7 +44,7 @@ export default function Generic({ year, latestYear, moduleKey }) {
         <div style={emptyState}>
           <div style={{ font: "700 14px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 6 }}>{year}年度尚未建立此模組資料</div>
           <div style={{ font: "400 13px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 16 }}>可從 {latestYear} 年度複製資料後再修改，或手動新增</div>
-          <div style={btnPrimary} onClick={() => copyFrom(latestYear)}>從 {latestYear} 年度複製資料</div>
+          <div style={btnPrimary} onClick={copyLatestYear}>從 {latestYear} 年度複製資料</div>
         </div>
       </div>
     );

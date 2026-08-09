@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useYearModule } from '../hooks/useYearData';
 import { useAuth } from '../contexts/AuthContext';
+import { runAuthorized } from '../lib/accessPolicy';
 import { fmtNum } from '../lib/format';
 import { pageTitle, pageSubtitle, card, btnPrimary, btnSecondary, input } from '../styles';
 
@@ -24,7 +25,7 @@ export default function Budget({ year, years, latestYear }) {
   const rB = useYearModule(recentYears[1], 'budget');
   const rC = useYearModule(recentYears[2], 'budget');
   const budgetByYear = { [recentYears[0]]: rA.data, [recentYears[1]]: rB.data, [recentYears[2]]: rC.data };
-  const { canEditModule } = useAuth();
+  const { canEditModule, authorizeModule } = useAuth();
   const canEdit = canEditModule('budget') && year === latestYear;
 
   const [tab, setTab] = useState('expense');
@@ -47,8 +48,10 @@ export default function Budget({ year, years, latestYear }) {
   };
 
   const commit = async () => {
-    await save({ expense: { breakdown: expenseRows }, revenue: { rows: revenueRows } });
-    setEditing(false);
+    return runAuthorized(() => authorizeModule('budget'), async () => {
+      await save({ expense: { breakdown: expenseRows }, revenue: { rows: revenueRows } });
+      setEditing(false);
+    });
   };
 
   return (

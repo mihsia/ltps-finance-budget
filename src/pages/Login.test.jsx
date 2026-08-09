@@ -4,6 +4,10 @@ import { describe, expect, it, vi } from 'vitest';
 import * as authModule from '../contexts/AuthContext';
 import Login from './Login';
 
+vi.mock('../firebase', () => ({
+  isFirebaseConfigured: true,
+}));
+
 function renderLogin(authValue) {
   return renderToStaticMarkup(
     <authModule.AuthContext.Provider value={authValue}>

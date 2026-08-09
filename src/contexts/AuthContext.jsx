@@ -7,8 +7,12 @@ import {
   signInWithPopup,
   signOut,
 } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, onSnapshot } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from '../firebase';
+import {
+  createAuthorizationSource,
+  evaluateProfileAccess,
+} from '../lib/accessPolicy';
 import {
   GoogleLinkRequiredError,
   completePasswordLogin,
@@ -20,10 +24,80 @@ import {
 
 export const AuthContext = createContext(null);
 
+export function listenToUserAccess({
+  auth: authInstance,
+  db: dbInstance,
+  authorization,
+  onState,
+  onAuthStateChangedImpl = onAuthStateChanged,
+  docImpl = doc,
+  onSnapshotImpl = onSnapshot,
+}) {
+  let generation = 0;
+  let profileUnsubscribe = null;
+  let stopped = false;
+
+  const publish = (user, profile, profileState) => {
+    const access = evaluateProfileAccess({ profileState, profile });
+    authorization.replace(access);
+    onState({
+      user,
+      profile,
+      profileState,
+      access,
+      loading: profileState === 'loading',
+    });
+  };
+
+  const authUnsubscribe = onAuthStateChangedImpl(authInstance, (fbUser) => {
+    if (stopped) return;
+    const listenerGeneration = ++generation;
+    profileUnsubscribe?.();
+    profileUnsubscribe = null;
+
+    if (!fbUser) {
+      publish(null, null, 'signed-out');
+      return;
+    }
+
+    publish(fbUser, null, 'loading');
+    const userRef = docImpl(dbInstance, 'users', fbUser.uid);
+    profileUnsubscribe = onSnapshotImpl(
+      userRef,
+      (snap) => {
+        if (stopped || listenerGeneration !== generation) return;
+        const exists = snap.exists();
+        publish(fbUser, exists ? snap.data() : null, exists ? 'ready' : 'missing');
+      },
+      () => {
+        if (stopped || listenerGeneration !== generation) return;
+        publish(fbUser, null, 'error');
+      },
+    );
+  });
+
+  return () => {
+    stopped = true;
+    generation += 1;
+    profileUnsubscribe?.();
+    authUnsubscribe?.();
+    authorization.replace(evaluateProfileAccess({ profileState: 'signed-out' }));
+  };
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(isFirebaseConfigured);
+  const [authorization] = useState(() => createAuthorizationSource(
+    evaluateProfileAccess({
+      profileState: isFirebaseConfigured ? 'loading' : 'signed-out',
+    }),
+  ));
+  const [authState, setAuthState] = useState(() => ({
+    user: null,
+    profile: null,
+    profileState: isFirebaseConfigured ? 'loading' : 'signed-out',
+    access: authorization.current(),
+    loading: isFirebaseConfigured,
+  }));
   const [googleLinkState, dispatchGoogleLink] = useReducer(
     reduceGoogleLinkState,
     initialGoogleLinkState,
@@ -36,18 +110,13 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-    const unsub = onAuthStateChanged(auth, async (fbUser) => {
-      setUser(fbUser);
-      if (fbUser) {
-        const snap = await getDoc(doc(db, 'users', fbUser.uid));
-        setProfile(snap.exists() ? snap.data() : { role: 'editor', modules: [], name: fbUser.email, dept: '' });
-      } else {
-        setProfile(null);
-      }
-      setLoading(false);
+    return listenToUserAccess({
+      auth,
+      db,
+      authorization,
+      onState: setAuthState,
     });
-    return unsub;
-  }, []);
+  }, [authorization]);
 
   const login = async (email, password) => {
     dispatchGoogleLink({ type: 'set-error', error: null });
@@ -108,13 +177,17 @@ export function AuthProvider({ children }) {
     await signOut(auth);
   };
 
-  const isAdmin = profile?.role === 'admin';
-  const canEditModule = (moduleKey) => isAdmin || profile?.modules?.includes(moduleKey);
+  const { user, profile, access, loading } = authState;
+  const isAdmin = access.allowed && access.role === 'admin';
+  const canEditModule = (moduleKey) => authorization.authorizeModule(moduleKey).allowed;
 
   return (
     <AuthContext.Provider value={{
       user, profile, loading, error, login, loginWithGoogle,
       pendingGoogleEmail, cancelGoogleLink, logout, isAdmin, canEditModule,
+      access, accessDeniedReason: access.reason,
+      authorizeModule: authorization.authorizeModule,
+      authorizeAdmin: authorization.authorizeAdmin,
     }}>
       {children}
     </AuthContext.Provider>

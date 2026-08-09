@@ -3,6 +3,7 @@ import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { createNextYear } from '../hooks/useYearData';
 import { useAuth } from '../contexts/AuthContext';
+import { runAuthorized } from '../lib/accessPolicy';
 import { parseImportFile, IMPORT_FIELDS } from '../lib/importParser';
 import { fmtNum } from '../lib/format';
 import { pageTitle, pageSubtitle, card, btnPrimary, btnSecondary, badge, input } from '../styles';
@@ -28,7 +29,7 @@ function buildReview(fields, missing, prevBudget) {
 }
 
 export default function Archive({ years, latestYear, setYear, setNav }) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, authorizeAdmin } = useAuth();
   const nextYear = String(Number(latestYear) + 1);
   const fileRef = useRef(null);
 
@@ -42,13 +43,15 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
   const exportYear = (y) => { setYear(y); setNav('report'); };
 
   const createYear = async () => {
-    setBusy(true);
-    try {
-      const created = await createNextYear(latestYear);
-      setYear(created);
-    } finally {
-      setBusy(false);
-    }
+    return runAuthorized(() => authorizeAdmin(), async () => {
+      setBusy(true);
+      try {
+        const created = await createNextYear(latestYear);
+        setYear(created);
+      } finally {
+        setBusy(false);
+      }
+    });
   };
 
   const pickFile = () => fileRef.current?.click();
@@ -79,38 +82,40 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
   const reviewValue = (id) => Number(String(review.find((r) => r.id === id)?.value ?? 0).replace(/[^\d.-]/g, '')) || 0;
 
   const confirmImport = async () => {
-    setBusy(true);
-    try {
-      await setDoc(doc(db, 'years', nextYear), { locked: false, deadlines: {}, createdAt: serverTimestamp() }, { merge: true });
+    return runAuthorized(() => authorizeAdmin(), async () => {
+      setBusy(true);
+      try {
+        await setDoc(doc(db, 'years', nextYear), { locked: false, deadlines: {}, createdAt: serverTimestamp() }, { merge: true });
 
-      const prevSnap = await getDoc(doc(db, 'years', latestYear, 'modules', 'budget'));
-      const prev = prevSnap.data();
+        const prevSnap = await getDoc(doc(db, 'years', latestYear, 'modules', 'budget'));
+        const prev = prevSnap.data();
 
-      const expenseBreakdown = Object.entries(EXPENSE_DEFAULTS).map(([id, meta]) => ({
-        label: meta.label,
-        formula: meta.formula,
-        amount: reviewValue(id),
-      }));
+        const expenseBreakdown = Object.entries(EXPENSE_DEFAULTS).map(([id, meta]) => ({
+          label: meta.label,
+          formula: meta.formula,
+          amount: reviewValue(id),
+        }));
 
-      // The 3 fine-grained revenue line items (財產處分收入／租金收入／利息收入)
-      // aren't reliably parseable from real-world budget-book layouts (see
-      // src/lib/importParser.js) — carry the prior year's figures forward
-      // instead of guessing, and rely on 財產收入合計 above as a cross-check
-      // total staff can use to redistribute them in 歲入歲出 afterward.
-      const carriedRevenueRows = (prev?.revenue?.rows || []).filter((r) => r.label !== GOV_GRANT_LABEL);
-      const revenueRows = [...carriedRevenueRows, { label: GOV_GRANT_LABEL, amount: reviewValue('govGrant') }];
+        // The 3 fine-grained revenue line items (財產處分收入／租金收入／利息收入)
+        // aren't reliably parseable from real-world budget-book layouts (see
+        // src/lib/importParser.js) — carry the prior year's figures forward
+        // instead of guessing, and rely on 財產收入合計 above as a cross-check
+        // total staff can use to redistribute them in 歲入歲出 afterward.
+        const carriedRevenueRows = (prev?.revenue?.rows || []).filter((r) => r.label !== GOV_GRANT_LABEL);
+        const revenueRows = [...carriedRevenueRows, { label: GOV_GRANT_LABEL, amount: reviewValue('govGrant') }];
 
-      await setDoc(doc(db, 'years', nextYear, 'modules', 'budget'), {
-        expense: { breakdown: expenseBreakdown },
-        revenue: { rows: revenueRows },
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
+        await setDoc(doc(db, 'years', nextYear, 'modules', 'budget'), {
+          expense: { breakdown: expenseBreakdown },
+          revenue: { rows: revenueRows },
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
 
-      cancelImport();
-      setYear(nextYear);
-    } finally {
-      setBusy(false);
-    }
+        cancelImport();
+        setYear(nextYear);
+      } finally {
+        setBusy(false);
+      }
+    });
   };
 
   return (

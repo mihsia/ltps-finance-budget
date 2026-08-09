@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useYearModule } from '../hooks/useYearData';
 import { useAuth } from '../contexts/AuthContext';
+import { runAuthorized } from '../lib/accessPolicy';
 import { pageTitle, pageSubtitle, card, input, label, btnPrimary, btnSecondary, emptyState } from '../styles';
 
 export default function Library({ year, latestYear }) {
   const { data, loading, save, copyFrom } = useYearModule(year, 'library');
-  const { canEditModule } = useAuth();
+  const { canEditModule, authorizeModule } = useAuth();
   const isEditableYear = year === latestYear;
   const canEdit = canEditModule('library') && isEditableYear;
 
@@ -18,6 +19,18 @@ export default function Library({ year, latestYear }) {
 
   if (!form) return null;
 
+  const copyLatestYear = () => runAuthorized(
+    () => authorizeModule('library'),
+    () => copyFrom(latestYear),
+  );
+  const commit = () => runAuthorized(
+    () => authorizeModule('library'),
+    async () => {
+      await save(form);
+      setEditing(false);
+    },
+  );
+
   if (!isEditableYear && !data) {
     return (
       <div>
@@ -26,7 +39,7 @@ export default function Library({ year, latestYear }) {
         <div style={emptyState}>
           <div style={{ font: "700 14px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 6 }}>{year}年度尚未建立此模組資料</div>
           <div style={{ font: "400 13px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 16 }}>可從 {latestYear} 年度複製資料後再修改，或手動新增</div>
-          <div style={btnPrimary} onClick={() => copyFrom(latestYear)}>從 {latestYear} 年度複製資料</div>
+          <div style={btnPrimary} onClick={copyLatestYear}>從 {latestYear} 年度複製資料</div>
         </div>
       </div>
     );
@@ -68,7 +81,7 @@ export default function Library({ year, latestYear }) {
             <input style={input} value={form.indigenousBooks} onChange={(e) => setForm((s) => ({ ...s, indigenousBooks: e.target.value }))} />
           </div>
           <div style={{ gridColumn: '1/3', display: 'flex', gap: 10 }}>
-            <div style={btnPrimary} onClick={async () => { await save(form); setEditing(false); }}>儲存</div>
+            <div style={btnPrimary} onClick={commit}>儲存</div>
             <div style={btnSecondary} onClick={() => { setForm(data || { generalBooks: '', indigenousBooks: '' }); setEditing(false); }}>取消</div>
           </div>
         </div>

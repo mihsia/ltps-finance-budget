@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useYearModule, useYearMeta, useChangeLog } from '../hooks/useYearData';
 import { useAuth } from '../contexts/AuthContext';
+import { runAuthorized } from '../lib/accessPolicy';
 import { fmtDate } from '../lib/format';
 import {
   pageTitle, pageSubtitle, sectionLabel, card, input, label,
@@ -16,7 +17,7 @@ export default function Basic({ year, latestYear }) {
   const { data, loading, save, copyFrom } = useYearModule(year, 'basic');
   const { meta } = useYearMeta(year);
   const { entries, appendChange } = useChangeLog(year, { moduleKey: 'basic' });
-  const { profile, user, canEditModule } = useAuth();
+  const { profile, user, canEditModule, authorizeModule } = useAuth();
   const isEditableYear = year === latestYear;
   const canEdit = canEditModule('basic');
 
@@ -42,13 +43,20 @@ export default function Basic({ year, latestYear }) {
 
   const commit = async (status) => {
     if (hasStudentsError) return;
-    const who = profile?.name || user?.email || '未知使用者';
-    const changed = Object.keys(FIELD_LABELS).filter((f) => String(data?.[f] ?? '') !== String(form[f] ?? ''));
-    await save({ ...form, status });
-    for (const f of changed) {
-      await appendChange('basic', who, FIELD_LABELS[f], data?.[f] ?? '（空白）', form[f]);
-    }
+    return runAuthorized(() => authorizeModule('basic'), async () => {
+      const who = profile?.name || user?.email || '未知使用者';
+      const changed = Object.keys(FIELD_LABELS).filter((f) => String(data?.[f] ?? '') !== String(form[f] ?? ''));
+      await save({ ...form, status });
+      for (const f of changed) {
+        await appendChange('basic', who, FIELD_LABELS[f], data?.[f] ?? '（空白）', form[f]);
+      }
+    });
   };
+
+  const copyLatestYear = () => runAuthorized(
+    () => authorizeModule('basic'),
+    () => copyFrom(latestYear),
+  );
 
   if (!isEditableYear && !data) {
     return (
@@ -58,7 +66,7 @@ export default function Basic({ year, latestYear }) {
         <div style={emptyState}>
           <div style={{ font: "700 14px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 6 }}>{year}年度尚未建立此模組資料</div>
           <div style={{ font: "400 13px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 16 }}>可從 {latestYear} 年度複製資料後再修改，或手動新增</div>
-          <div style={btnPrimary} onClick={() => copyFrom(latestYear)}>從 {latestYear} 年度複製資料</div>
+          <div style={btnPrimary} onClick={copyLatestYear}>從 {latestYear} 年度複製資料</div>
         </div>
       </div>
     );

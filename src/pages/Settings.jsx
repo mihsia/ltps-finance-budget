@@ -3,6 +3,7 @@ import { collection, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions, isFirebaseConfigured } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { runAuthorized } from '../lib/accessPolicy';
 import { navGroups } from '../lib/nav';
 import { pageTitle, pageSubtitle, card, input, label, btnPrimary, btnOutline, btnSecondary, chip } from '../styles';
 
@@ -22,7 +23,7 @@ function useUsers() {
 
 export default function Settings() {
   const users = useUsers();
-  const { isAdmin } = useAuth();
+  const { isAdmin, authorizeAdmin } = useAuth();
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', dept: DEPT_ORDER[0], role: 'editor', modules: [] });
   const [status, setStatus] = useState(null);
@@ -37,17 +38,19 @@ export default function Settings() {
   };
 
   const submit = async () => {
-    setStatus('saving');
-    setResetLink(null);
-    try {
-      const createAccount = httpsCallable(functions, 'createAccount');
-      const res = await createAccount(form);
-      setStatus('done');
-      setResetLink(res.data.resetLink);
-      setForm({ name: '', email: '', dept: DEPT_ORDER[0], role: 'editor', modules: [] });
-    } catch (e) {
-      setStatus(e.message || '新增失敗');
-    }
+    return runAuthorized(() => authorizeAdmin(), async () => {
+      setStatus('saving');
+      setResetLink(null);
+      try {
+        const createAccount = httpsCallable(functions, 'createAccount');
+        const res = await createAccount(form);
+        setStatus('done');
+        setResetLink(res.data.resetLink);
+        setForm({ name: '', email: '', dept: DEPT_ORDER[0], role: 'editor', modules: [] });
+      } catch (e) {
+        setStatus(e.message || '新增失敗');
+      }
+    });
   };
 
   return (
