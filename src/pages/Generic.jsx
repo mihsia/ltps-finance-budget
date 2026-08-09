@@ -38,7 +38,7 @@ export default function Generic({
   const meta = genericModuleMeta[moduleKey];
   const schema = genericRecordSchemas[moduleKey];
   const yearState = useYearMeta(year);
-  const { canEditModule, authorizeModule, authorizeModuleActor } = useAuth();
+  const { canEditModule, authorizeModuleActor } = useAuth();
   const recoveryAllowed = canEditModule(moduleKey)
     && year === latestYear
     && yearState.exists
@@ -53,7 +53,6 @@ export default function Generic({
     hasCurrentYear,
     yearState,
     recordState,
-    authorizeModule,
     authorizeModuleActor,
   });
 

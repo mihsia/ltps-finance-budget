@@ -9,7 +9,6 @@ export function useRecordCrudActions({
   hasCurrentYear,
   yearState,
   recordState,
-  authorizeModule,
   authorizeModuleActor,
 }) {
   const scopeToken = useMemo(() => ({ scopeKey }), [scopeKey]);

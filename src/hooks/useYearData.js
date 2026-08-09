@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  doc, documentId, onSnapshot, collection, addDoc, serverTimestamp,
+  doc, documentId, onSnapshot, collection, serverTimestamp,
   query, where, orderBy, limit as fsLimit, getDoc, writeBatch,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase';
@@ -281,7 +281,7 @@ export async function createNextYear(fromYear) {
   for (const key of MODULE_KEYS) {
     const fromSnap = await getDoc(doc(db, 'years', fromYear, 'modules', key));
     if (fromSnap.exists()) {
-      const { updatedAt, ...rest } = fromSnap.data();
+      const { updatedAt: _updatedAt, ...rest } = fromSnap.data();
       batch.set(doc(db, 'years', nextYear, 'modules', key), rest);
     }
   }
@@ -515,7 +515,7 @@ export function useYearModule(year, moduleKey) {
     if (mutationReadyRef.current !== scopeGeneration) throw new StaleYearRecordsScopeError();
     const fromSnap = await getDoc(doc(db, 'years', fromYear, 'modules', moduleKey));
     if (!fromSnap.exists()) return;
-    const { updatedAt, ...rest } = fromSnap.data();
+    const { updatedAt: _updatedAt, ...rest } = fromSnap.data();
     await save(rest);
   }, [moduleKey, save, scopeGeneration]);
 
@@ -614,30 +614,3 @@ export function useAuditLog(year, { moduleKey, max = 20 } = {}) {
   return { entries: state.entries, loading: state.loading, error: state.error };
 }
 
-/**
- * Newest-first change log for a given year, plus a helper to append an entry.
- * Pass `moduleKey` to scope the list to one module (filtered client-side to
- * avoid requiring a composite index for what are always small collections).
- */
-export function useChangeLog(year, { moduleKey, max = 20 } = {}) {
-  const [entries, setEntries] = useState([]);
-
-  useEffect(() => {
-    if (!isFirebaseConfigured) return;
-    const q = query(collection(db, 'years', year, 'changeLogs'), orderBy('time', 'desc'), fsLimit(max * 3));
-    const unsub = onSnapshot(q, (snap) => {
-      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      const filtered = moduleKey ? all.filter((e) => e.module === moduleKey) : all;
-      setEntries(filtered.slice(0, max));
-    });
-    return unsub;
-  }, [year, max, moduleKey]);
-
-  const appendChange = useCallback(async (module, user, field, from, to) => {
-    await addDoc(collection(db, 'years', year, 'changeLogs'), {
-      module, user, field, from, to, time: serverTimestamp(),
-    });
-  }, [year]);
-
-  return { entries, appendChange };
-}

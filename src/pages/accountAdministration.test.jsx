@@ -1,4 +1,3 @@
-import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAuthorizationSource } from '../lib/accessPolicy';
@@ -32,7 +31,7 @@ vi.mock('firebase/firestore', () => ({
         docs: firestoreMocks.users.map((user) => ({
           id: user.uid,
           data: () => {
-            const { uid, ...rest } = user;
+            const { uid: _uid, ...rest } = user;
             return rest;
           },
         })),

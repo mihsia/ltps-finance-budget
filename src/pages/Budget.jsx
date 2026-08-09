@@ -43,7 +43,7 @@ export default function Budget({
   const recentC = useYearRecords(recentYears[2], 'budget');
   const recentStates = [recentA, recentB, recentC];
   const yearState = useYearMeta(year);
-  const { canEditModule, authorizeModule, authorizeModuleActor } = useAuth();
+  const { canEditModule, authorizeModuleActor } = useAuth();
   const recoveryAllowed = canEditModule('budget')
     && year === latestYear
     && yearState.exists
@@ -59,7 +59,6 @@ export default function Budget({
     hasCurrentYear,
     yearState,
     recordState,
-    authorizeModule,
     authorizeModuleActor,
   });
 

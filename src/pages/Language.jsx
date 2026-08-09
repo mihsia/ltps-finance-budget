@@ -40,7 +40,7 @@ export default function Language({
   hasCurrentYear = () => false,
 }) {
   const yearState = useYearMeta(year);
-  const { canEditModule, authorizeModule, authorizeModuleActor } = useAuth();
+  const { canEditModule, authorizeModuleActor } = useAuth();
   const recoveryAllowed = canEditModule('language')
     && year === latestYear
     && yearState.exists
@@ -55,7 +55,6 @@ export default function Language({
     hasCurrentYear,
     yearState,
     recordState,
-    authorizeModule,
     authorizeModuleActor,
   });
 
