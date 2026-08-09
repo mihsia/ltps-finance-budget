@@ -7,10 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "vitest run src functions",
+    "test": "vitest run src functions scripts",
     "test:rules": "firebase emulators:exec --only firestore,storage \"vitest run rules-tests\"",
     "lint": "eslint .",
-    "seed": "node scripts/seed.js"
+    "seed": "node scripts/seed.js",
+    "seed:dry-run": "node scripts/seed.js --dry-run"
   },
   "dependencies": {
     "firebase": "^11.0.2",
