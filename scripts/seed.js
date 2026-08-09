@@ -14,11 +14,15 @@
  * school's real figures (via the app's own forms) before this system is used
  * for an actual council submission.
  */
-const { initializeApp, cert } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
-const { getAuth } = require('firebase-admin/auth');
-const path = require('node:path');
-const fs = require('node:fs');
+import { initializeApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
+import { getAuth } from 'firebase-admin/auth';
+import path from 'node:path';
+import fs from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { getNamedFirestore } from '../functions/firestore.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const keyPath = path.join(__dirname, 'serviceAccountKey.json');
 if (!fs.existsSync(keyPath)) {
@@ -26,8 +30,9 @@ if (!fs.existsSync(keyPath)) {
   process.exit(1);
 }
 
-initializeApp({ credential: cert(require(keyPath)) });
-const db = getFirestore();
+const serviceAccount = JSON.parse(fs.readFileSync(keyPath, 'utf8'));
+initializeApp({ credential: cert(serviceAccount) });
+const db = getNamedFirestore(getFirestore);
 const auth = getAuth();
 
 const EXPENSE_BREAKDOWN = [

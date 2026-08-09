@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore } = require('firebase-admin/firestore');
+const { getNamedFirestore } = require('./firestore');
 
 initializeApp();
 
@@ -17,7 +18,7 @@ exports.createAccount = onCall(async (request) => {
   const callerUid = request.auth?.uid;
   if (!callerUid) throw new HttpsError('unauthenticated', '請先登入');
 
-  const db = getFirestore();
+  const db = getNamedFirestore(getFirestore);
   const callerProfile = await db.collection('users').doc(callerUid).get();
   if (callerProfile.data()?.role !== 'admin') {
     throw new HttpsError('permission-denied', '僅管理者可新增帳號');
