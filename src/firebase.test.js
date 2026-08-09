@@ -45,6 +45,7 @@ describe('Firebase named Firestore configuration', () => {
     vi.stubEnv('VITE_USE_FIREBASE_EMULATOR', 'false');
     vi.stubEnv('VITE_FIREBASE_PROJECT_ID', 'test-project');
     vi.stubEnv('VITE_FIREBASE_API_KEY', 'test-key');
+    vi.stubEnv('VITE_FIREBASE_AUTH_DOMAIN', 'test-project.firebaseapp.com');
 
     for (const mock of Object.values(firebaseMocks)) {
       if (typeof mock?.mockReset === 'function') mock.mockReset();
@@ -107,5 +108,15 @@ describe('Firebase named Firestore configuration', () => {
         indexes: 'firestore.indexes.json',
       },
     ]);
+  });
+
+  it('treats itself as unconfigured when authDomain is missing, instead of hanging Auth later', async () => {
+    vi.stubEnv('VITE_FIREBASE_AUTH_DOMAIN', '');
+
+    const firebase = await import('./firebase.js');
+
+    expect(firebase.isFirebaseConfigured).toBe(false);
+    expect(firebase.db).toBeNull();
+    expect(firebaseMocks.initializeApp).not.toHaveBeenCalled();
   });
 });

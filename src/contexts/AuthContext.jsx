@@ -60,32 +60,46 @@ export function listenToUserAccess({
     });
   };
 
-  const authUnsubscribe = onAuthStateChangedImpl(authInstance, (fbUser) => {
-    if (stopped) return;
-    const listenerGeneration = ++generation;
-    profileUnsubscribe?.();
-    profileUnsubscribe = null;
+  const authUnsubscribe = onAuthStateChangedImpl(
+    authInstance,
+    (fbUser) => {
+      if (stopped) return;
+      const listenerGeneration = ++generation;
+      profileUnsubscribe?.();
+      profileUnsubscribe = null;
 
-    if (!fbUser) {
-      publish(null, null, 'signed-out');
-      return;
-    }
+      if (!fbUser) {
+        publish(null, null, 'signed-out');
+        return;
+      }
 
-    publish(fbUser, null, 'loading');
-    const userRef = docImpl(dbInstance, 'users', fbUser.uid);
-    profileUnsubscribe = onSnapshotImpl(
-      userRef,
-      (snap) => {
-        if (stopped || listenerGeneration !== generation) return;
-        const exists = snap.exists();
-        publish(fbUser, exists ? snap.data() : null, exists ? 'ready' : 'missing');
-      },
-      () => {
-        if (stopped || listenerGeneration !== generation) return;
-        publish(fbUser, null, 'error');
-      },
-    );
-  });
+      publish(fbUser, null, 'loading');
+      const userRef = docImpl(dbInstance, 'users', fbUser.uid);
+      profileUnsubscribe = onSnapshotImpl(
+        userRef,
+        (snap) => {
+          if (stopped || listenerGeneration !== generation) return;
+          const exists = snap.exists();
+          publish(fbUser, exists ? snap.data() : null, exists ? 'ready' : 'missing');
+        },
+        () => {
+          if (stopped || listenerGeneration !== generation) return;
+          publish(fbUser, null, 'error');
+        },
+      );
+    },
+    () => {
+      // The auth-state observer itself failed (bad config, network to
+      // Google blocked, etc.) rather than just the profile lookup. Without
+      // this handler the initial `loading: true` state never resolves and
+      // the app spins on the loading screen forever.
+      if (stopped) return;
+      generation += 1;
+      profileUnsubscribe?.();
+      profileUnsubscribe = null;
+      publish(null, null, 'error');
+    },
+  );
 
   return () => {
     stopped = true;

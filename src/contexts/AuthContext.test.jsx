@@ -43,10 +43,12 @@ function createHarness() {
   const states = [];
   const profileSubscriptions = [];
   let authCallback;
+  let authErrorCallback;
   const authUnsubscribe = vi.fn();
 
-  const onAuthStateChangedImpl = vi.fn((_auth, callback) => {
+  const onAuthStateChangedImpl = vi.fn((_auth, callback, errorCallback) => {
     authCallback = callback;
+    authErrorCallback = errorCallback;
     return authUnsubscribe;
   });
   const docImpl = vi.fn((_db, collectionName, uid) => ({ collectionName, uid }));
@@ -71,6 +73,7 @@ function createHarness() {
     states,
     profileSubscriptions,
     get authCallback() { return authCallback; },
+    get authErrorCallback() { return authErrorCallback; },
     authUnsubscribe,
     docImpl,
     onAuthStateChangedImpl,
@@ -133,6 +136,31 @@ describe('listenToUserAccess', () => {
     expect(harness.states.at(-1).access.reason).toBe(
       '無法確認帳號權限，請稍後再試或聯絡系統管理員。',
     );
+  });
+
+  it('resolves out of loading instead of hanging forever when the auth observer itself errors', () => {
+    const harness = createHarness();
+    expect(harness.authCallback).toBeTypeOf('function');
+    expect(harness.authErrorCallback).toBeTypeOf('function');
+
+    harness.authErrorCallback(new Error('auth/network-request-failed'));
+
+    expect(harness.states.at(-1).loading).toBe(false);
+    expect(harness.states.at(-1).access).toEqual(
+      expect.objectContaining({ allowed: false, code: 'profile-error' }),
+    );
+  });
+
+  it('unsubscribes any pending profile listener when the auth observer errors mid-session', () => {
+    const harness = createHarness();
+    harness.authCallback({ uid: 'user-a', email: 'a@example.com' });
+    const subscription = harness.profileSubscriptions[0];
+
+    harness.authErrorCallback(new Error('auth/network-request-failed'));
+
+    expect(subscription.unsubscribe).toHaveBeenCalledOnce();
+    expect(harness.states.at(-1).loading).toBe(false);
+    expect(harness.states.at(-1).user).toBeNull();
   });
 
   it('ignores stale profile callbacks after the authenticated user changes', () => {
