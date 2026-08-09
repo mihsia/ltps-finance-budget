@@ -1,6 +1,7 @@
-import { useYearModule } from '../hooks/useYearData';
+import { useYearModule, useYearRecords } from '../hooks/useYearData';
 import { fmtNum } from '../lib/format';
 import { moduleCompletionPct, completionColor } from '../lib/completion';
+import { budgetRecordSummary, languageRecordSummary } from '../lib/recordDerivations';
 import { pageTitle, pageSubtitle, statTile, card, sectionLabel, progressBar } from '../styles';
 
 const COMPLETION_MODULES = [
@@ -16,27 +17,29 @@ const COMPLETION_MODULES = [
 
 export default function Dashboard({ years, latestYear }) {
   const trendYears = years.length >= 3 ? years.slice(-3) : [...Array(3 - years.length).fill(years[0]), ...years];
-  const budgetA = useYearModule(trendYears[0], 'budget');
-  const budgetB = useYearModule(trendYears[1], 'budget');
-  const budgetC = useYearModule(trendYears[2], 'budget');
+  const budgetA = useYearRecords(trendYears[0], 'budget');
+  const budgetB = useYearRecords(trendYears[1], 'budget');
+  const budgetC = useYearRecords(trendYears[2], 'budget');
   const basic = useYearModule(latestYear, 'basic');
   const library = useYearModule(latestYear, 'library');
-  const language = useYearModule(latestYear, 'language');
+  const language = useYearRecords(latestYear, 'language');
   const modules = {
     basic, budget: budgetC, library, language,
-    awards: useYearModule(latestYear, 'awards'),
-    club: useYearModule(latestYear, 'club'),
-    land: useYearModule(latestYear, 'land'),
-    inquiry: useYearModule(latestYear, 'inquiry'),
+    awards: useYearRecords(latestYear, 'awards'),
+    club: useYearRecords(latestYear, 'club'),
+    land: useYearRecords(latestYear, 'land'),
+    inquiry: useYearRecords(latestYear, 'inquiry'),
   };
 
-  const expenseTotalOf = (d) => d?.expense?.breakdown?.reduce((s, r) => s + Number(r.amount || 0), 0);
+  const expenseTotalOf = (state) => (
+    state.loading || state.error ? null : budgetRecordSummary(state.data).expenseTotal
+  );
   const trendData = [
-    { year: trendYears[0], data: budgetA.data },
-    { year: trendYears[1], data: budgetB.data },
-    { year: trendYears[2], data: budgetC.data },
+    { year: trendYears[0], state: budgetA },
+    { year: trendYears[1], state: budgetB },
+    { year: trendYears[2], state: budgetC },
   ];
-  const budgetByYear = Object.fromEntries(trendData.map((t) => [t.year, expenseTotalOf(t.data)]));
+  const budgetByYear = Object.fromEntries(trendData.map((t) => [t.year, expenseTotalOf(t.state)]));
   const budgetMax = Math.max(...trendYears.map((y) => budgetByYear[y] || 0), 1);
   const totalLatest = budgetByYear[latestYear];
   const totalPrev = budgetByYear[trendYears[trendYears.length - 2]];
@@ -46,7 +49,9 @@ export default function Dashboard({ years, latestYear }) {
   const teacherTotal = Number(staff.regularTeachers || 0) + Number(staff.substitute || 0) + Number(staff.partTimeTeachers || 0);
   const substituteRatio = teacherTotal ? Math.round((Number(staff.substitute || 0) / teacherTotal) * 100) : null;
 
-  const langClasses = language.data?.classes || [];
+  const langClasses = language.loading || language.error
+    ? []
+    : languageRecordSummary(language.data).classRows;
   const langMax = Math.max(...langClasses.map((l) => Number(l.students || 0)), 1);
 
   return (

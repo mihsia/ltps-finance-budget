@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useAvailableYears } from './hooks/useYearData';
+import { useCurrentYearGuard } from './hooks/useCurrentYearGuard';
 import { genericModuleKeys } from './lib/nav';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
@@ -23,8 +24,9 @@ function Shell() {
   const [nav, setNav] = useState('dashboard');
 
   const effectiveYear = years.includes(year) ? year : latestYear;
+  const hasCurrentYear = useCurrentYearGuard(effectiveYear, latestYear);
 
-  const pageProps = { year: effectiveYear, years, latestYear, setYear, setNav };
+  const pageProps = { year: effectiveYear, years, latestYear, setYear, setNav, hasCurrentYear };
 
   const renderPage = () => {
     if (nav === 'dashboard') return <Dashboard {...pageProps} />;
@@ -54,11 +56,22 @@ function Shell() {
 }
 
 function Gate() {
-  const { user, loading } = useAuth();
+  const { user, loading, access, accessDeniedReason, logout } = useAuth();
   if (loading) {
     return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8A9089' }}>載入中…</div>;
   }
   if (!user) return <Login />;
+  if (!access?.allowed) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F3EE', padding: 20 }}>
+        <div style={{ background: '#FFFFFF', border: '1px solid #E3DFD3', borderRadius: 10, padding: 24, width: 420 }}>
+          <div style={{ font: "700 15px 'Noto Sans TC', sans-serif", color: '#B5533E', marginBottom: 8 }}>無法進入系統</div>
+          <div style={{ font: "400 13px/1.8 'Noto Sans TC', sans-serif", color: '#454B45', marginBottom: 16 }}>{accessDeniedReason}</div>
+          <button type="button" onClick={logout} style={{ border: 0, borderRadius: 7, background: '#1F5F52', color: '#fff', padding: '9px 14px', cursor: 'pointer' }}>登出</button>
+        </div>
+      </div>
+    );
+  }
   return <Shell />;
 }
 

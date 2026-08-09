@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
-import { createNextYear } from '../hooks/useYearData';
+import { createNextYear, useYearRecords } from '../hooks/useYearData';
 import { useAuth } from '../contexts/AuthContext';
+import { runAuthorized } from '../lib/accessPolicy';
 import { parseImportFile, IMPORT_FIELDS } from '../lib/importParser';
+import { validateBudgetRecord } from '../lib/recordSchemas';
+import { yearDataRepository } from '../lib/yearDataRepository';
 import { fmtNum } from '../lib/format';
 import { pageTitle, pageSubtitle, card, btnPrimary, btnSecondary, badge, input } from '../styles';
 
@@ -15,9 +16,16 @@ const EXPENSE_DEFAULTS = {
 const GOV_GRANT_LABEL = '政府撥入收入（公庫撥款）';
 
 /** Builds the editable review-row state from a parse result + the prior year's saved figures (used as the starting value for anything the parser couldn't find, so nothing is left silently blank). */
-function buildReview(fields, missing, prevBudget) {
-  const prevExpenseByLabel = Object.fromEntries((prevBudget?.expense?.breakdown || []).map((r) => [r.label, r.amount]));
-  const prevGovGrant = (prevBudget?.revenue?.rows || []).find((r) => r.label === GOV_GRANT_LABEL)?.amount;
+function buildReview(fields, missing, previousRecords) {
+  const activeRecords = (previousRecords || []).filter((record) => !record.deletedAt);
+  const prevExpenseByLabel = Object.fromEntries(
+    activeRecords
+      .filter((record) => record.recordType === 'expense')
+      .map((record) => [record.label, record.amount]),
+  );
+  const prevGovGrant = activeRecords.find(
+    (record) => record.recordType === 'revenue' && record.label === GOV_GRANT_LABEL,
+  )?.amount;
   return IMPORT_FIELDS.map((f) => {
     const matched = f.id in fields;
     let value = matched ? fields[f.id] : '';
@@ -27,10 +35,44 @@ function buildReview(fields, missing, prevBudget) {
   }).filter((r) => !(missing.includes(r.id) && r.group === 'info' && r.value === ''));
 }
 
+function numericReviewValue(review, id) {
+  return Number(String(review.find((row) => row.id === id)?.value ?? 0).replace(/[^\d.-]/g, '')) || 0;
+}
+
+export function buildBudgetImportRecords(review, previousRecords) {
+  const expenseRecords = Object.entries(EXPENSE_DEFAULTS).map(([id, meta]) => ({
+    recordType: 'expense',
+    label: meta.label,
+    formula: meta.formula,
+    amount: numericReviewValue(review, id),
+  }));
+  const carriedRevenueRecords = (previousRecords || [])
+    .filter((record) => (
+      record.recordType === 'revenue'
+      && !record.deletedAt
+      && record.label !== GOV_GRANT_LABEL
+    ))
+    .map((record) => ({
+      recordType: 'revenue',
+      label: record.label,
+      amount: Number(record.amount || 0),
+    }));
+  return [
+    ...expenseRecords,
+    ...carriedRevenueRecords,
+    {
+      recordType: 'revenue',
+      label: GOV_GRANT_LABEL,
+      amount: numericReviewValue(review, 'govGrant'),
+    },
+  ];
+}
+
 export default function Archive({ years, latestYear, setYear, setNav }) {
-  const { isAdmin } = useAuth();
+  const { isAdmin, authorizeAdmin, authorizeAdminActor } = useAuth();
   const nextYear = String(Number(latestYear) + 1);
   const fileRef = useRef(null);
+  const budgetState = useYearRecords(latestYear, 'budget');
 
   const [busy, setBusy] = useState(false);
   const [importFile, setImportFile] = useState(null);
@@ -42,13 +84,15 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
   const exportYear = (y) => { setYear(y); setNav('report'); };
 
   const createYear = async () => {
-    setBusy(true);
-    try {
-      const created = await createNextYear(latestYear);
-      setYear(created);
-    } finally {
-      setBusy(false);
-    }
+    return runAuthorized(() => authorizeAdmin(), async () => {
+      setBusy(true);
+      try {
+        const created = await createNextYear(latestYear);
+        setYear(created);
+      } finally {
+        setBusy(false);
+      }
+    });
   };
 
   const pickFile = () => fileRef.current?.click();
@@ -61,8 +105,10 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
     setImportFile(file.name);
     try {
       const { fields, missing } = await parseImportFile(file);
-      const prevSnap = await getDoc(doc(db, 'years', latestYear, 'modules', 'budget'));
-      setReview(buildReview(fields, missing, prevSnap.data()));
+      if (budgetState.loading || budgetState.error) {
+        throw new Error('無法載入前一年度預算資料，請稍後再試');
+      }
+      setReview(buildReview(fields, missing, budgetState.data));
       setMissingCount(missing.length);
     } catch (err) {
       setError(err.message);
@@ -76,41 +122,34 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
     setReview((rows) => rows.map((r) => (r.id === id ? { ...r, value } : r)));
   };
 
-  const reviewValue = (id) => Number(String(review.find((r) => r.id === id)?.value ?? 0).replace(/[^\d.-]/g, '')) || 0;
-
   const confirmImport = async () => {
-    setBusy(true);
-    try {
-      await setDoc(doc(db, 'years', nextYear), { locked: false, deadlines: {}, createdAt: serverTimestamp() }, { merge: true });
+    const result = await runAuthorized(() => authorizeAdminActor(), async ({ actor }) => {
+      setBusy(true);
+      try {
+        const records = buildBudgetImportRecords(review, budgetState.data);
+        const invalid = records
+          .map((record) => validateBudgetRecord(record.recordType, record))
+          .find((validation) => !validation.valid);
+        if (invalid) {
+          setError(invalid.error);
+          return;
+        }
+        await yearDataRepository.importRecords({
+          year: nextYear,
+          moduleKey: 'budget',
+          records,
+          actor,
+          yearData: { locked: false, deadlines: {} },
+        });
 
-      const prevSnap = await getDoc(doc(db, 'years', latestYear, 'modules', 'budget'));
-      const prev = prevSnap.data();
-
-      const expenseBreakdown = Object.entries(EXPENSE_DEFAULTS).map(([id, meta]) => ({
-        label: meta.label,
-        formula: meta.formula,
-        amount: reviewValue(id),
-      }));
-
-      // The 3 fine-grained revenue line items (財產處分收入／租金收入／利息收入)
-      // aren't reliably parseable from real-world budget-book layouts (see
-      // src/lib/importParser.js) — carry the prior year's figures forward
-      // instead of guessing, and rely on 財產收入合計 above as a cross-check
-      // total staff can use to redistribute them in 歲入歲出 afterward.
-      const carriedRevenueRows = (prev?.revenue?.rows || []).filter((r) => r.label !== GOV_GRANT_LABEL);
-      const revenueRows = [...carriedRevenueRows, { label: GOV_GRANT_LABEL, amount: reviewValue('govGrant') }];
-
-      await setDoc(doc(db, 'years', nextYear, 'modules', 'budget'), {
-        expense: { breakdown: expenseBreakdown },
-        revenue: { rows: revenueRows },
-        updatedAt: serverTimestamp(),
-      }, { merge: true });
-
-      cancelImport();
-      setYear(nextYear);
-    } finally {
-      setBusy(false);
-    }
+        cancelImport();
+        setYear(nextYear);
+      } finally {
+        setBusy(false);
+      }
+    });
+    if (!result.executed) setError(result.reason);
+    return result;
   };
 
   return (
@@ -148,6 +187,9 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
           <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 14 }}>
             上傳議會版預算書（PDF／Word），系統自動解析歲入歲出金額並帶入 {nextYear} 年度「歲入歲出」模組 — 匯入前請核對每一項金額，必要時直接修改
           </div>
+
+          {budgetState.loading && <div style={{ ...card, maxWidth: 640 }}>正在載入前一年度預算資料…</div>}
+          {budgetState.error && <div style={{ color: '#B5533E', marginBottom: 14 }}>無法載入前一年度預算資料。</div>}
 
           <div style={{ maxWidth: 640 }}>
             <input ref={fileRef} type="file" accept=".pdf,.docx" style={{ display: 'none' }} onChange={onFileSelected} />

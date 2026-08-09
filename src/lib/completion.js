@@ -4,6 +4,17 @@
 // draft/submit distinction on the 基本資料 form.
 export function moduleCompletionPct(moduleKey, data) {
   if (!data) return 0;
+  if (Array.isArray(data)) {
+    const active = data.filter((record) => record && !record.deletedAt);
+    if (moduleKey === 'budget') {
+      return active.some((record) => record.recordType === 'expense')
+        && active.some((record) => record.recordType === 'revenue') ? 100 : 0;
+    }
+    if (moduleKey === 'language') {
+      return active.some((record) => record.recordType === 'class') ? 100 : 0;
+    }
+    return active.length > 0 ? 100 : 0;
+  }
   if (moduleKey === 'basic') {
     if (data.status === 'submitted') return 100;
     if (data.status === 'draft') return 50;

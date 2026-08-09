@@ -3,6 +3,9 @@ import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
+import firestoreConfig from '../functions/firestoreConfig.cjs';
+
+export const { FIRESTORE_DATABASE_ID } = firestoreConfig;
 
 const useEmulator = import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true';
 
@@ -29,7 +32,7 @@ const app = isFirebaseConfigured
   : null;
 
 export const auth = app ? getAuth(app) : null;
-export const db = app ? getFirestore(app) : null;
+export const db = app ? getFirestore(app, FIRESTORE_DATABASE_ID) : null;
 export const storage = app ? getStorage(app) : null;
 export const functions = app ? getFunctions(app) : null;
 
