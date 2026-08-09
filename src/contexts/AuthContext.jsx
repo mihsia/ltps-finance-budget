@@ -24,6 +24,17 @@ import {
 
 export const AuthContext = createContext(null);
 
+function auditActor(user, profile) {
+  if (typeof user?.uid !== 'string' || !user.uid) return null;
+  const profileName = typeof profile?.name === 'string' ? profile.name.trim() : '';
+  const displayName = typeof user.displayName === 'string' ? user.displayName.trim() : '';
+  const email = typeof user.email === 'string' ? user.email.trim() : '';
+  return {
+    uid: user.uid,
+    name: profileName || displayName || email || '未知使用者',
+  };
+}
+
 export function listenToUserAccess({
   auth: authInstance,
   db: dbInstance,
@@ -39,7 +50,7 @@ export function listenToUserAccess({
 
   const publish = (user, profile, profileState) => {
     const access = evaluateProfileAccess({ profileState, profile });
-    authorization.replace(access);
+    authorization.replace(access, auditActor(user, profile));
     onState({
       user,
       profile,
@@ -187,6 +198,7 @@ export function AuthProvider({ children }) {
       pendingGoogleEmail, cancelGoogleLink, logout, isAdmin, canEditModule,
       access, accessDeniedReason: access.reason,
       authorizeModule: authorization.authorizeModule,
+      authorizeModuleActor: authorization.authorizeModuleActor,
       authorizeAdmin: authorization.authorizeAdmin,
     }}>
       {children}

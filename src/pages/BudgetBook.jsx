@@ -11,16 +11,12 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
   const budgetState = useYearModule(year, 'budget');
   const moduleState = useYearModule(year, 'budgetbook');
   const yearState = useYearMeta(year);
-  const { profile, user, canEditModule, authorizeModule } = useAuth();
+  const { canEditModule, authorizeModule, authorizeModuleActor } = useAuth();
   const editor = useFixedFieldEditor({
     scopeKey: `${year}\0budgetbook`,
     data: moduleState.data,
     fields: FIELDS,
   });
-  const actor = {
-    uid: user?.uid || '',
-    name: profile?.name || user?.email || '未知使用者',
-  };
 
   const checkInvocation = () => {
     if (!hasCurrentYear()) return { allowed: false, reason: '目前選擇的年度已變更，請重新操作。' };
@@ -52,7 +48,7 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
     applyGuardResult(result);
   };
   const commit = async () => {
-    const result = await runAuthorized(() => authorizeModule('budgetbook'), async () => {
+    const result = await runAuthorized(() => authorizeModuleActor('budgetbook'), async ({ actor }) => {
       const decision = checkInvocation();
       if (!decision.allowed) return decision;
       const payload = {
@@ -78,11 +74,11 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
     applyGuardResult(result);
   };
 
-  if (moduleState.loading || yearState.loading) {
-    return <div><div style={pageTitle}>{year}年度預算書</div><div style={card}>正在載入預算書基本資料…</div></div>;
-  }
   if (moduleState.error || yearState.error) {
     return <div><div style={pageTitle}>{year}年度預算書</div><div style={lockedBanner}>無法載入預算書基本資料，請稍後再試。</div></div>;
+  }
+  if (moduleState.loading || yearState.loading) {
+    return <div><div style={pageTitle}>{year}年度預算書</div><div style={card}>正在載入預算書基本資料…</div></div>;
   }
 
   const budget = budgetState.data;
@@ -93,14 +89,16 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
   const shortfall = revenueTotal - expenseTotal;
   const canStartEditing = canEditModule('budgetbook')
     && yearState.exists
-    && !yearState.meta?.locked;
+    && yearState.meta?.locked === false;
 
   return (
     <div>
       <div style={pageTitle}>{year}年度預算書</div>
       <div style={pageSubtitle}>依原始預算書內容摘要呈現，供議會對照全文 PDF</div>
       {!yearState.exists && <div style={lockedBanner}>找不到此年度設定，無法編輯或儲存。</div>}
-      {yearState.meta?.locked && <div style={lockedBanner}>此年度已鎖定，無法編輯或儲存。</div>}
+      {yearState.exists && yearState.meta?.locked !== false && (
+        <div style={lockedBanner}>此年度未開放編輯，無法編輯或儲存。</div>
+      )}
       {!canEditModule('budgetbook') && <div style={lockedBanner}>您沒有此模組的編輯權限。</div>}
       {editor.message && <div style={{ color: editor.message === '儲存成功。' ? '#2F7D55' : '#B5533E', marginBottom: 14 }}>{editor.message}</div>}
 

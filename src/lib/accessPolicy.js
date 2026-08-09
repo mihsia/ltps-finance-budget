@@ -79,15 +79,34 @@ export function checkAdminAccess(access) {
   };
 }
 
-export function createAuthorizationSource(initialAccess = DENIALS.loading) {
+export function createAuthorizationSource(initialAccess = DENIALS.loading, initialActor = null) {
   let currentAccess = initialAccess;
+  let currentActor = initialActor;
 
   return {
-    replace(nextAccess) {
+    replace(nextAccess, nextActor = null) {
       currentAccess = nextAccess || DENIALS.error;
+      currentActor = nextActor;
     },
     current: () => currentAccess,
     authorizeModule: (moduleKey) => checkModuleAccess(currentAccess, moduleKey),
+    authorizeModuleActor: (moduleKey) => {
+      const decision = checkModuleAccess(currentAccess, moduleKey);
+      if (!decision.allowed) return decision;
+      if (
+        typeof currentActor?.uid !== 'string'
+        || !currentActor.uid
+        || typeof currentActor?.name !== 'string'
+        || !currentActor.name
+      ) {
+        return {
+          allowed: false,
+          code: 'actor-missing',
+          reason: '無法確認操作者身分，請重新登入。',
+        };
+      }
+      return { ...decision, actor: { ...currentActor } };
+    },
     authorizeAdmin: () => checkAdminAccess(currentAccess),
   };
 }
@@ -96,6 +115,6 @@ export async function runAuthorized(authorize, mutation) {
   const decision = authorize();
   if (!decision.allowed) return { ...decision, executed: false };
 
-  const value = await mutation();
+  const value = await mutation(decision);
   return { ...decision, executed: true, value };
 }

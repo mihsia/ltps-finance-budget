@@ -122,6 +122,26 @@ describe('mounted useYearMeta write readiness', () => {
     expect(mounted.current).toMatchObject({ meta: null, loading: true, error: null });
     mounted.unmount();
   });
+
+  it.each([
+    ['missing', {}],
+    ['null', { locked: null }],
+    ['zero', { locked: 0 }],
+    ['string false', { locked: 'false' }],
+    ['boolean true', { locked: true }],
+  ])('denies writes when locked is %s instead of exactly false', (_label, meta) => {
+    const harness = installHarness();
+    const mounted = mountHook(hookModule.useYearMeta, ['115']);
+
+    act(() => harness.subscriptions[0].onNext(snapshot(meta)));
+
+    expect(mounted.current).toMatchObject({ meta, loading: false, exists: true, error: null });
+    expect(mounted.current.authorizeWrite()).toMatchObject({
+      allowed: false,
+      code: 'year-locked',
+    });
+    mounted.unmount();
+  });
 });
 
 describe('module and audit scope readiness', () => {

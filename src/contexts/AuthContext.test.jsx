@@ -174,4 +174,52 @@ describe('listenToUserAccess', () => {
     expect(harness.authorization.authorizeAdmin().allowed).toBe(false);
     expect(harness.onSnapshotImpl).toHaveBeenCalledOnce();
   });
+
+  it('keeps retained module actor decisions synchronized with the live user and profile', () => {
+    const harness = createHarness();
+    harness.authCallback({ uid: 'user-a', email: 'a@example.com' });
+    const firstSubscription = harness.profileSubscriptions[0];
+    firstSubscription.onNext(snapshot({
+      name: '舊名稱',
+      role: 'editor',
+      status: 'active',
+      modules: ['basic'],
+    }));
+
+    const retained = harness.authorization.authorizeModuleActor;
+    expect(retained).toBeTypeOf('function');
+    expect(retained('basic')).toEqual(expect.objectContaining({
+      allowed: true,
+      actor: { uid: 'user-a', name: '舊名稱' },
+    }));
+
+    firstSubscription.onNext(snapshot({
+      name: '新名稱',
+      role: 'editor',
+      status: 'active',
+      modules: ['basic'],
+    }));
+    expect(retained('basic')).toEqual(expect.objectContaining({
+      allowed: true,
+      actor: { uid: 'user-a', name: '新名稱' },
+    }));
+
+    harness.authCallback({ uid: 'user-b', email: 'new@example.com' });
+    harness.profileSubscriptions[1].onNext(snapshot({
+      role: 'editor',
+      status: 'active',
+      modules: ['basic'],
+    }));
+    expect(retained('basic')).toEqual(expect.objectContaining({
+      allowed: true,
+      actor: { uid: 'user-b', name: 'new@example.com' },
+    }));
+
+    harness.authCallback(null);
+    expect(retained('basic')).toEqual(expect.objectContaining({
+      allowed: false,
+      code: 'not-signed-in',
+    }));
+    expect(retained('basic').actor).toBeUndefined();
+  });
 });

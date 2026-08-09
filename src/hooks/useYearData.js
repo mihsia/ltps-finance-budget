@@ -301,7 +301,7 @@ export function useYearMeta(year) {
         const meta = exists ? snap.data() : null;
         accessStateRef.current = {
           scopeGeneration,
-          status: exists ? (meta?.locked ? 'locked' : 'ready') : 'missing',
+          status: exists ? (meta?.locked === false ? 'ready' : 'locked') : 'missing',
           meta,
         };
         setState({

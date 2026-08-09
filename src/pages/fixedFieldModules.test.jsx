@@ -1,6 +1,7 @@
 import React from 'react';
 import TestRenderer, { act } from 'react-test-renderer';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createAuthorizationSource } from '../lib/accessPolicy';
 
 const hookMocks = vi.hoisted(() => ({
   modules: {},
@@ -17,7 +18,15 @@ const hookMocks = vi.hoisted(() => ({
 }));
 
 const authMocks = vi.hoisted(() => ({
-  decision: { allowed: true, code: 'access-granted', reason: null },
+  decision: {
+    allowed: true,
+    code: 'access-granted',
+    reason: null,
+    role: 'admin',
+    modules: [],
+  },
+  actor: { uid: 'admin-fixed', name: '校務管理員' },
+  authorization: null,
   value: null,
 }));
 
@@ -128,12 +137,24 @@ beforeEach(() => {
       unrelated: { keep: true },
     }),
   };
-  authMocks.decision = { allowed: true, code: 'access-granted', reason: null };
+  authMocks.decision = {
+    allowed: true,
+    code: 'access-granted',
+    reason: null,
+    role: 'admin',
+    modules: [],
+  };
+  authMocks.actor = { uid: 'admin-fixed', name: '校務管理員' };
+  authMocks.authorization = createAuthorizationSource(authMocks.decision, authMocks.actor);
   authMocks.value = {
     profile: { name: '校務管理員' },
     user: { uid: 'admin-fixed', email: 'admin@example.test' },
     canEditModule: () => authMocks.decision.allowed,
     authorizeModule: () => authMocks.decision,
+    authorizeModuleActor: (moduleKey) => {
+      authMocks.authorization.replace(authMocks.decision, authMocks.actor);
+      return authMocks.authorization.authorizeModuleActor(moduleKey);
+    },
   };
 });
 
@@ -226,6 +247,54 @@ describe('Basic fixed-field module', () => {
     mounted.unmount();
   });
 
+  it('accepts an exact submitted-status echo but rejects genuinely unrelated changes', async () => {
+    const firstWrite = deferred();
+    const save = vi.fn(() => firstWrite.promise);
+    const source = {
+      classes: '13', students: '262', staff: '28', regularTeachers: '19', substitute: '9', partTimeTeachers: '2',
+      status: 'draft', unrelated: { keep: true }, updatedAt: { seconds: 1 },
+    };
+    hookMocks.modules.basic = readyModule(source, save);
+    const mounted = mount(Basic);
+
+    await act(async () => control(mounted.renderer, '編輯資料').props.onClick());
+    let pending;
+    act(() => { pending = control(mounted.renderer, '儲存並送出審核').props.onClick(); });
+    await act(async () => Promise.resolve());
+    hookMocks.modules.basic = readyModule({
+      ...source,
+      status: 'submitted',
+      updatedAt: { seconds: 2 },
+    }, save);
+    mounted.rerender();
+    firstWrite.resolve();
+    await act(async () => pending);
+    expect(pageText(mounted.renderer)).toContain('儲存成功。');
+
+    const secondWrite = deferred();
+    hookMocks.modules.basic = readyModule({
+      ...source,
+      status: 'submitted',
+      updatedAt: { seconds: 2 },
+    }, vi.fn(() => secondWrite.promise));
+    mounted.rerender();
+    await act(async () => control(mounted.renderer, '編輯資料').props.onClick());
+    let secondPending;
+    act(() => { secondPending = control(mounted.renderer, '儲存並送出審核').props.onClick(); });
+    await act(async () => Promise.resolve());
+    hookMocks.modules.basic = readyModule({
+      ...source,
+      status: 'submitted',
+      unrelated: { keep: false },
+      updatedAt: { seconds: 3 },
+    }, save);
+    mounted.rerender();
+    secondWrite.resolve();
+    await act(async () => secondPending);
+    expect(pageText(mounted.renderer)).toContain('資料已在儲存期間變更');
+    mounted.unmount();
+  });
+
   it('rechecks the live deadline at callback invocation, including a retained cancel callback', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 7, 9, 12));
@@ -304,6 +373,32 @@ describe('Library fixed-field module', () => {
     expect(pageText(mounted.renderer)).toContain('無法載入圖書館藏書資料');
     mounted.unmount();
   });
+
+  it('uses the invocation-current audit actor and writes nothing when that actor is unavailable', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    hookMocks.modules.library = readyModule({ generalBooks: 1, indigenousBooks: 2 }, save);
+    const mounted = mount(Library);
+    await act(async () => control(mounted.renderer, '編輯數量').props.onClick());
+    const retainedSave = control(mounted.renderer, '儲存').props.onClick;
+
+    authMocks.actor = { uid: 'current-user', name: '即時名稱' };
+    await act(async () => retainedSave());
+    expect(save).toHaveBeenCalledWith(
+      { generalBooks: '1', indigenousBooks: '2' },
+      {
+        actor: { uid: 'current-user', name: '即時名稱' },
+        fields: ['generalBooks', 'indigenousBooks'],
+      },
+    );
+
+    await act(async () => control(mounted.renderer, '編輯數量').props.onClick());
+    const retainedWithoutActor = control(mounted.renderer, '儲存').props.onClick;
+    authMocks.actor = null;
+    await act(async () => retainedWithoutActor());
+    expect(save).toHaveBeenCalledOnce();
+    expect(pageText(mounted.renderer)).toContain('無法確認操作者身分');
+    mounted.unmount();
+  });
 });
 
 describe('BudgetBook fixed-field module', () => {
@@ -347,6 +442,61 @@ describe('BudgetBook fixed-field module', () => {
     });
     expect(pageText(mounted.renderer)).toContain('儲存成功。');
     expect(mounted.renderer.root.findAll((node) => node.type === 'input' && node.props.type === 'file')).toHaveLength(0);
+    mounted.unmount();
+  });
+});
+
+describe('fixed-field year readiness and error priority', () => {
+  it.each([
+    ['Basic', Basic, 'basic', '編輯資料'],
+    ['Library', Library, 'library', '編輯數量'],
+    ['BudgetBook', BudgetBook, 'budgetbook', '編輯基金資料'],
+  ])('%s hides editing unless locked is exactly false', (_name, Page, moduleKey, editLabel) => {
+    const save = vi.fn();
+    hookMocks.modules[moduleKey] = { ...hookMocks.modules[moduleKey], save };
+    const mounted = mount(Page);
+
+    for (const locked of [undefined, null, 0, 'false', true]) {
+      hookMocks.meta = {
+        meta: locked === undefined ? { deadlines: {} } : { locked, deadlines: {} },
+        loading: false,
+        exists: true,
+        error: null,
+      };
+      mounted.rerender();
+      expect(control(mounted.renderer, editLabel)).toBeUndefined();
+      expect(pageText(mounted.renderer)).toContain('無法編輯或儲存');
+    }
+
+    expect(save).not.toHaveBeenCalled();
+    mounted.unmount();
+  });
+
+  it.each([
+    ['Basic', Basic, 'basic', '無法載入學校基本資料'],
+    ['Library', Library, 'library', '無法載入圖書館藏書資料'],
+    ['BudgetBook', BudgetBook, 'budgetbook', '無法載入預算書基本資料'],
+  ])('%s renders an active error ahead of loading and performs no write', (_name, Page, moduleKey, errorText) => {
+    const save = vi.fn();
+    const ready = { ...hookMocks.modules[moduleKey], save };
+
+    hookMocks.modules[moduleKey] = { ...ready, error: new Error('module denied') };
+    hookMocks.meta = { meta: null, loading: true, exists: false, error: null };
+    const mounted = mount(Page);
+    expect(pageText(mounted.renderer)).toContain(errorText);
+    expect(pageText(mounted.renderer)).not.toContain('正在載入');
+
+    hookMocks.modules[moduleKey] = { ...ready, loading: true };
+    hookMocks.meta = {
+      meta: null,
+      loading: false,
+      exists: false,
+      error: new Error('meta denied'),
+    };
+    mounted.rerender();
+    expect(pageText(mounted.renderer)).toContain(errorText);
+    expect(pageText(mounted.renderer)).not.toContain('正在載入');
+    expect(save).not.toHaveBeenCalled();
     mounted.unmount();
   });
 });

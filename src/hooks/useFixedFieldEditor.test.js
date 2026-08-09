@@ -62,6 +62,54 @@ describe('useFixedFieldEditor source-version lifecycle', () => {
     mounted.unmount();
   });
 
+  it('uses a successful no-echo submission as the baseline for the next edit', () => {
+    const source = { generalBooks: 1, indigenousBooks: 2, unrelated: { keep: true } };
+    const mounted = mountEditor(source);
+    const token = startSubmission(mounted);
+
+    act(() => mounted.current.saveSucceeded(token));
+    act(() => mounted.current.beginEditing());
+
+    expect(mounted.current).toMatchObject({
+      form: { generalBooks: '11', indigenousBooks: '2' },
+      editing: true,
+      pending: false,
+      message: null,
+    });
+    mounted.unmount();
+  });
+
+  it('does not cancel a newer edit when the successful no-echo submission arrives later', () => {
+    const source = {
+      generalBooks: 1,
+      indigenousBooks: 2,
+      unrelated: { keep: true },
+      updatedAt: { seconds: 1 },
+    };
+    const mounted = mountEditor(source);
+    const token = startSubmission(mounted);
+
+    act(() => mounted.current.saveSucceeded(token));
+    act(() => {
+      mounted.current.beginEditing();
+      mounted.current.updateField('generalBooks', '12');
+    });
+    mounted.rerender({
+      generalBooks: '11',
+      indigenousBooks: '2',
+      unrelated: { keep: true },
+      updatedAt: { seconds: 2 },
+    });
+
+    expect(mounted.current).toMatchObject({
+      form: { generalBooks: '12', indigenousBooks: '2' },
+      editing: true,
+      pending: false,
+      message: null,
+    });
+    mounted.unmount();
+  });
+
   it('accepts exactly one exact type-preserving echo of the submitted fixed fields', () => {
     const source = {
       generalBooks: 1,
@@ -85,6 +133,32 @@ describe('useFixedFieldEditor source-version lifecycle', () => {
       editing: false,
       pending: false,
       message: '儲存成功。',
+    });
+    mounted.unmount();
+  });
+
+  it('still rejects a repeated exact source publication during one pending save', () => {
+    const source = {
+      generalBooks: 1,
+      indigenousBooks: 2,
+      unrelated: { keep: true },
+    };
+    const mounted = mountEditor(source);
+    const token = startSubmission(mounted);
+    const echo = {
+      generalBooks: '11',
+      indigenousBooks: '2',
+      unrelated: { keep: true },
+    };
+
+    mounted.rerender(echo);
+    mounted.rerender({ ...echo });
+    act(() => mounted.current.saveSucceeded(token));
+
+    expect(mounted.current).toMatchObject({
+      editing: false,
+      pending: false,
+      message: '資料已在儲存期間變更，已重新載入最新內容。',
     });
     mounted.unmount();
   });

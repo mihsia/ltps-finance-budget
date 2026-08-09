@@ -40,24 +40,20 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
   const moduleState = useYearModule(year, 'basic');
   const yearState = useYearMeta(year);
   const auditState = useAuditLog(year, { moduleKey: 'basic', max: 20 });
-  const { profile, user, canEditModule, authorizeModule } = useAuth();
+  const { canEditModule, authorizeModule, authorizeModuleActor } = useAuth();
   const editor = useFixedFieldEditor({
     scopeKey: `${year}\0basic`,
     data: moduleState.data,
-    fields: COUNT_FIELDS,
+    fields: AUDIT_FIELDS,
   });
 
-  const actor = {
-    uid: user?.uid || '',
-    name: profile?.name || user?.email || '未知使用者',
-  };
   const deadline = yearState.meta?.deadlines?.basic;
   const parsedDeadline = parseLocalDeadlineEndOfDay(deadline);
   const deadlineInvalid = Boolean(deadline) && !parsedDeadline;
   const pastDeadline = Boolean(parsedDeadline && Date.now() > parsedDeadline.getTime());
   const writeVisible = canEditModule('basic')
     && yearState.exists
-    && !yearState.meta?.locked
+    && yearState.meta?.locked === false
     && !moduleState.loading
     && !moduleState.error
     && !pastDeadline
@@ -117,7 +113,7 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
   };
 
   const commit = async (status) => {
-    const result = await runAuthorized(() => authorizeModule('basic'), async () => {
+    const result = await runAuthorized(() => authorizeModuleActor('basic'), async ({ actor }) => {
       const decision = checkInvocation();
       if (!decision.allowed) return decision;
       const validation = validateFixedFields(editor.form, COUNT_FIELDS);
@@ -138,11 +134,11 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
     applyGuardResult(result);
   };
 
-  if (moduleState.loading || yearState.loading) {
-    return <div><div style={pageTitle}>學校基本資料</div><div style={card}>正在載入學校基本資料…</div></div>;
-  }
   if (moduleState.error || yearState.error) {
     return <div><div style={pageTitle}>學校基本資料</div><div style={lockedBanner}>無法載入學校基本資料，請稍後再試。</div></div>;
+  }
+  if (moduleState.loading || yearState.loading) {
+    return <div><div style={pageTitle}>學校基本資料</div><div style={card}>正在載入學校基本資料…</div></div>;
   }
 
   const teacherTotal = Number(editor.form.regularTeachers || 0)
@@ -161,7 +157,9 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
       <div style={pageSubtitle}>負責人：教務處 · {year}年度</div>
 
       {!yearState.exists && <div style={lockedBanner}>找不到此年度設定，無法編輯或儲存。</div>}
-      {yearState.meta?.locked && <div style={lockedBanner}>此年度已鎖定，無法編輯或儲存。</div>}
+      {yearState.exists && yearState.meta?.locked !== false && (
+        <div style={lockedBanner}>此年度未開放編輯，無法編輯或儲存。</div>
+      )}
       {!canEditModule('basic') && <div style={lockedBanner}>您沒有此模組的編輯權限。</div>}
       {deadline && (
         <div style={(pastDeadline || deadlineInvalid) ? lockedBanner : deadlineBanner}>

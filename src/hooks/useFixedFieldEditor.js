@@ -29,6 +29,10 @@ function isExactSubmittedEcho(source, attempt, fields) {
   );
 }
 
+function committedSource(baseSource, submitted) {
+  return { ...(baseSource || {}), ...submitted };
+}
+
 export function useFixedFieldEditor({ scopeKey, data, fields }) {
   const scopeGeneration = useMemo(() => ({ scopeKey }), [scopeKey]);
   const activeScopeRef = useRef(scopeGeneration);
@@ -36,6 +40,7 @@ export function useFixedFieldEditor({ scopeKey, data, fields }) {
   const observedScopeRef = useRef(scopeGeneration);
   const sourceRef = useRef(data);
   const attemptRef = useRef(null);
+  const delayedEchoRef = useRef(null);
   const editingRef = useRef(false);
   const pendingRef = useRef(false);
   const [state, setState] = useState(() => ({
@@ -54,6 +59,7 @@ export function useFixedFieldEditor({ scopeKey, data, fields }) {
       observedScopeRef.current = scopeGeneration;
       sourceRef.current = data;
       attemptRef.current = null;
+      delayedEchoRef.current = null;
       editingRef.current = false;
       pendingRef.current = false;
       setState({
@@ -66,10 +72,10 @@ export function useFixedFieldEditor({ scopeKey, data, fields }) {
     }
     if (sourceRef.current === data) return;
 
-    sourceRef.current = data;
     const attempt = attemptRef.current;
     if (attempt) {
       const exactEcho = isExactSubmittedEcho(data, attempt, fields);
+      sourceRef.current = data;
       if (exactEcho && attempt.echoCount === 0 && !attempt.invalid) {
         attempt.echoCount = 1;
         setState((current) => ({ ...current, form: toForm(data, fields) }));
@@ -86,6 +92,17 @@ export function useFixedFieldEditor({ scopeKey, data, fields }) {
       }));
       return;
     }
+
+    const delayedEcho = delayedEchoRef.current;
+    if (delayedEcho) {
+      delayedEchoRef.current = null;
+      if (isExactSubmittedEcho(data, delayedEcho, fields)) {
+        sourceRef.current = data;
+        return;
+      }
+    }
+
+    sourceRef.current = data;
 
     if (editingRef.current) {
       editingRef.current = false;
@@ -151,6 +168,7 @@ export function useFixedFieldEditor({ scopeKey, data, fields }) {
   const beginSave = useCallback((submitted) => {
     if (!isCurrent() || pendingRef.current || !editingRef.current) return null;
     const token = { scopeGeneration };
+    delayedEchoRef.current = null;
     attemptRef.current = {
       token,
       baseSource: sourceRef.current,
@@ -179,7 +197,9 @@ export function useFixedFieldEditor({ scopeKey, data, fields }) {
       });
       return false;
     }
-    attempt.settled = true;
+    sourceRef.current = committedSource(sourceRef.current, attempt.submitted);
+    delayedEchoRef.current = attempt.echoCount === 0 ? attempt : null;
+    attemptRef.current = null;
     setState((current) => ({
       ...current,
       form: toForm(attempt.submitted, fields),
