@@ -32,6 +32,11 @@ const authMocks = vi.hoisted(() => ({
   value: null,
 }));
 
+const callableMocks = vi.hoisted(() => ({
+  calls: [],
+  impl: vi.fn(async () => ({ data: {} })),
+}));
+
 vi.mock('../hooks/useYearData', () => ({
   useYearModule: hookMocks.useYearModule,
   useYearRecords: hookMocks.useYearRecords,
@@ -40,6 +45,15 @@ vi.mock('../hooks/useYearData', () => ({
 }));
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => authMocks.value,
+}));
+vi.mock('../firebase', () => ({
+  functions: {},
+}));
+vi.mock('firebase/functions', () => ({
+  httpsCallable: (_functions, name) => async (payload) => {
+    callableMocks.calls.push({ name, payload });
+    return callableMocks.impl(name, payload);
+  },
 }));
 
 const [{ default: Basic }, { default: Library }, { default: BudgetBook }] = await Promise.all([
@@ -103,6 +117,17 @@ function mount(Page, props = {}) {
   };
 }
 
+function fakeFile({ name = 'budget.pdf', type = 'application/pdf', content = '%PDF-1.4 fake' } = {}) {
+  const bytes = new TextEncoder().encode(content);
+  return {
+    name, type, size: bytes.length, arrayBuffer: async () => bytes.buffer,
+  };
+}
+
+function fileInput(renderer) {
+  return renderer.root.findAll((node) => node.type === 'input' && node.props.type === 'file')[0];
+}
+
 function readyModule(data, save = vi.fn().mockResolvedValue(undefined), exists = true) {
   return {
     data,
@@ -116,6 +141,8 @@ function readyModule(data, save = vi.fn().mockResolvedValue(undefined), exists =
 
 beforeEach(() => {
   vi.clearAllMocks();
+  callableMocks.calls = [];
+  callableMocks.impl = vi.fn(async () => ({ data: {} }));
   hookMocks.moduleDecision = { allowed: true, code: 'module-writable', reason: null };
   hookMocks.meta = { meta: { locked: false, deadlines: {} }, loading: false, exists: true, error: null };
   hookMocks.yearDecision = { allowed: true, code: 'year-writable', reason: null };
@@ -425,7 +452,7 @@ describe('Library fixed-field module', () => {
 });
 
 describe('BudgetBook fixed-field module', () => {
-  it('trims and validates both metadata fields, saves an audited fixed-field payload, and leaves PDF read-only', async () => {
+  it('trims and validates both metadata fields, and saves an audited fixed-field payload', async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     hookMocks.modules.budgetbook = readyModule({
       fundName: '利澤國小校務基金',
@@ -435,7 +462,6 @@ describe('BudgetBook fixed-field module', () => {
     }, save);
     const mounted = mount(BudgetBook);
     expect(mounted.renderer.root.findAllByType('a')[0].props.href).toBe('https://example.test/budget.pdf');
-    expect(mounted.renderer.root.findAll((node) => node.type === 'input' && node.props.type === 'file')).toHaveLength(0);
 
     await act(async () => control(mounted.renderer, '編輯基金資料').props.onClick());
     let inputs = mounted.renderer.root.findAllByType('input');
@@ -464,7 +490,88 @@ describe('BudgetBook fixed-field module', () => {
       fields: ['fundName', 'reviewAuthority'],
     });
     expect(pageText(mounted.renderer)).toContain('儲存成功。');
-    expect(mounted.renderer.root.findAll((node) => node.type === 'input' && node.props.type === 'file')).toHaveLength(0);
+    mounted.unmount();
+  });
+
+  it('uploads a PDF, then offers to replace it once one exists', async () => {
+    const moduleWithoutPdf = readyModule({ fundName: '基金', reviewAuthority: '機關' });
+    hookMocks.modules.budgetbook = moduleWithoutPdf;
+    const mounted = mount(BudgetBook);
+
+    expect(pageText(mounted.renderer)).toContain('上傳 PDF 全文');
+    expect(pageText(mounted.renderer)).not.toContain('更換 PDF 全文');
+
+    const file = fakeFile({ name: '115budget.pdf', content: '%PDF-1.4 hello' });
+    await act(async () => fileInput(mounted.renderer).props.onChange({ target: { files: [file], value: 'x' } }));
+
+    const call = callableMocks.calls.find((c) => c.name === 'uploadBudgetBookPdf');
+    expect(call).toBeTruthy();
+    expect(call.payload).toMatchObject({ year: '115', fileName: '115budget.pdf', contentType: 'application/pdf' });
+    expect(atob(call.payload.base64)).toBe('%PDF-1.4 hello');
+    expect(pageText(mounted.renderer)).toContain('已上傳 PDF 全文。');
+
+    hookMocks.modules.budgetbook = readyModule({ fundName: '基金', reviewAuthority: '機關', pdfUrl: 'https://example.test/new.pdf' });
+    mounted.rerender();
+    expect(pageText(mounted.renderer)).toContain('更換 PDF 全文');
+    mounted.unmount();
+  });
+
+  it('rejects a non-PDF file on the client without calling the function', async () => {
+    hookMocks.modules.budgetbook = readyModule({ fundName: '基金', reviewAuthority: '機關' });
+    const mounted = mount(BudgetBook);
+
+    const file = fakeFile({ name: 'photo.png', type: 'image/png' });
+    await act(async () => fileInput(mounted.renderer).props.onChange({ target: { files: [file], value: 'x' } }));
+
+    expect(callableMocks.calls).toHaveLength(0);
+    expect(pageText(mounted.renderer)).toContain('僅接受 PDF 檔案');
+    mounted.unmount();
+  });
+
+  it('surfaces a failed upload instead of appearing to succeed', async () => {
+    callableMocks.impl = vi.fn(async () => { throw new Error('儲存空間已滿'); });
+    hookMocks.modules.budgetbook = readyModule({ fundName: '基金', reviewAuthority: '機關' });
+    const mounted = mount(BudgetBook);
+
+    const file = fakeFile();
+    await act(async () => fileInput(mounted.renderer).props.onChange({ target: { files: [file], value: 'x' } }));
+
+    expect(pageText(mounted.renderer)).toContain('儲存空間已滿');
+    mounted.unmount();
+  });
+
+  it('freezes the upload control while a request is in flight so it cannot fire twice', async () => {
+    const pending = deferred();
+    callableMocks.impl = vi.fn(() => pending.promise);
+    hookMocks.modules.budgetbook = readyModule({ fundName: '基金', reviewAuthority: '機關' });
+    const mounted = mount(BudgetBook);
+
+    const file = fakeFile();
+    act(() => { fileInput(mounted.renderer).props.onChange({ target: { files: [file], value: 'x' } }); });
+    await act(async () => Promise.resolve());
+    expect(callableMocks.calls).toHaveLength(1);
+
+    act(() => { fileInput(mounted.renderer).props.onChange({ target: { files: [file], value: 'x' } }); });
+    await act(async () => Promise.resolve());
+    expect(callableMocks.calls).toHaveLength(1);
+
+    await act(async () => {
+      pending.resolve({ data: {} });
+      await pending.promise;
+    });
+    mounted.unmount();
+  });
+
+  it('hides the upload control once the year is locked or the module is not editable', async () => {
+    hookMocks.modules.budgetbook = readyModule({ fundName: '基金', reviewAuthority: '機關' });
+    hookMocks.meta = { meta: { locked: true, deadlines: {} }, loading: false, exists: true, error: null };
+    const mounted = mount(BudgetBook);
+    expect(fileInput(mounted.renderer)).toBeUndefined();
+
+    hookMocks.meta = { meta: { locked: false, deadlines: {} }, loading: false, exists: true, error: null };
+    authMocks.decision = { allowed: false, code: 'module-denied', reason: '沒有此模組的編輯權限。' };
+    mounted.rerender();
+    expect(fileInput(mounted.renderer)).toBeUndefined();
     mounted.unmount();
   });
 });

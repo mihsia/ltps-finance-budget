@@ -1,9 +1,13 @@
+import { useState } from 'react';
+import { httpsCallable } from 'firebase/functions';
 import { useYearMeta, useYearModule, useYearRecords } from '../hooks/useYearData';
 import { useFixedFieldEditor } from '../hooks/useFixedFieldEditor';
 import { useAuth } from '../contexts/AuthContext';
+import { functions } from '../firebase';
 import { runAuthorized } from '../lib/accessPolicy';
 import { fmtNum } from '../lib/format';
 import { budgetRecordSummary } from '../lib/recordDerivations';
+import { fileToBase64, validatePdfFile } from '../lib/pdfUpload';
 import { pageTitle, pageSubtitle, card, btnOutline, btnPrimary, btnSecondary, input, label, lockedBanner, progressBar } from '../styles';
 
 const FIELDS = ['fundName', 'reviewAuthority'];
@@ -18,6 +22,8 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
     data: moduleState.data,
     fields: FIELDS,
   });
+  const [pdfPending, setPdfPending] = useState(false);
+  const [pdfStatus, setPdfStatus] = useState(null);
 
   const checkInvocation = () => {
     if (!hasCurrentYear()) return { allowed: false, reason: '目前選擇的年度已變更，請重新操作。' };
@@ -28,6 +34,10 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
   const applyGuardResult = (result) => {
     if (!result.executed) editor.setMessage(result.reason);
     else if (result.value?.allowed === false) editor.setMessage(result.value.reason);
+  };
+  const applyPdfGuardResult = (result) => {
+    if (!result.executed) setPdfStatus(result.reason);
+    else if (result.value?.allowed === false) setPdfStatus(result.value.reason);
   };
 
   const beginEditing = async () => {
@@ -73,6 +83,39 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
       return { allowed: true };
     });
     applyGuardResult(result);
+  };
+
+  const uploadPdf = async (file) => {
+    if (pdfPending) return;
+    const result = await runAuthorized(() => authorizeModule('budgetbook'), async () => {
+      const decision = checkInvocation();
+      if (!decision.allowed) return decision;
+      const validation = validatePdfFile(file);
+      if (!validation.valid) return { allowed: false, reason: validation.error };
+
+      const isReplace = Boolean(moduleState.data?.pdfUrl);
+      setPdfStatus(null);
+      setPdfPending(true);
+      try {
+        const base64 = await fileToBase64(file);
+        const uploadBudgetBookPdf = httpsCallable(functions, 'uploadBudgetBookPdf');
+        await uploadBudgetBookPdf({
+          year, fileName: file.name, contentType: file.type, base64,
+        });
+        setPdfStatus(isReplace ? '已更換 PDF 全文。' : '已上傳 PDF 全文。');
+      } catch (e) {
+        setPdfStatus(e.message || '上傳失敗，請稍後再試。');
+      } finally {
+        setPdfPending(false);
+      }
+      return { allowed: true };
+    });
+    applyPdfGuardResult(result);
+  };
+  const handlePdfFileChange = (event) => {
+    const file = event.target.files?.[0] || null;
+    event.target.value = '';
+    if (file) uploadPdf(file);
   };
 
   if (moduleState.error || yearState.error) {
@@ -150,11 +193,29 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
         </div>
       )}
 
-      {moduleState.data?.pdfUrl ? (
-        <a href={moduleState.data.pdfUrl} target="_blank" rel="noreferrer" style={btnOutline}>下載原始預算書 PDF 全文</a>
-      ) : (
-        <div style={{ ...btnOutline, opacity: 0.6, cursor: 'not-allowed' }} title="尚未上傳 PDF 全文">下載原始預算書 PDF 全文</div>
+      {pdfStatus && (
+        <div style={{ maxWidth: 640, marginBottom: 12, color: /^已(上傳|更換)/.test(pdfStatus) ? '#2F7D55' : '#B5533E' }}>{pdfStatus}</div>
       )}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+        {moduleState.data?.pdfUrl ? (
+          <a href={moduleState.data.pdfUrl} target="_blank" rel="noreferrer" style={btnOutline}>下載原始預算書 PDF 全文</a>
+        ) : (
+          <div style={{ ...btnOutline, opacity: 0.6, cursor: 'not-allowed' }} title="尚未上傳 PDF 全文">下載原始預算書 PDF 全文</div>
+        )}
+        {canStartEditing && (
+          <label style={{ ...btnSecondary, opacity: pdfPending ? .6 : 1, cursor: pdfPending ? 'wait' : 'pointer' }}>
+            {pdfPending ? '上傳中…' : (moduleState.data?.pdfUrl ? '更換 PDF 全文' : '上傳 PDF 全文')}
+            <input
+              type="file"
+              accept="application/pdf"
+              aria-label={moduleState.data?.pdfUrl ? '更換 PDF 全文' : '上傳 PDF 全文'}
+              disabled={pdfPending}
+              onChange={handlePdfFileChange}
+              style={{ display: 'none' }}
+            />
+          </label>
+        )}
+      </div>
     </div>
   );
 }

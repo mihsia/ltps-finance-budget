@@ -2,6 +2,7 @@ const { onCall, HttpsError } = require('firebase-functions/v2/https');
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore } = require('firebase-admin/firestore');
+const { getStorage } = require('firebase-admin/storage');
 const { getNamedFirestore } = require('./firestore');
 const {
   validateAccountProfile,
@@ -10,6 +11,7 @@ const {
   validateStatusRequest,
   buildStatusChange,
 } = require('./accountAdmin.cjs');
+const { validateUploadRequest } = require('./pdfStorage.cjs');
 
 initializeApp();
 
@@ -40,6 +42,36 @@ function writeAccountLog(db, entry) {
     ...entry,
     createdAt: new Date().toISOString(),
   });
+}
+
+/**
+ * Re-verifies on the server that the caller is a signed-in, active admin or
+ * an active editor scoped to `moduleKey` — the same rule the client enforces
+ * client-side (for presentation only), re-checked here because a revoked
+ * role or disabled account can still carry a valid ID token mid-session.
+ */
+async function requireModuleWriteAccess(db, request, moduleKey) {
+  const callerUid = request.auth?.uid;
+  if (!callerUid) throw new HttpsError('unauthenticated', '請先登入');
+
+  const callerProfile = (await db.collection('users').doc(callerUid).get()).data();
+  if (callerProfile?.status !== 'active') {
+    throw new HttpsError('permission-denied', '此帳號已停用');
+  }
+  const canEditModule = callerProfile.role === 'admin'
+    || (Array.isArray(callerProfile.modules) && callerProfile.modules.includes(moduleKey));
+  if (!canEditModule) {
+    throw new HttpsError('permission-denied', '沒有此模組的編輯權限');
+  }
+  return { callerUid, callerProfile };
+}
+
+async function requireUnlockedYear(db, year) {
+  const yearSnap = await db.collection('years').doc(year).get();
+  if (!yearSnap.exists) throw new HttpsError('failed-precondition', '找不到此年度設定');
+  if (yearSnap.data()?.locked !== false) {
+    throw new HttpsError('failed-precondition', '此年度未開放編輯');
+  }
 }
 
 /**
@@ -164,4 +196,76 @@ exports.setAccountStatus = onCall(async (request) => {
   });
 
   return { uid, status };
+});
+
+/**
+ * Admin or budgetbook-module editor: uploads (or replaces) the archived
+ * budget-book PDF. Storage rules deny client writes to `budget-books/**`
+ * outright (see storage.rules), so the file only ever reaches Storage through
+ * this Admin-SDK path, which re-checks role/module scope and the year lock
+ * itself rather than trusting the client's own (presentation-only) gating.
+ */
+exports.uploadBudgetBookPdf = onCall({ timeoutSeconds: 60 }, async (request) => {
+  const db = getNamedFirestore(getFirestore);
+  const { year } = request.data || {};
+  if (typeof year !== 'string' || !year) throw new HttpsError('invalid-argument', '缺少年度');
+
+  const { callerUid, callerProfile } = await requireModuleWriteAccess(db, request, 'budgetbook');
+  await requireUnlockedYear(db, year);
+
+  const validation = validateUploadRequest(request.data);
+  if (!validation.valid) throw new HttpsError('invalid-argument', validation.error);
+
+  const moduleRef = db.collection('years').doc(year).collection('modules').doc('budgetbook');
+  const moduleSnap = await moduleRef.get();
+  const before = moduleSnap.exists ? moduleSnap.data() : null;
+
+  const storagePath = `budget-books/${year}/${Date.now()}-${validation.fileName}`;
+  const bucket = getStorage().bucket();
+  const file = bucket.file(storagePath);
+  await file.save(validation.buffer, { contentType: 'application/pdf', resumable: false });
+  await file.makePublic();
+  const pdfUrl = `https://storage.googleapis.com/${bucket.name}/${storagePath}`;
+
+  const now = new Date().toISOString();
+  const after = {
+    ...before,
+    pdfUrl,
+    pdfFileName: validation.fileName,
+    pdfPath: storagePath,
+    pdfSize: validation.buffer.length,
+    pdfUpdatedAt: now,
+    pdfUpdatedBy: callerUid,
+    updatedAt: now,
+  };
+
+  const batch = db.batch();
+  batch.set(moduleRef, after, { merge: true });
+
+  const auditRef = db.collection('years').doc(year).collection('auditLogs').doc();
+  batch.set(auditRef, {
+    moduleKey: 'budgetbook',
+    recordId: null,
+    action: before?.pdfUrl ? 'pdf-replace' : 'pdf-upload',
+    actorUid: callerUid,
+    actorName: callerProfile.name || callerProfile.email || callerUid,
+    before: { pdfUrl: before?.pdfUrl ?? null, pdfFileName: before?.pdfFileName ?? null },
+    after: { pdfUrl, pdfFileName: validation.fileName },
+    createdAt: now,
+  });
+
+  const fileRef = db.collection('years').doc(year).collection('files').doc();
+  batch.set(fileRef, {
+    moduleKey: 'budgetbook',
+    storagePath,
+    fileName: validation.fileName,
+    contentType: 'application/pdf',
+    size: validation.buffer.length,
+    uploadedBy: callerUid,
+    uploadedAt: now,
+  });
+
+  await batch.commit();
+
+  return { pdfUrl, pdfFileName: validation.fileName };
 });
