@@ -8,10 +8,7 @@ async function pageSource(page) {
 describe('page mutation authorization audit', () => {
   it.each([
     ['Basic', 'authorizeModule', 2],
-    ['Budget', 'authorizeModule', 1],
     ['Library', 'authorizeModule', 2],
-    ['Language', 'authorizeModule', 3],
-    ['Generic', 'authorizeModule', 3],
     ['Settings', 'authorizeAdmin', 1],
     ['Archive', 'authorizeAdmin', 2],
   ])('%s rechecks current access in each existing write handler', async (page, authorizeName, minimumChecks) => {
@@ -21,4 +18,21 @@ describe('page mutation authorization audit', () => {
     expect(source.match(new RegExp(`runAuthorized\\(\\s*\\(\\) => ${authorizeName}`, 'g'))?.length || 0)
       .toBeGreaterThanOrEqual(minimumChecks);
   });
+
+  it.each(['Budget', 'Language', 'Generic'])(
+    '%s delegates every record control and mutation to the invocation-current guard',
+    async (page) => {
+      const source = await pageSource(page);
+      const guardSource = await readFile(
+        new URL('../hooks/useRecordCrudActions.js', import.meta.url),
+        'utf8',
+      );
+
+      expect(source).toContain("import { useRecordCrudActions } from '../hooks/useRecordCrudActions';");
+      expect(source).toContain('actions.runControl(');
+      expect(source).toContain('actions.runMutation(');
+      expect(guardSource).toContain('runAuthorized(() => authorizeModule(moduleKey)');
+      expect(guardSource).toContain('runAuthorized(() => authorizeModuleActor(moduleKey)');
+    },
+  );
 });

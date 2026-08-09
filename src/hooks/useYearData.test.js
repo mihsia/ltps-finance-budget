@@ -333,12 +333,20 @@ describe('mounted useYearRecords lifecycle', () => {
     const harness = installMountedFirestoreHarness();
     const mounted = mountHook(hookModule.useYearRecords, ['115', 'budget']);
 
+    expect(mounted.current.authorizeWrite()).toMatchObject({
+      allowed: false,
+      code: 'records-loading',
+    });
     await expectRecordMutationsDenied(mounted.current);
     expect(firestoreMocks.getDocFromServer).not.toHaveBeenCalled();
     expect(firestoreMocks.writeBatch).not.toHaveBeenCalled();
 
     act(() => {
       harness.subscriptions[0].onNext(recordSnapshot([]));
+    });
+    expect(mounted.current.authorizeWrite()).toMatchObject({
+      allowed: true,
+      code: 'records-writable',
     });
     await mounted.current.create(
       { title: 'active write' },
@@ -349,6 +357,10 @@ describe('mounted useYearRecords lifecycle', () => {
     const activeError = new Error('permission denied');
     act(() => {
       harness.subscriptions[0].onError(activeError);
+    });
+    expect(mounted.current.authorizeWrite()).toMatchObject({
+      allowed: false,
+      code: 'records-error',
     });
     const readsAtError = firestoreMocks.getDocFromServer.mock.calls.length;
     const batchesAtError = firestoreMocks.writeBatch.mock.calls.length;

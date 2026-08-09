@@ -164,8 +164,15 @@ export function useYearRecords(year, moduleKey, { includeDeleted = false } = {})
   const currentGenerationRef = useRef(null);
   const activeSubscriptionRef = useRef(null);
   const mutationReadyRef = useRef(null);
+  const accessStateRef = useRef(null);
   currentGenerationRef.current = isFirebaseConfigured ? scopeGeneration : null;
   if (mutationReadyRef.current !== scopeGeneration) mutationReadyRef.current = null;
+  if (accessStateRef.current?.scopeGeneration !== scopeGeneration) {
+    accessStateRef.current = {
+      scopeGeneration,
+      status: isFirebaseConfigured ? 'loading' : 'unavailable',
+    };
+  }
   const [state, setState] = useState(() => ({
     scopeTag,
     scopeGeneration,
@@ -179,6 +186,7 @@ export function useYearRecords(year, moduleKey, { includeDeleted = false } = {})
     const subscriptionToken = {};
     activeSubscriptionRef.current = subscriptionToken;
     mutationReadyRef.current = null;
+    accessStateRef.current = { scopeGeneration, status: 'loading' };
     const stop = listenToYearRecords({
       year,
       moduleKey,
@@ -193,6 +201,10 @@ export function useYearRecords(year, moduleKey, { includeDeleted = false } = {})
         } else {
           mutationReadyRef.current = scopeGeneration;
         }
+        accessStateRef.current = {
+          scopeGeneration,
+          status: nextState.error ? 'error' : (nextState.loading ? 'loading' : 'ready'),
+        };
         if (nextState.error) activeSubscriptionRef.current = null;
         setState({ ...nextState, scopeGeneration });
       },
@@ -202,7 +214,11 @@ export function useYearRecords(year, moduleKey, { includeDeleted = false } = {})
       if (activeSubscriptionRef.current === subscriptionToken) {
         activeSubscriptionRef.current = null;
         if (mutationReadyRef.current === scopeGeneration) mutationReadyRef.current = null;
+        if (accessStateRef.current?.scopeGeneration === scopeGeneration) {
+          accessStateRef.current = { scopeGeneration, status: 'stale' };
+        }
       }
+      if (currentGenerationRef.current === scopeGeneration) currentGenerationRef.current = null;
     };
   }, [year, moduleKey, includeDeleted, scopeGeneration]);
 
@@ -219,7 +235,24 @@ export function useYearRecords(year, moduleKey, { includeDeleted = false } = {})
     scopeGeneration,
   );
 
-  return { ...visibleState, ...mutations };
+  const authorizeWrite = useCallback(() => {
+    const current = accessStateRef.current;
+    if (
+      currentGenerationRef.current !== scopeGeneration
+      || current?.scopeGeneration !== scopeGeneration
+    ) {
+      return { allowed: false, code: 'records-stale', reason: '目前資料列範圍已變更，請重新操作。' };
+    }
+    if (current.status === 'ready' && mutationReadyRef.current === scopeGeneration) {
+      return { allowed: true, code: 'records-writable', reason: null };
+    }
+    if (current.status === 'error') {
+      return { allowed: false, code: 'records-error', reason: '無法確認資料列狀態，請稍後再試。' };
+    }
+    return { allowed: false, code: 'records-loading', reason: '正在確認資料列狀態，請稍候。' };
+  }, [scopeGeneration]);
+
+  return { ...visibleState, ...mutations, authorizeWrite };
 }
 
 /** Live list of fiscal years that exist under /years, sorted ascending. Falls back to the static defaults above. */
