@@ -8,6 +8,7 @@ import { useYearModule } from '../hooks/useYearData';
 import { useAuth } from '../contexts/AuthContext';
 import { fmtNum, fmtDate } from '../lib/format';
 import { buildCouncilWorkbook } from '../lib/councilExport';
+import { runAuthorized } from '../lib/accessPolicy';
 import { pageTitle, sectionLabel, card, btnOutline, btnPrimary, chip } from '../styles';
 
 const MODULE_CHOICES = [
@@ -32,12 +33,40 @@ function useExportHistory(year) {
   return { entries, logExport };
 }
 
+export function createReportExportHandlers({
+  year,
+  who,
+  authorizeModule,
+  downloadExcel,
+  downloadPdf,
+  logExport,
+}) {
+  return {
+    exportExcel: (aligned) => runAuthorized(
+      () => authorizeModule('report'),
+      async () => {
+        const name = `${year}年度議會報表${aligned ? '（議會格式）' : ''}.xlsx`;
+        await downloadExcel(aligned, name);
+        await logExport(name, who);
+      },
+    ),
+    exportPdf: () => runAuthorized(
+      () => authorizeModule('report'),
+      async () => {
+        const name = `${year}年度議會報表.pdf`;
+        await downloadPdf(name);
+        await logExport(name, who);
+      },
+    ),
+  };
+}
+
 export default function Report({ year, years }) {
   const { data: basic } = useYearModule(year, 'basic');
   const { data: budget } = useYearModule(year, 'budget');
   const { data: language } = useYearModule(year, 'language');
   const { entries, logExport } = useExportHistory(year);
-  const { profile, user } = useAuth();
+  const { profile, user, authorizeModule } = useAuth();
   const who = profile?.name || user?.email || '未知使用者';
 
   // Recent 3 fiscal years for the 基金用途明細表 comparison columns (fixed number
@@ -62,7 +91,7 @@ export default function Report({ year, years }) {
     { label: '本土語開班語系及班級數總和', val: langTotal || '—' },
   ];
 
-  const exportExcel = async (aligned) => {
+  const downloadExcel = async (aligned, name) => {
     const wb = aligned
       ? buildCouncilWorkbook({ year, years: recentYears, budgetByYear })
       : (() => {
@@ -71,12 +100,10 @@ export default function Report({ year, years }) {
         XLSX.utils.book_append_sheet(book, ws, '議會報表');
         return book;
       })();
-    const name = `${year}年度議會報表${aligned ? '（議會格式）' : ''}.xlsx`;
     XLSX.writeFile(wb, name);
-    await logExport(name, who);
   };
 
-  const exportPdf = async () => {
+  const downloadPdf = async (name) => {
     const doc = new jsPDF();
     doc.setFontSize(14);
     doc.text(`${year}年度 利澤國小基金預算（議會用）`, 14, 16);
@@ -86,10 +113,17 @@ export default function Report({ year, years }) {
       body: reportRows.map((r) => [r.label, String(r.val)]),
       headStyles: { fillColor: [31, 95, 82] },
     });
-    const name = `${year}年度議會報表.pdf`;
     doc.save(name);
-    await logExport(name, who);
   };
+
+  const { exportExcel, exportPdf } = createReportExportHandlers({
+    year,
+    who,
+    authorizeModule,
+    downloadExcel,
+    downloadPdf,
+    logExport,
+  });
 
   return (
     <div>
