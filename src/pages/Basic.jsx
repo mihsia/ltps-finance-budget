@@ -177,7 +177,7 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
       {editor.message && <div style={messageStyle(editor.message)}>{editor.message}</div>}
 
       <div style={sectionLabel}>班級、學生與教師概況</div>
-      <div style={{ ...card, maxWidth: 640, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18, marginBottom: 16 }}>
+      <div style={{ ...card, maxWidth: 640, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18, marginBottom: 16 }}>
         {COUNT_FIELDS.map((field) => (
           <div key={field}>
             <label style={label}>{FIELD_LABELS[field]}</label>
@@ -193,18 +193,18 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
             )}
           </div>
         ))}
-        <div style={{ gridColumn: '1/3', display: 'flex', gap: 20, padding: '12px 14px', background: '#F5F3EE', borderRadius: 8 }}>
+        <div style={{ gridColumn: '1/-1', display: 'flex', gap: 20, flexWrap: 'wrap', padding: '12px 14px', background: '#F5F3EE', borderRadius: 8 }}>
           <div>教師總數 <b>{teacherTotal}</b></div>
           <div>代理教師占比 <b>{substituteRatio}%</b></div>
           <div>生師比 <b>{studentTeacherRatio} : 1</b></div>
         </div>
         {writeVisible && !editor.editing && (
-          <div style={{ gridColumn: '1/3' }}>
+          <div style={{ gridColumn: '1/-1' }}>
             <button type="button" onClick={beginEditing} style={{ ...btnPrimary, border: 0 }}>編輯資料</button>
           </div>
         )}
         {editor.editing && (
-          <div style={{ gridColumn: '1/3', display: 'flex', gap: 10 }}>
+          <div style={{ gridColumn: '1/-1', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button type="button" disabled={editor.pending} onClick={() => commit('draft')} style={{ ...btnPrimary, border: 0 }}>儲存草稿</button>
             <button type="button" disabled={editor.pending} onClick={() => commit('submitted')} style={{ ...btnPrimary, border: 0 }}>儲存並送出審核</button>
             <button type="button" disabled={editor.pending} onClick={cancelEditing} style={btnSecondary}>取消</button>

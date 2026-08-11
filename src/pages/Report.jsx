@@ -11,7 +11,7 @@ import { buildOverviewReport, OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_COL
 import { languageRecordSummary } from '../lib/recordDerivations';
 import { runAuthorized } from '../lib/accessPolicy';
 import {
-  pageTitle, sectionLabel, card, statTile, btnOutline, btnPrimary, chip,
+  pageTitle, sectionLabel, card, statTile, btnOutline, btnPrimary, btnSecondary, chip,
 } from '../styles';
 
 const OPTIONAL_MODULE_CHOICES = [
@@ -103,6 +103,7 @@ export default function Report({ year, years }) {
   const [selected, setSelected] = useState(
     () => Object.fromEntries(OPTIONAL_MODULE_CHOICES.map((m) => [m.key, true])),
   );
+  const [preview, setPreview] = useState(null);
   const selectedModules = OPTIONAL_MODULE_CHOICES.map((m) => m.key).filter((key) => selected[key]);
 
   const sourceStates = [
@@ -175,13 +176,36 @@ export default function Report({ year, years }) {
     logExport,
   });
 
+  // Preview-before-download: build the same PDF/Excel a click would export,
+  // show it, and only actually download (via the authorized handlers above)
+  // once the user confirms — so 匯出 never fires blind.
+  const closePreview = () => {
+    if (preview?.kind === 'pdf' && preview.url) URL.revokeObjectURL(preview.url);
+    setPreview(null);
+  };
+  const openPdfPreview = () => runAuthorized(() => authorizeModule('report'), async () => {
+    const doc = await buildOverviewPdf(report, { selectedModules });
+    setPreview({ kind: 'pdf', name: `${year}年度基金總覽報表.pdf`, url: doc.output('bloburl') });
+  });
+  const openExcelPreview = () => runAuthorized(() => authorizeModule('report'), async () => {
+    const wb = buildOverviewWorkbook(report, { selectedModules });
+    const html = XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]]);
+    setPreview({ kind: 'excel', name: `${year}年度議會報表.xlsx`, html });
+  });
+  const confirmPreview = async () => {
+    const kind = preview?.kind;
+    closePreview();
+    if (kind === 'excel') await exportExcel(false);
+    else if (kind === 'pdf') await exportPdf();
+  };
+
   return (
     <div>
       <div style={pageTitle}>議會報表匯出</div>
       <div style={{ font: "400 13px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 18 }}>{year}年度 · 利澤國小基金總覽（議會用）</div>
 
       <div style={sectionLabel}>關鍵指標</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 12, marginBottom: 20, maxWidth: 900 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20, maxWidth: 900 }}>
         <div style={statTile}>
           <div style={{ font: "400 12px 'Noto Sans TC', sans-serif", color: '#6B726A', marginBottom: 6 }}>{year}年度歲出預算</div>
           <div style={{ font: '800 20px Inter, sans-serif' }}>{fmtNum(report.kpi.expenseTotal)}<span style={{ font: "600 11px 'Noto Sans TC', sans-serif", color: '#8A9089' }}> 千元</span></div>
@@ -201,35 +225,39 @@ export default function Report({ year, years }) {
       </div>
 
       <div style={sectionLabel}>歲出三年比較（千元）</div>
-      <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 640, marginBottom: 20 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '10px 18px', background: '#F5F3EE', font: "700 12px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
-          <span>年度</span><span>金額</span><span>較上年增減</span>
-        </div>
-        {report.trend.map((entry) => (
-          <div key={entry.year} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '10px 18px', borderTop: '1px solid #EEEBE2', font: "500 13px 'Noto Sans TC', sans-serif" }}>
-            <span>{entry.year}年度</span>
-            <span style={{ font: '700 13px Inter, sans-serif' }}>{fmtNum(entry.expenseTotal)}</span>
-            <span style={{ font: '700 12px Inter, sans-serif', color: entry.deltaPct == null ? '#8A9089' : (entry.deltaPct < 0 ? '#B5533E' : '#2F8F5B') }}>
-              {entry.deltaPct == null ? '—' : `${entry.deltaPct < 0 ? '▼' : '▲'} ${Math.abs(entry.deltaPct).toFixed(2)}%`}
-            </span>
+      <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 640, marginBottom: 20 }} className="table-scroll">
+        <div style={{ minWidth: 420 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '10px 18px', background: '#F5F3EE', font: "700 12px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
+            <span>年度</span><span>金額</span><span>較上年增減</span>
           </div>
-        ))}
+          {report.trend.map((entry) => (
+            <div key={entry.year} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '10px 18px', borderTop: '1px solid #EEEBE2', font: "500 13px 'Noto Sans TC', sans-serif" }}>
+              <span>{entry.year}年度</span>
+              <span style={{ font: '700 13px Inter, sans-serif' }}>{fmtNum(entry.expenseTotal)}</span>
+              <span style={{ font: '700 12px Inter, sans-serif', color: entry.deltaPct == null ? '#8A9089' : (entry.deltaPct < 0 ? '#B5533E' : '#2F8F5B') }}>
+                {entry.deltaPct == null ? '—' : `${entry.deltaPct < 0 ? '▼' : '▲'} ${Math.abs(entry.deltaPct).toFixed(2)}%`}
+              </span>
+            </div>
+          ))}
+        </div>
       </div>
 
       <div style={sectionLabel}>業務計畫別預算與決算（千元）</div>
-      <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 900, marginBottom: 8 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1.6fr', padding: '10px 18px', background: '#F5F3EE', font: "700 12px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
-          <span>項目</span><span>預算金額</span><span>決算金額</span><span>差異原因說明</span>
-        </div>
-        {report.expenseVariance.rows.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無歲出資料</div>}
-        {report.expenseVariance.rows.map((row) => (
-          <div key={row.label} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1.6fr', padding: '10px 18px', borderTop: '1px solid #EEEBE2', font: "500 13px 'Noto Sans TC', sans-serif" }}>
-            <span>{row.label}</span>
-            <span style={{ font: '700 13px Inter, sans-serif' }}>{fmtNum(row.budgetAmount)}</span>
-            <span>{row.actualAmount == null ? '—' : fmtNum(row.actualAmount)}</span>
-            <span style={{ color: '#8A9089' }}>{row.note || '—'}</span>
+      <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 900, marginBottom: 8 }} className="table-scroll">
+        <div style={{ minWidth: 620 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1.6fr', padding: '10px 18px', background: '#F5F3EE', font: "700 12px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
+            <span>項目</span><span>預算金額</span><span>決算金額</span><span>差異原因說明</span>
           </div>
-        ))}
+          {report.expenseVariance.rows.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無歲出資料</div>}
+          {report.expenseVariance.rows.map((row) => (
+            <div key={row.label} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1.6fr', padding: '10px 18px', borderTop: '1px solid #EEEBE2', font: "500 13px 'Noto Sans TC', sans-serif" }}>
+              <span>{row.label}</span>
+              <span style={{ font: '700 13px Inter, sans-serif' }}>{fmtNum(row.budgetAmount)}</span>
+              <span>{row.actualAmount == null ? '—' : fmtNum(row.actualAmount)}</span>
+              <span style={{ color: '#8A9089' }}>{row.note || '—'}</span>
+            </div>
+          ))}
+        </div>
       </div>
       {!report.expenseVariance.complete && (
         <div style={{ font: "400 12px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 20, maxWidth: 900 }}>
@@ -249,7 +277,7 @@ export default function Report({ year, years }) {
           </div>
         ))}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12, marginBottom: 24, maxWidth: 900 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginBottom: 24, maxWidth: 900 }}>
         {OPTIONAL_MODULE_CHOICES.filter((m) => selected[m.key] && report.modules[m.key]).map((m) => {
           const color = OPTIONAL_MODULE_COLORS[m.key] || '#1F5F52';
           const fields = OPTIONAL_MODULE_DETAIL_FIELDS[m.key] || [];
@@ -262,15 +290,17 @@ export default function Report({ year, years }) {
                 <div style={{ font: '800 17px Inter, sans-serif' }}>{moduleValueText(m.key)}</div>
               </div>
               {detailRows.length > 0 && (
-                <div style={{ borderTop: '1px solid #EEEBE2' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: columns, padding: '6px 14px', background: '#F5F3EE', font: "700 10.5px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
-                    {fields.map((field) => <span key={field.key}>{field.label}</span>)}
-                  </div>
-                  {detailRows.map((row, i) => (
-                    <div key={i} style={{ display: 'grid', gridTemplateColumns: columns, padding: '6px 14px', borderTop: '1px solid #EEEBE2', font: "500 11.5px 'Noto Sans TC', sans-serif", color: '#454B45' }}>
-                      {fields.map((field) => <span key={field.key}>{row[field.key] == null || row[field.key] === '' ? '—' : row[field.key]}</span>)}
+                <div style={{ borderTop: '1px solid #EEEBE2' }} className="table-scroll">
+                  <div style={{ minWidth: fields.length * 110 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: columns, padding: '6px 14px', background: '#F5F3EE', font: "700 10.5px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
+                      {fields.map((field) => <span key={field.key}>{field.label}</span>)}
                     </div>
-                  ))}
+                    {detailRows.map((row, i) => (
+                      <div key={i} style={{ display: 'grid', gridTemplateColumns: columns, padding: '6px 14px', borderTop: '1px solid #EEEBE2', font: "500 11.5px 'Noto Sans TC', sans-serif", color: '#454B45' }}>
+                        {fields.map((field) => <span key={field.key}>{row[field.key] == null || row[field.key] === '' ? '—' : row[field.key]}</span>)}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -280,9 +310,9 @@ export default function Report({ year, years }) {
 
       <div style={sectionLabel}>匯出格式</div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-        <div style={btnOutline} onClick={() => exportExcel(false)}>匯出 Excel（全貌總覽）</div>
+        <div style={btnOutline} onClick={openExcelPreview}>匯出 Excel（全貌總覽）</div>
         <div style={btnOutline} onClick={() => exportExcel(true)}>對齊議會既有格式（.xls 範本）</div>
-        <div style={btnPrimary} onClick={exportPdf}>匯出 PDF（全貌總覽）</div>
+        <div style={btnPrimary} onClick={openPdfPreview}>匯出 PDF（全貌總覽）</div>
       </div>
 
       <div style={sectionLabel}>匯出紀錄</div>
@@ -294,6 +324,39 @@ export default function Report({ year, years }) {
           </div>
         ))}
       </div>
+
+      {preview && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(20,20,16,.45)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+        }}
+        >
+          <div style={{
+            background: '#fff', borderRadius: 12, width: 'min(920px, 100%)', maxHeight: '88vh',
+            display: 'flex', flexDirection: 'column', overflow: 'hidden',
+          }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 6, padding: '14px 18px', borderBottom: '1px solid #E3DFD3' }}>
+              <div style={{ font: "700 14px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>預覽：{preview.name}</div>
+              <div style={{ font: "400 11.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>確認內容無誤後再下載</div>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', background: '#F5F3EE' }} className="table-scroll">
+              {preview.kind === 'pdf' ? (
+                <iframe title="PDF 預覽" src={preview.url} style={{ width: '100%', height: '70vh', border: 0, display: 'block' }} />
+              ) : (
+                <div
+                  style={{ padding: 16, font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420' }}
+                  dangerouslySetInnerHTML={{ __html: preview.html }}
+                />
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 10, padding: '14px 18px', borderTop: '1px solid #E3DFD3' }}>
+              <div style={btnPrimary} onClick={confirmPreview}>確認下載</div>
+              <div style={btnSecondary} onClick={closePreview}>取消</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

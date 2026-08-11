@@ -22,6 +22,7 @@ function Shell() {
   const latestYear = years[years.length - 1];
   const [year, setYear] = useState(latestYear);
   const [nav, setNav] = useState('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const effectiveYear = years.includes(year) ? year : latestYear;
   const hasCurrentYear = useCurrentYearGuard(effectiveYear, latestYear);
@@ -43,11 +44,15 @@ function Shell() {
   };
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', background: '#F5F3EE' }}>
-      <Header year={effectiveYear} setYear={setYear} years={years} />
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        <Sidebar nav={nav} setNav={setNav} />
-        <div style={{ flex: 1, padding: '28px 32px', overflow: 'auto' }}>
+    <div className="app-shell">
+      <Header year={effectiveYear} setYear={setYear} years={years} onMenuClick={() => setSidebarOpen(true)} />
+      <div className="app-body">
+        <div
+          className={`app-sidebar-backdrop${sidebarOpen ? ' is-open' : ''}`}
+          onClick={() => setSidebarOpen(false)}
+        />
+        <Sidebar nav={nav} setNav={setNav} open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+        <div className="app-main">
           {renderPage()}
         </div>
       </div>

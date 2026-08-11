@@ -1,25 +1,37 @@
 import { useAuth } from '../contexts/AuthContext';
 
-export default function Header({ year, setYear, years }) {
+export default function Header({ year, setYear, years, onMenuClick }) {
   const { profile, user, logout } = useAuth();
   const initial = (profile?.name || user?.email || '?').trim().charAt(0);
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      height: 64, padding: '0 24px', borderBottom: '1px solid #E3DFD3', background: '#FFFFFF',
-    }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+    <div className="app-header">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+        {onMenuClick && (
+          <button
+            type="button"
+            aria-label="開啟選單"
+            className="app-hamburger"
+            onClick={onMenuClick}
+          >
+            <svg width="18" height="18" viewBox="0 0 16 16" fill="#454B45">
+              <path d="M1.5 3H14.5V4.5H1.5ZM1.5 7.25H14.5V8.75H1.5ZM1.5 11.5H14.5V13H1.5Z" />
+            </svg>
+          </button>
+        )}
         <div style={{
           width: 32, height: 32, borderRadius: 8, background: '#1F5F52',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          font: "700 14px Inter, sans-serif", color: '#fff',
+          font: "700 14px Inter, sans-serif", color: '#fff', flex: 'none',
         }}>利</div>
-        <div style={{ font: "700 15px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>
+        <div style={{
+          font: "700 15px 'Noto Sans TC', sans-serif", color: '#1E2420',
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        }}>
           利澤國小基金預算管理系統
         </div>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', background: '#F5F3EE', borderRadius: 8, padding: 3 }}>
           {years.map((y) => {
             const active = year === y;

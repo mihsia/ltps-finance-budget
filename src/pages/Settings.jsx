@@ -171,7 +171,7 @@ export default function Settings() {
               if (isEditing && editForm) {
                 return (
                   <div key={ac.uid} style={{ borderTop: '1px solid #EEEBE2', padding: '14px 18px' }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 14 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 14 }}>
                       <div>
                         <label style={label}>姓名</label>
                         <input
@@ -260,7 +260,7 @@ export default function Settings() {
 
       {isAdmin && adding && (
         <div style={{ ...card, maxWidth: 640, marginTop: 6 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 14 }}>
             <div>
               <label style={label}>姓名</label>
               <input style={input} value={form.name} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))} />

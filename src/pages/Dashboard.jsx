@@ -62,7 +62,7 @@ export default function Dashboard({ years, latestYear }) {
       <div style={pageTitle}>總覽 Dashboard</div>
       <div style={pageSubtitle}>跨年度總覽，不受上方年度切換影響</div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 16, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         <div style={statTile}>
           <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#6B726A', marginBottom: 8 }}>{latestYear}年度預算</div>
           <div style={{ font: '800 24px Inter, sans-serif', color: '#1E2420' }}>
@@ -97,7 +97,7 @@ export default function Dashboard({ years, latestYear }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.3fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
         <div style={card}>
           <div style={{ font: "700 13.5px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 16 }}>年度預算趨勢（千元）</div>
           <div style={{ display: 'flex', alignItems: 'flex-end', gap: 24, height: 140, padding: '0 8px' }}>
@@ -134,7 +134,7 @@ export default function Dashboard({ years, latestYear }) {
 
       <div style={{ ...card, marginTop: 16 }}>
         <div style={sectionLabel}>各模組填報進度（{latestYear}年度）</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 28px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px 28px' }}>
           {COMPLETION_MODULES.map((c) => {
             const pct = moduleCompletionPct(c.key, modules[c.key].data);
             const { track, fill } = progressBar(pct, completionColor(pct));

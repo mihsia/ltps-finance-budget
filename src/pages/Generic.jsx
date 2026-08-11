@@ -143,6 +143,7 @@ export default function Generic({
   }
 
   const columns = `${schema.fields.map(() => '1fr').join(' ')}${writeVisible ? ' 92px' : ''}`;
+  const tableMinWidth = schema.fields.length * 130 + (writeVisible ? 92 : 0);
 
   return (
     <div>
@@ -169,47 +170,51 @@ export default function Generic({
       </div>
 
       {!includeDeleted && (
-        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 860 }}>
-          <div style={tableHeadRow(columns)}>
-            {schema.fields.map((field) => <span key={field.key}>{field.label}</span>)}
-            {writeVisible && <span>操作</span>}
-          </div>
-          {activeRecords.length === 0 && (
-            <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無資料</div>
-          )}
-          {activeRecords.map((record) => (
-            <div key={record.id} style={{ ...tableRow(columns), alignItems: 'center' }}>
-              {schema.fields.map((field) => <span key={field.key}>{record[field.key]}</span>)}
-              {writeVisible && (
-                <span style={{ display: 'flex', gap: 8 }}>
-                  <button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯</button>
-                  <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用中…' : '停用'}</button>
-                </span>
-              )}
+        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 860 }} className="table-scroll">
+          <div style={{ minWidth: tableMinWidth }}>
+            <div style={tableHeadRow(columns)}>
+              {schema.fields.map((field) => <span key={field.key}>{field.label}</span>)}
+              {writeVisible && <span>操作</span>}
             </div>
-          ))}
+            {activeRecords.length === 0 && (
+              <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無資料</div>
+            )}
+            {activeRecords.map((record) => (
+              <div key={record.id} style={{ ...tableRow(columns), alignItems: 'center' }}>
+                {schema.fields.map((field) => <span key={field.key}>{record[field.key]}</span>)}
+                {writeVisible && (
+                  <span style={{ display: 'flex', gap: 8 }}>
+                    <button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯</button>
+                    <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用中…' : '停用'}</button>
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
       {includeDeleted && (
-        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 860 }}>
-          <div style={tableHeadRow(columns)}>
-            {schema.fields.map((field) => <span key={field.key}>{field.label}</span>)}
-            <span>操作</span>
-          </div>
-          {deletedRecords.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無已停用資料</div>}
-          {deletedRecords.map((record) => (
-            <div key={record.id} style={{ ...tableRow(columns), opacity: 0.72 }}>
-              {schema.fields.map((field) => <span key={field.key}>{record[field.key]}</span>)}
-              <button type="button" disabled={actions.pending} onClick={() => restore(record.id)}>{actions.isRowPending(record.id) ? '復原中…' : '復原'}</button>
+        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 860 }} className="table-scroll">
+          <div style={{ minWidth: tableMinWidth }}>
+            <div style={tableHeadRow(columns)}>
+              {schema.fields.map((field) => <span key={field.key}>{field.label}</span>)}
+              <span>操作</span>
             </div>
-          ))}
+            {deletedRecords.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無已停用資料</div>}
+            {deletedRecords.map((record) => (
+              <div key={record.id} style={{ ...tableRow(columns), opacity: 0.72 }}>
+                {schema.fields.map((field) => <span key={field.key}>{record[field.key]}</span>)}
+                <button type="button" disabled={actions.pending} onClick={() => restore(record.id)}>{actions.isRowPending(record.id) ? '復原中…' : '復原'}</button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
       {writeVisible && formState && !includeDeleted && (
         <div style={{ ...card, maxWidth: 760, marginTop: 14 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${schema.fields.length}, minmax(0, 1fr))`, gap: 12, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
             {schema.fields.map((fieldSchema) => (
               <label key={fieldSchema.key} style={{ font: "600 11.5px 'Noto Sans TC', sans-serif", color: '#454B45' }}>
                 {fieldSchema.label}

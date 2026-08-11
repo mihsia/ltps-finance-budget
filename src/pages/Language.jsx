@@ -183,7 +183,7 @@ export default function Language({
           </div>
 
           <div style={{ fontWeight: 700, marginBottom: 10 }}>師資族語能力認證與學生通過情形</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 14, maxWidth: 720, marginBottom: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, maxWidth: 720, marginBottom: 18 }}>
             <div style={{ background: '#F5F3EE', borderRadius: 10, padding: 16 }}>授課教師取得認證比例<br /><b>{certifiedTeachers} / {totalTeachers} 人（{totalTeachers ? Math.round((certifiedTeachers / totalTeachers) * 100) : 0}%）</b></div>
             <div style={{ background: '#F5F3EE', borderRadius: 10, padding: 16 }}>學生族語認證通過人數<br /><b>{passed} 人</b></div>
             <div style={{ background: '#F5F3EE', borderRadius: 10, padding: 16 }}>學生認證通過率<br /><b>{passRate}%</b></div>
@@ -230,7 +230,7 @@ export default function Language({
       {writeVisible && formState && !includeDeleted && (
         <div style={{ ...card, maxWidth: 720, marginTop: 14 }}>
           <div style={{ fontWeight: 700, marginBottom: 12 }}>{formState.mode === 'create' ? '新增' : '編輯'}{TYPE_LABELS[formState.recordType]}</div>
-          <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(formSchema.fields.length, 3)}, minmax(0, 1fr))`, gap: 12, marginBottom: 14 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
             {formSchema.fields.map((fieldSchema) => (
               <label key={fieldSchema.key}>
                 {fieldSchema.label}

@@ -90,7 +90,7 @@ export default function Library({ year, hasCurrentYear = () => false }) {
       {editor.message && <div style={{ color: editor.message === '儲存成功。' ? '#2F7D55' : '#B5533E', marginBottom: 14 }}>{editor.message}</div>}
 
       {!editor.editing ? (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 16, maxWidth: 520 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, maxWidth: 520 }}>
           <div style={card}>
             <div>一般書籍</div>
             <div style={{ font: '800 26px Inter, sans-serif' }}>{editor.form.generalBooks || 0} <small>本</small></div>
@@ -100,14 +100,14 @@ export default function Library({ year, hasCurrentYear = () => false }) {
             <div style={{ font: '800 26px Inter, sans-serif' }}>{editor.form.indigenousBooks || 0} <small>本</small></div>
           </div>
           {canStartEditing && (
-            <button type="button" onClick={beginEditing} style={{ ...btnPrimary, border: 0, gridColumn: '1/3', width: 'fit-content' }}>編輯數量</button>
+            <button type="button" onClick={beginEditing} style={{ ...btnPrimary, border: 0, gridColumn: '1/-1', width: 'fit-content' }}>編輯數量</button>
           )}
         </div>
       ) : (
-        <div style={{ ...card, maxWidth: 520, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+        <div style={{ ...card, maxWidth: 520, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 18 }}>
           <div><label style={label}>一般書籍</label><input disabled={editor.pending} style={input} value={editor.form.generalBooks} onChange={(event) => editor.updateField('generalBooks', event.target.value)} /></div>
           <div><label style={label}>族語書籍</label><input disabled={editor.pending} style={input} value={editor.form.indigenousBooks} onChange={(event) => editor.updateField('indigenousBooks', event.target.value)} /></div>
-          <div style={{ gridColumn: '1/3', display: 'flex', gap: 10 }}>
+          <div style={{ gridColumn: '1/-1', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button type="button" disabled={editor.pending} onClick={commit} style={{ ...btnPrimary, border: 0 }}>儲存</button>
             <button type="button" disabled={editor.pending} onClick={cancelEditing} style={btnSecondary}>取消</button>
           </div>

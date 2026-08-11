@@ -147,7 +147,7 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
       {!canEditModule('budgetbook') && <div style={lockedBanner}>您沒有此模組的編輯權限。</div>}
       {editor.message && <div style={{ color: editor.message === '儲存成功。' ? '#2F7D55' : '#B5533E', marginBottom: 14 }}>{editor.message}</div>}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, maxWidth: 720, marginBottom: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, maxWidth: 720, marginBottom: 20 }}>
         <div style={card}>
           <div style={{ fontWeight: 700, marginBottom: 10 }}>收支平衡表</div>
           <div>基金來源合計（歲入） <b>{budgetReady ? fmtNum(revenueTotal) : '—'} 千元</b></div>

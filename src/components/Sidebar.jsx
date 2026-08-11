@@ -1,11 +1,13 @@
 import { navGroups, icons } from '../lib/nav';
 
-export default function Sidebar({ nav, setNav }) {
+export default function Sidebar({ nav, setNav, open = false, onClose }) {
+  const select = (key) => {
+    setNav(key);
+    if (onClose) onClose();
+  };
+
   return (
-    <div style={{
-      width: 216, flex: 'none', borderRight: '1px solid #E3DFD3',
-      padding: '20px 12px', background: '#FBFAF7',
-    }}>
+    <div className={`app-sidebar${open ? ' is-open' : ''}`}>
       {navGroups.map((grp) => (
         <div key={grp.label} style={{ marginBottom: 20 }}>
           <div style={{
@@ -19,7 +21,7 @@ export default function Sidebar({ nav, setNav }) {
             return (
               <div
                 key={it.key}
-                onClick={() => setNav(it.key)}
+                onClick={() => select(it.key)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px',
                   borderRadius: 8, cursor: 'pointer', marginBottom: 2,
