@@ -9,7 +9,7 @@ function sampleReport() {
     who: '王小明',
     basic: {
       classes: '13', students: '262', staff: '28',
-      regularTeachers: '19', substitute: '9', partTimeTeachers: '2',
+      regularTeachers: '19', substituteVacancy: '6', substituteAdditional: '3', partTimeTeachers: '2',
       tuitionFeeAvg: '827', lunchSubsidyTotal: '236',
     },
     library: { generalBooks: 17296, indigenousBooks: 36 },
@@ -45,7 +45,12 @@ describe('buildOverviewWorkbook', () => {
     expect(flat).toContain('學校基本資料');
     expect(flat).toContain('各模組現況');
     expect(flat).toContain('族語開班（班級數總和）|13 班');
-    expect(flat).toContain('特殊生統計（總人數）|17 人');
+    expect(flat).toContain('特生統計（總人數）|17 人');
+    // Itemized detail rows, not just the aggregate line.
+    expect(flat).toContain('|語系|班級數|學生人數');
+    expect(flat).toContain('|閩南語|13|264');
+    expect(flat).toContain('|類別|人數|說明');
+    expect(flat).toContain('|原住民|17|—');
   });
 
   it('omits the 各模組現況 section entirely when no optional module has data', () => {
@@ -61,7 +66,7 @@ describe('buildOverviewWorkbook', () => {
     const wb = buildOverviewWorkbook(report, { selectedModules: ['specialNeeds'] });
     const sheet = wb.Sheets[wb.SheetNames[0]];
     const flat = XLSX.utils.sheet_to_json(sheet, { header: 1 }).map((row) => row.join('|')).join('\n');
-    expect(flat).toContain('特殊生統計');
+    expect(flat).toContain('特生統計');
     expect(flat).not.toContain('族語開班');
   });
 });
@@ -72,5 +77,9 @@ describe('buildOverviewPdf', () => {
     expect(doc.getFontList().NotoSansTC).toEqual(['normal', 'bold']);
     expect(doc).toHaveProperty('save');
     expect(typeof doc.output('datauristring')).toBe('string');
+    // Itemized per-module detail tables (library/language/specialNeeds all
+    // have rows in the sample report) push the document past one page, and
+    // every page should have gotten a "第 x 頁，共 y 頁" footer stamped on it.
+    expect(doc.internal.getNumberOfPages()).toBeGreaterThanOrEqual(1);
   });
 });

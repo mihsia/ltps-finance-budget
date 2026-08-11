@@ -48,9 +48,9 @@ const PLACEHOLDER_LANGUAGE_ROSTER = [
   { lang: '賽考利克泰雅語', level: 'B級（中級）', name: '林○恩' },
 ];
 const PLACEHOLDER_AWARDS = [
-  { item: '全國語文競賽 朗讀組', level: '特優', date: '2025-10-12' },
-  { item: '宜蘭縣科展', level: '優等', date: '2025-09-20' },
-  { item: '全縣運動會 大隊接力', level: '第二名', date: '2025-05-15' },
+  { category: '語文類', item: '全國語文競賽 朗讀組', level: '特優', date: '2025-10-12' },
+  { category: '科學類', item: '宜蘭縣科展', level: '優等', date: '2025-09-20' },
+  { category: '體育類', item: '全縣運動會 大隊接力', level: '第二名', date: '2025-05-15' },
 ];
 const PLACEHOLDER_CLUBS = [
   { name: '桌球社', instructor: '陳老師', participants: 18, schedule: '週二 16:00' },
@@ -67,9 +67,9 @@ const PLACEHOLDER_INQUIRY = [
   { date: '2026-05-20', subject: '陳議員：課後社團經費', status: '待答詢' },
 ];
 const PLACEHOLDER_SPECIAL_NEEDS = [
-  { category: '身心障礙', count: 14, note: '含資源班與巡迴輔導' },
+  { category: '身障生', count: 14, note: '含資源班與巡迴輔導' },
   { category: '原住民', count: 17, note: '' },
-  { category: '新住民子女', count: 25, note: '' },
+  { category: '新住民', count: 25, note: '' },
 ];
 // 校方尚未提供 115 年度正式決算數字（決算須待年度結束後陸續填報），此處僅為
 // 示意資料，用以展示「預算／決算／差異原因」報表呈現方式，正式啟用前請由
@@ -125,7 +125,10 @@ function buildYearPlan(year) {
       {
         path: 'years/115/modules/basic',
         data: {
-          classes: '13', students: '262', staff: '28', regularTeachers: '19', substitute: '9', partTimeTeachers: '2', status: 'submitted',
+          classes: '13', students: '262', staff: '28', regularTeachers: '19', partTimeTeachers: '2', status: 'submitted',
+          // 代理教師僅留有「9 人」的合計，校方尚未提供懸缺代理／增置員額的分項數字，
+          // 暫將合計全數計入懸缺代理，待總務處以系統表單更正實際分項。
+          substituteVacancy: '9', substituteAdditional: '0',
           // 學雜費／午餐補助為新增欄位，尚未取得校方正式數字，暫以示意資料填入。
           tuitionFeeAvg: '827', lunchSubsidyTotal: '236',
         },

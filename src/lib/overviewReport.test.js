@@ -14,7 +14,7 @@ const REVENUE_ROWS = [
 ];
 const BASIC = {
   classes: '13', students: '262', staff: '28',
-  regularTeachers: '19', substitute: '9', partTimeTeachers: '2',
+  regularTeachers: '19', substituteVacancy: '6', substituteAdditional: '3', partTimeTeachers: '2',
   tuitionFeeAvg: '827', lunchSubsidyTotal: '236',
 };
 
@@ -28,9 +28,18 @@ describe('buildOverviewReport', () => {
     expect(report.kpi.revenueTotal).toBe(53642);
     expect(report.kpi.shortfall).toBe(-716);
     expect(report.kpi.students).toBe('262');
-    expect(report.kpi.substituteRatio).toBe(30); // 9 / (19+9+2) = 30%
+    expect(report.kpi.substituteRatio).toBe(30); // (6+3) / (19+9+2) = 30%
     expect(report.kpi.libraryTotal).toBe(17332);
     expect(report.meta).toEqual({ year: '115', who: '王小明', generatedAt: expect.any(Date) });
+    expect(report.basicProfile).toMatchObject({
+      substituteVacancy: '6', substituteAdditional: '3', substituteTotal: 9,
+    });
+    expect(report.modules.library).toMatchObject({
+      rows: [
+        { label: '一般書籍', value: 17296 },
+        { label: '族語／原住民書籍', value: 36 },
+      ],
+    });
   });
 
   it('leaves substitute ratio and library totals null when the source module has no data', () => {
@@ -107,7 +116,7 @@ describe('buildOverviewReport', () => {
         certificationRows: [{ lang: '閩南語', tested: 264, passed: 138 }],
       },
       specialNeedsRows: [{ category: '原住民', count: 17 }, { category: '新住民', count: 25 }],
-      awardsRows: [{ item: '縣科展' }],
+      awardsRows: [{ category: '科學類', item: '縣科展' }],
       clubRows: [{ name: '桌球社' }, { name: '直笛隊' }],
       landRows: [],
       inquiryRows: [
@@ -115,14 +124,25 @@ describe('buildOverviewReport', () => {
         { subject: '課後社團經費', status: '待答詢' },
       ],
     });
-    expect(report.modules.language).toEqual({ classTotal: 14, passRate: (138 / 264) * 100 });
+    const languageRows = [{ lang: '閩南語', classes: 13, students: 264 }, { lang: '客語', classes: 1, students: 4 }];
+    expect(report.modules.language).toEqual({ classTotal: 14, passRate: (138 / 264) * 100, rows: languageRows });
     expect(report.modules.specialNeeds).toEqual({
       total: 42,
       rows: [{ category: '原住民', count: 17 }, { category: '新住民', count: 25 }],
     });
-    expect(report.modules.awards).toEqual({ count: 1 });
-    expect(report.modules.club).toEqual({ count: 2 });
+    expect(report.modules.awards).toEqual({ count: 1, rows: [{ category: '科學類', item: '縣科展' }] });
+    expect(report.modules.club).toEqual({
+      count: 2,
+      rows: [{ name: '桌球社' }, { name: '直笛隊' }],
+    });
     expect(report.modules.land).toBeNull();
-    expect(report.modules.inquiry).toEqual({ total: 2, resolved: 1 });
+    expect(report.modules.inquiry).toEqual({
+      total: 2,
+      resolved: 1,
+      rows: [
+        { subject: '代理教師人力', status: '已答詢' },
+        { subject: '課後社團經費', status: '待答詢' },
+      ],
+    });
   });
 });

@@ -3,16 +3,34 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { registerCjkFont } from './pdfFont';
 import { fmtNum, fmtDate } from './format';
+import { OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_COLORS } from './overviewReport';
 
 const MODULE_LABELS = {
   library: '圖書藏書量',
   language: '族語開班（班級數總和）',
-  specialNeeds: '特殊生統計（總人數）',
+  specialNeeds: '特生統計（總人數）',
   awards: '獲獎紀錄（筆數）',
   club: '課後社團（社團數）',
   land: '土地現值（地號數）',
   inquiry: '議會質詢答詢（已結案／總數）',
 };
+
+// One accent color per section, reused from the sidebar nav's per-module
+// colors (src/lib/nav.js) so the PDF's colored header blocks stay visually
+// consistent with the rest of the app instead of introducing a new palette.
+const SECTION_COLORS = {
+  kpi: '#1F5F52',
+  trend: '#B5533E',
+  variance: '#B5533E',
+  revenue: '#3E8E7E',
+  basicProfile: '#C9832F',
+  ...OPTIONAL_MODULE_COLORS,
+};
+
+function hexToRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
 
 function pctText(value) {
   if (value == null) return '—';
@@ -28,6 +46,21 @@ function moduleValueText(key, summary) {
   if (key === 'land') return `${summary.count} 筆`;
   if (key === 'inquiry') return `${summary.resolved} / ${summary.total} 已結案`;
   return '—';
+}
+
+function detailCell(value) {
+  if (value == null || value === '') return '—';
+  return typeof value === 'number' ? fmtNum(value) : value;
+}
+
+/** The itemized detail rows for one module, as [[header...], [row...], ...], or [] when there's nothing to itemize. */
+function moduleDetailTable(key, summary) {
+  const fields = OPTIONAL_MODULE_DETAIL_FIELDS[key];
+  if (!fields || !summary.rows || !summary.rows.length) return [];
+  return [
+    fields.map((field) => field.label),
+    ...summary.rows.map((row) => fields.map((field) => detailCell(row[field.key]))),
+  ];
 }
 
 /** Builds the one-sheet "全貌總覽" Excel workbook from a buildOverviewReport() result. */
@@ -70,7 +103,8 @@ export function buildOverviewWorkbook(report, { selectedModules } = {}) {
       ['學校基本資料'],
       ['班級數', report.basicProfile.classes, '學生人數', report.basicProfile.students],
       ['教師員額', report.basicProfile.staff, '正式教師', report.basicProfile.regularTeachers],
-      ['代理教師', report.basicProfile.substitute, '兼任教師', report.basicProfile.partTimeTeachers],
+      ['代理教師（懸缺代理）', report.basicProfile.substituteVacancy, '代理教師（增置員額）', report.basicProfile.substituteAdditional],
+      ['兼任教師', report.basicProfile.partTimeTeachers, '代理教師合計', report.basicProfile.substituteTotal],
       ['生師比', report.basicProfile.studentTeacherRatio == null ? '—' : `${report.basicProfile.studentTeacherRatio} : 1`, '代理教師占比', report.basicProfile.substituteRatio == null ? '—' : `${report.basicProfile.substituteRatio}%`],
       ['學雜費（各年級平均，元）', report.basicProfile.tuitionFeeAvg ?? '—', '午餐補助（全年度，千元）', report.basicProfile.lunchSubsidyTotal ?? '—'],
     );
@@ -79,7 +113,11 @@ export function buildOverviewWorkbook(report, { selectedModules } = {}) {
   const moduleKeys = (selectedModules || Object.keys(MODULE_LABELS)).filter((key) => report.modules[key]);
   if (moduleKeys.length) {
     rows.push([], ['各模組現況'], ['模組', '現況']);
-    for (const key of moduleKeys) rows.push([MODULE_LABELS[key], moduleValueText(key, report.modules[key])]);
+    for (const key of moduleKeys) {
+      const summary = report.modules[key];
+      rows.push([MODULE_LABELS[key], moduleValueText(key, summary)]);
+      for (const detailRow of moduleDetailTable(key, summary)) rows.push(['', ...detailRow]);
+    }
   }
 
   const wb = XLSX.utils.book_new();
@@ -89,12 +127,18 @@ export function buildOverviewWorkbook(report, { selectedModules } = {}) {
   return wb;
 }
 
-/** Renders the same report into a jsPDF document with the embedded Chinese font. */
+function sectionStyles(fontName, color) {
+  return {
+    headStyles: { fillColor: hexToRgb(color), textColor: [255, 255, 255], font: fontName, fontStyle: 'bold' },
+    bodyStyles: { font: fontName, fontStyle: 'normal' },
+    styles: { font: fontName },
+  };
+}
+
+/** Renders the same report into a jsPDF document with the embedded Chinese font, colored per-section headers, and page-number footers. */
 export async function buildOverviewPdf(report, { selectedModules } = {}) {
   const doc = new jsPDF();
   const fontName = await registerCjkFont(doc);
-  const headStyles = { fillColor: [31, 95, 82], font: fontName, fontStyle: 'bold' };
-  const bodyStyles = { font: fontName, fontStyle: 'normal' };
 
   doc.setFont(fontName, 'bold');
   doc.setFontSize(16);
@@ -114,14 +158,14 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
       ['代理教師占比', report.kpi.substituteRatio == null ? '—' : `${report.kpi.substituteRatio}%`],
       ['圖書藏書量', report.kpi.libraryTotal == null ? '—' : `${fmtNum(report.kpi.libraryTotal)} 冊`],
     ],
-    headStyles, bodyStyles, styles: { font: fontName },
+    ...sectionStyles(fontName, SECTION_COLORS.kpi),
   });
 
   autoTable(doc, {
     startY: doc.lastAutoTable.finalY + 8,
     head: [['歲出三年比較', '金額（千元）', '較上年增減']],
     body: report.trend.map((entry) => [`${entry.year}年度`, fmtNum(entry.expenseTotal), pctText(entry.deltaPct)]),
-    headStyles, bodyStyles, styles: { font: fontName },
+    ...sectionStyles(fontName, SECTION_COLORS.trend),
   });
 
   autoTable(doc, {
@@ -135,7 +179,7 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
       ]),
       ['合計', fmtNum(report.expenseVariance.budgetTotal), report.expenseVariance.hasActual ? fmtNum(report.expenseVariance.actualTotal) : '—', '', ''],
     ],
-    headStyles, bodyStyles, styles: { font: fontName },
+    ...sectionStyles(fontName, SECTION_COLORS.variance),
   });
 
   autoTable(doc, {
@@ -145,7 +189,7 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
       ...report.revenue.rows.map((row) => [row.label, fmtNum(row.amount)]),
       ['合計', fmtNum(report.revenue.total)],
     ],
-    headStyles, bodyStyles, styles: { font: fontName },
+    ...sectionStyles(fontName, SECTION_COLORS.revenue),
   });
 
   if (report.basicProfile) {
@@ -155,12 +199,13 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
       body: [
         ['班級數', report.basicProfile.classes],
         ['學生人數', report.basicProfile.students],
-        ['教師員額（正式／代理／兼任）', `${report.basicProfile.regularTeachers} / ${report.basicProfile.substitute} / ${report.basicProfile.partTimeTeachers}`],
+        ['教師員額（正式／兼任）', `${report.basicProfile.regularTeachers} / ${report.basicProfile.partTimeTeachers}`],
+        ['代理教師（懸缺代理／增置員額）', `${report.basicProfile.substituteVacancy} / ${report.basicProfile.substituteAdditional}`],
         ['生師比', report.basicProfile.studentTeacherRatio == null ? '—' : `${report.basicProfile.studentTeacherRatio} : 1`],
         ['學雜費（各年級平均，元）', report.basicProfile.tuitionFeeAvg ?? '—'],
         ['午餐補助（全年度，千元）', report.basicProfile.lunchSubsidyTotal ?? '—'],
       ],
-      headStyles, bodyStyles, styles: { font: fontName },
+      ...sectionStyles(fontName, SECTION_COLORS.basicProfile),
     });
   }
 
@@ -170,8 +215,35 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
       startY: doc.lastAutoTable.finalY + 8,
       head: [['各模組現況', '現況']],
       body: moduleKeys.map((key) => [MODULE_LABELS[key], moduleValueText(key, report.modules[key])]),
-      headStyles, bodyStyles, styles: { font: fontName },
+      ...sectionStyles(fontName, SECTION_COLORS.kpi),
     });
+
+    // One colored detail table per module — the aggregate table above answers
+    // "how much", these answer "which ones" (item5: 要能呈現細項資料).
+    for (const key of moduleKeys) {
+      const detail = moduleDetailTable(key, report.modules[key]);
+      if (!detail.length) continue;
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 6,
+        head: [[{ content: MODULE_LABELS[key], colSpan: detail[0].length }], detail[0]],
+        body: detail.slice(1),
+        ...sectionStyles(fontName, SECTION_COLORS[key] || SECTION_COLORS.kpi),
+      });
+    }
+  }
+
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let page = 1; page <= totalPages; page += 1) {
+    doc.setPage(page);
+    doc.setFont(fontName, 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(138, 144, 137);
+    doc.text(
+      `第 ${page} 頁，共 ${totalPages} 頁`,
+      doc.internal.pageSize.getWidth() - 14,
+      doc.internal.pageSize.getHeight() - 8,
+      { align: 'right' },
+    );
   }
 
   return doc;

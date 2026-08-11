@@ -14,7 +14,8 @@ const COUNT_FIELDS = [
   'students',
   'staff',
   'regularTeachers',
-  'substitute',
+  'substituteVacancy',
+  'substituteAdditional',
   'partTimeTeachers',
   'tuitionFeeAvg',
   'lunchSubsidyTotal',
@@ -25,7 +26,8 @@ const FIELD_LABELS = {
   students: '學生人數',
   staff: '教師員額（編制內）',
   regularTeachers: '正式教師人數',
-  substitute: '代理教師人數',
+  substituteVacancy: '代理教師人數（懸缺代理）',
+  substituteAdditional: '代理教師人數（增置員額）',
   partTimeTeachers: '兼任／支援教師人數',
   tuitionFeeAvg: '學雜費（各年級平均，元）',
   lunchSubsidyTotal: '午餐補助（全年度，千元）',
@@ -144,11 +146,13 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
     return <div><div style={pageTitle}>學校基本資料</div><div style={card}>正在載入學校基本資料…</div></div>;
   }
 
+  const substituteTotal = Number(editor.form.substituteVacancy || 0)
+    + Number(editor.form.substituteAdditional || 0);
   const teacherTotal = Number(editor.form.regularTeachers || 0)
-    + Number(editor.form.substitute || 0)
+    + substituteTotal
     + Number(editor.form.partTimeTeachers || 0);
   const substituteRatio = teacherTotal
-    ? Math.round((Number(editor.form.substitute || 0) / teacherTotal) * 100)
+    ? Math.round((substituteTotal / teacherTotal) * 100)
     : 0;
   const studentTeacherRatio = teacherTotal
     ? (Number(editor.form.students || 0) / teacherTotal).toFixed(1)

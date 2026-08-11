@@ -6,7 +6,7 @@ import { pageTitle, pageSubtitle, statTile, card, sectionLabel, progressBar } fr
 
 const COMPLETION_MODULES = [
   { key: 'basic', label: '學校基本資料' },
-  { key: 'specialNeeds', label: '特殊生統計' },
+  { key: 'specialNeeds', label: '特生統計' },
   { key: 'budget', label: '預算數' },
   { key: 'library', label: '圖書館藏書' },
   { key: 'language', label: '本土語開班' },
@@ -48,8 +48,9 @@ export default function Dashboard({ years, latestYear }) {
   const pctChange = (totalLatest != null && totalPrev) ? (((totalLatest - totalPrev) / totalPrev) * 100).toFixed(2) : null;
 
   const staff = basic.data || {};
-  const teacherTotal = Number(staff.regularTeachers || 0) + Number(staff.substitute || 0) + Number(staff.partTimeTeachers || 0);
-  const substituteRatio = teacherTotal ? Math.round((Number(staff.substitute || 0) / teacherTotal) * 100) : null;
+  const substituteTotal = Number(staff.substituteVacancy || 0) + Number(staff.substituteAdditional || 0);
+  const teacherTotal = Number(staff.regularTeachers || 0) + substituteTotal + Number(staff.partTimeTeachers || 0);
+  const substituteRatio = teacherTotal ? Math.round((substituteTotal / teacherTotal) * 100) : null;
 
   const langClasses = language.loading || language.error
     ? []
@@ -83,7 +84,7 @@ export default function Dashboard({ years, latestYear }) {
           <div style={{ font: '800 24px Inter, sans-serif', color: '#1E2420' }}>
             {substituteRatio != null ? substituteRatio : '—'}<span style={{ font: "600 12px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>%</span>
           </div>
-          <div style={{ font: '600 11.5px Inter, sans-serif', color: '#8A9089', marginTop: 4 }}>{staff.substitute || 0} / {teacherTotal || 0} 人</div>
+          <div style={{ font: '600 11.5px Inter, sans-serif', color: '#8A9089', marginTop: 4 }}>{substituteTotal || 0} / {teacherTotal || 0} 人</div>
         </div>
         <div style={statTile}>
           <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#6B726A', marginBottom: 8 }}>圖書藏書量</div>

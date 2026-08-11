@@ -114,7 +114,8 @@ beforeEach(() => {
     students: 262,
     staff: 28,
     regularTeachers: 19,
-    substitute: 9,
+    substituteVacancy: 6,
+    substituteAdditional: 3,
     partTimeTeachers: 2,
     status: 'submitted',
   }));

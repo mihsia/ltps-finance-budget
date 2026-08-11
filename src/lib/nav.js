@@ -23,7 +23,7 @@ export const navGroups = [
   ] },
   { label: '資料模組', items: [
     { key: 'basic', label: '基本資料', icon: 'school', color: '#C9832F' },
-    { key: 'specialNeeds', label: '特殊生統計', icon: 'heart', color: '#A0764A' },
+    { key: 'specialNeeds', label: '特生統計', icon: 'heart', color: '#A0764A' },
     { key: 'budget', label: '歲入歲出', icon: 'coin', color: '#B5533E' },
     { key: 'library', label: '圖書藏書', icon: 'book', color: '#7D5BA6' },
     { key: 'language', label: '族語開班', icon: 'chat', color: '#2E7DAF' },
@@ -43,9 +43,9 @@ export const navGroups = [
 export const genericModuleKeys = ['awards', 'club', 'land', 'inquiry', 'specialNeeds'];
 
 export const genericModuleMeta = {
-  awards: { title: '獲獎紀錄', desc: '記錄學生與學校各項競賽獲獎資訊', columns: ['獲獎項目', '等級', '日期'] },
+  awards: { title: '獲獎紀錄', desc: '記錄學生與學校各項競賽獲獎資訊', columns: ['類別', '獲獎項目', '等級', '日期'] },
   club: { title: '課後社團', desc: '課後社團開設班別與人數', columns: ['社團名稱', '指導老師', '人數', '上課時間'] },
   land: { title: '土地公告現值', desc: '學校用地地號與公告現值資訊', columns: ['地號', '面積(㎡)', '公告現值(元/㎡)'] },
   inquiry: { title: '議會質詢／答詢紀錄', desc: '議員質詢與學校答詢內容存檔', columns: ['日期', '議員/題目', '答詢狀態'] },
-  specialNeeds: { title: '特殊生統計', desc: '原住民、新住民、低收入戶、身障生、單親生等統計人數', columns: ['類別', '人數', '說明'] },
+  specialNeeds: { title: '特生統計', desc: '原住民、新住民、低收入戶、身障生、單親生等統計人數', columns: ['類別', '人數', '說明'] },
 };

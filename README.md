@@ -49,16 +49,19 @@ npm run dev
 
 ```
 /years/{year}                                    -- "113" | "114" | "115" ...；locked、deadlines
-/years/{year}/modules/basic                      -- 班級數／學生人數／教師人力／學雜費（各年級平均）／
-                                                     午餐補助（全年度），含 status: draft|submitted
+/years/{year}/modules/basic                      -- 班級數／學生人數／代理教師人數（substituteVacancy 懸缺
+                                                     代理、substituteAdditional 增置員額，分開存放）／其餘
+                                                     教師人力／學雜費（各年級平均）／午餐補助（全年度），
+                                                     含 status: draft|submitted
 /years/{year}/modules/library                    -- generalBooks、indigenousBooks
 /years/{year}/modules/budgetbook                 -- fundName、reviewAuthority、pdfUrl（PDF 存 Storage，見下）
 /years/{year}/modules/{key}/records/{recordId}   -- 多筆資料：budget（expense|revenue，各含 amount 預算
                                                      金額、actualAmount 決算金額、varianceNote 差異原因，
                                                      後兩者選填）、language（class|certification|roster）、
-                                                     specialNeeds（特殊生統計：category|count|note）、
-                                                     awards、club、land、inquiry；軟刪除以
-                                                     deletedAt/deletedBy 標記
+                                                     specialNeeds（特生統計：category|count|note，
+                                                     category 為下拉選單並可自訂）、awards（含 category
+                                                     語文類|藝文類|體育類|科學類下拉選單）、club、land、
+                                                     inquiry；軟刪除以 deletedAt/deletedBy 標記
 /years/{year}/auditLogs/{id}                     -- 不可變更稽核紀錄：moduleKey、recordId、action、
                                                      actorUid、actorName、before、after、createdAt
 /years/{year}/files/{id}                         -- 預算書 PDF 的 Storage 路徑／檔名／大小等中繼資料
@@ -70,7 +73,7 @@ Storage：`budget-books/{year}/{fileName}`（公開讀取，僅能透過 `upload
 
 ## 已知的真實數字 vs. 佔位資料
 
-115 年度歲入歲出（歲入合計 53,642／歲出合計 54,358／短絀 716）與 113–115 三年度歲出總額，取自校方實際 115 年度預算書，已寫入 `scripts/migration.cjs`（`scripts/seed.js` 為其 CLI 入口，見上）。圖書、族語、獲獎、社團、土地現值、質詢答詢、特殊生統計等模組資料，以及 115 年度決算金額／差異原因說明、學雜費（各年級平均）、午餐補助等新增欄位，為**示意用佔位資料**，正式啟用前請由各處室以系統表單填入實際數字。
+115 年度歲入歲出（歲入合計 53,642／歲出合計 54,358／短絀 716）與 113–115 三年度歲出總額，取自校方實際 115 年度預算書，已寫入 `scripts/migration.cjs`（`scripts/seed.js` 為其 CLI 入口，見上）。圖書、族語、獲獎、社團、土地現值、質詢答詢、特生統計等模組資料，以及 115 年度決算金額／差異原因說明、學雜費（各年級平均）、午餐補助、代理教師懸缺代理／增置員額分項等新增欄位，為**示意用佔位資料**，正式啟用前請由各處室以系統表單填入實際數字。
 
 ## 帳號與權限
 

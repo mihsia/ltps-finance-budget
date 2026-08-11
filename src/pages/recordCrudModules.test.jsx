@@ -358,7 +358,7 @@ describe('Language variant records CRUD page', () => {
 
 describe('schema-driven Generic records CRUD page', () => {
   it.each([
-    ['awards', ['獲獎項目', '等級', '日期']],
+    ['awards', ['類別', '獲獎項目', '等級', '日期']],
     ['club', ['社團名稱', '指導老師', '人數', '上課時間']],
     ['land', ['地號', '面積(㎡)', '公告現值(元/㎡)']],
     ['inquiry', ['日期', '議員/題目', '答詢狀態']],
@@ -374,6 +374,7 @@ describe('schema-driven Generic records CRUD page', () => {
     installRecords('awards', records);
     const mounted = mount(Generic, { moduleKey: 'awards' });
     await act(async () => control(mounted.renderer, '＋ 新增一筆').props.onClick());
+    change(mounted.renderer, '類別', '語文類');
     change(mounted.renderer, '獲獎項目', ' 全國語文競賽 ');
     change(mounted.renderer, '等級', ' 特優 ');
     change(mounted.renderer, '日期', '2025-02-30');
@@ -384,9 +385,36 @@ describe('schema-driven Generic records CRUD page', () => {
     change(mounted.renderer, '日期', '2025-02-28');
     await act(async () => control(mounted.renderer, '新增').props.onClick());
     expect(records.create).toHaveBeenCalledWith({
-      recordType: 'award', item: '全國語文競賽', level: '特優', date: '2025-02-28',
+      recordType: 'award', category: '語文類', item: '全國語文競賽', level: '特優', date: '2025-02-28',
     }, authMocks.actor);
     mounted.unmount();
+  });
+
+  it('lets a 特生統計 category be picked from the dropdown or typed as a custom value', async () => {
+    const records = readyRecords([]);
+    installRecords('specialNeeds', records);
+    const mounted = mount(Generic, { moduleKey: 'specialNeeds' });
+    await act(async () => control(mounted.renderer, '＋ 新增一筆').props.onClick());
+    change(mounted.renderer, '類別', '原住民');
+    change(mounted.renderer, '人數', '17');
+    await act(async () => control(mounted.renderer, '新增').props.onClick());
+    expect(records.create).toHaveBeenCalledWith({
+      recordType: 'specialNeeds', category: '原住民', count: 17, note: null,
+    }, authMocks.actor);
+    mounted.unmount();
+
+    const customRecords = readyRecords([]);
+    installRecords('specialNeeds', customRecords);
+    const customMounted = mount(Generic, { moduleKey: 'specialNeeds' });
+    await act(async () => control(customMounted.renderer, '＋ 新增一筆').props.onClick());
+    change(customMounted.renderer, '類別', '__custom__');
+    change(customMounted.renderer, '類別（自訂）', '外籍配偶子女');
+    change(customMounted.renderer, '人數', '3');
+    await act(async () => control(customMounted.renderer, '新增').props.onClick());
+    expect(customRecords.create).toHaveBeenCalledWith({
+      recordType: 'specialNeeds', category: '外籍配偶子女', count: 3, note: null,
+    }, authMocks.actor);
+    customMounted.unmount();
   });
 
   it.each([
@@ -406,10 +434,10 @@ describe('schema-driven Generic records CRUD page', () => {
 
   it('edits, soft-deletes, and restores by record id through the active query scope', async () => {
     const active = readyRecords([
-      { id: 'award-1', recordType: 'award', item: '縣科展', level: '優等', date: '2025-09-20', deletedAt: null },
+      { id: 'award-1', recordType: 'award', category: '科學類', item: '縣科展', level: '優等', date: '2025-09-20', deletedAt: null },
     ]);
     const recovery = readyRecords([
-      { id: 'award-old', recordType: 'award', item: '舊獎項', level: '佳作', date: '2024-01-10', deletedAt: { seconds: 2 } },
+      { id: 'award-old', recordType: 'award', category: '體育類', item: '舊獎項', level: '佳作', date: '2024-01-10', deletedAt: { seconds: 2 } },
     ]);
     installRecords('awards', active, recovery);
     const mounted = mount(Generic, { moduleKey: 'awards' });
@@ -418,7 +446,7 @@ describe('schema-driven Generic records CRUD page', () => {
     change(mounted.renderer, '等級', '特優');
     await act(async () => control(mounted.renderer, '儲存').props.onClick());
     expect(active.update).toHaveBeenCalledWith('award-1', {
-      item: '縣科展', level: '特優', date: '2025-09-20',
+      category: '科學類', item: '縣科展', level: '特優', date: '2025-09-20',
     }, authMocks.actor);
     await act(async () => control(mounted.renderer, '停用').props.onClick());
     expect(active.delete).toHaveBeenCalledWith('award-1', authMocks.actor);
@@ -594,8 +622,8 @@ describe('record page invocation guards', () => {
     const formWrite = deferred();
     const rowWrite = deferred();
     const records = readyRecords([
-      { id: 'award-1', recordType: 'award', item: '縣科展', level: '優等', date: '2025-09-20', deletedAt: null },
-      { id: 'award-2', recordType: 'award', item: '縣語文競賽', level: '特優', date: '2025-10-20', deletedAt: null },
+      { id: 'award-1', recordType: 'award', category: '科學類', item: '縣科展', level: '優等', date: '2025-09-20', deletedAt: null },
+      { id: 'award-2', recordType: 'award', category: '語文類', item: '縣語文競賽', level: '特優', date: '2025-10-20', deletedAt: null },
     ], {
       update: vi.fn(() => formWrite.promise),
       delete: vi.fn((recordId) => (recordId === 'award-2' ? rowWrite.promise : Promise.resolve())),

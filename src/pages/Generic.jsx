@@ -29,6 +29,31 @@ function inputType(kind) {
   return 'text';
 }
 
+const CUSTOM_OPTION = '__custom__';
+
+// The custom-entry text box is tracked by its own marker key (rather than
+// derived purely from the field's current value) so picking "其他（自訂）"
+// keeps the text box visible even while its value is still blank. Editing an
+// existing record whose stored category isn't one of the fixed options also
+// counts as custom mode, with no marker needed.
+function customMarkerKey(fieldSchema) {
+  return `${fieldSchema.key}__custom`;
+}
+
+function isCustomSelected(fieldSchema, values) {
+  if (!fieldSchema.allowCustom) return false;
+  if (values[customMarkerKey(fieldSchema)]) return true;
+  const value = values[fieldSchema.key];
+  return Boolean(value) && !fieldSchema.options.includes(value);
+}
+
+function selectValue(fieldSchema, values) {
+  const value = values[fieldSchema.key];
+  if (fieldSchema.options.includes(value)) return value;
+  if (isCustomSelected(fieldSchema, values)) return CUSTOM_OPTION;
+  return '';
+}
+
 export default function Generic({
   year,
   latestYear,
@@ -188,19 +213,59 @@ export default function Generic({
             {schema.fields.map((fieldSchema) => (
               <label key={fieldSchema.key} style={{ font: "600 11.5px 'Noto Sans TC', sans-serif", color: '#454B45' }}>
                 {fieldSchema.label}
-                <input
-                  aria-label={fieldSchema.label}
-                  type={inputType(fieldSchema.kind)}
-                  min={fieldSchema.kind === 'number' || fieldSchema.kind === 'integer' ? 0 : undefined}
-                  step={fieldSchema.kind === 'integer' ? 1 : undefined}
-                  disabled={actions.pending}
-                  style={{ ...input, marginTop: 5 }}
-                  value={formState.values[fieldSchema.key]}
-                  onChange={(event) => setFormState((current) => ({
-                    ...current,
-                    values: { ...current.values, [fieldSchema.key]: event.target.value },
-                  }))}
-                />
+                {fieldSchema.kind === 'select' ? (
+                  <>
+                    <select
+                      aria-label={fieldSchema.label}
+                      disabled={actions.pending}
+                      style={{ ...input, marginTop: 5 }}
+                      value={selectValue(fieldSchema, formState.values)}
+                      onChange={(event) => {
+                        const next = event.target.value;
+                        setFormState((current) => ({
+                          ...current,
+                          values: {
+                            ...current.values,
+                            [fieldSchema.key]: next === CUSTOM_OPTION ? '' : next,
+                            [customMarkerKey(fieldSchema)]: next === CUSTOM_OPTION ? '1' : '',
+                          },
+                        }));
+                      }}
+                    >
+                      <option value="">請選擇</option>
+                      {fieldSchema.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                      {fieldSchema.allowCustom && <option value={CUSTOM_OPTION}>其他（自訂）</option>}
+                    </select>
+                    {isCustomSelected(fieldSchema, formState.values) && (
+                      <input
+                        aria-label={`${fieldSchema.label}（自訂）`}
+                        type="text"
+                        placeholder="請輸入自訂類別"
+                        disabled={actions.pending}
+                        style={{ ...input, marginTop: 6 }}
+                        value={formState.values[fieldSchema.key]}
+                        onChange={(event) => setFormState((current) => ({
+                          ...current,
+                          values: { ...current.values, [fieldSchema.key]: event.target.value },
+                        }))}
+                      />
+                    )}
+                  </>
+                ) : (
+                  <input
+                    aria-label={fieldSchema.label}
+                    type={inputType(fieldSchema.kind)}
+                    min={fieldSchema.kind === 'number' || fieldSchema.kind === 'integer' ? 0 : undefined}
+                    step={fieldSchema.kind === 'integer' ? 1 : undefined}
+                    disabled={actions.pending}
+                    style={{ ...input, marginTop: 5 }}
+                    value={formState.values[fieldSchema.key]}
+                    onChange={(event) => setFormState((current) => ({
+                      ...current,
+                      values: { ...current.values, [fieldSchema.key]: event.target.value },
+                    }))}
+                  />
+                )}
               </label>
             ))}
           </div>

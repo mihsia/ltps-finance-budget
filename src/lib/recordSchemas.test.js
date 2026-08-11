@@ -100,15 +100,19 @@ describe('record CRUD schemas', () => {
   it('uses field-specific Generic schemas and validates real calendar dates', () => {
     expect(schemas.validateGenericRecord).toBeTypeOf('function');
     expect(schemas.genericRecordSchemas.awards.fields.map((field) => field.label))
-      .toEqual(['獲獎項目', '等級', '日期']);
+      .toEqual(['類別', '獲獎項目', '等級', '日期']);
+    expect(schemas.genericRecordSchemas.awards.fields[0]).toMatchObject({
+      kind: 'select', options: schemas.AWARD_CATEGORIES,
+    });
+    expect(schemas.AWARD_CATEGORIES).toEqual(['語文類', '藝文類', '體育類', '科學類']);
     expect(schemas.validateGenericRecord('awards', {
-      item: ' 縣科展 ', level: ' 優等 ', date: '2025-02-29',
+      category: '科學類', item: ' 縣科展 ', level: ' 優等 ', date: '2025-02-29',
     })).toMatchObject({ valid: false, error: '日期必須是有效的 YYYY-MM-DD。' });
     expect(schemas.validateGenericRecord('awards', {
-      item: ' 縣科展 ', level: ' 優等 ', date: '2024-02-29',
+      category: '科學類', item: ' 縣科展 ', level: ' 優等 ', date: '2024-02-29',
     })).toEqual({
       valid: true,
-      data: { recordType: 'award', item: '縣科展', level: '優等', date: '2024-02-29' },
+      data: { recordType: 'award', category: '科學類', item: '縣科展', level: '優等', date: '2024-02-29' },
       error: null,
     });
     expect(schemas.validateGenericRecord('club', {
@@ -119,9 +123,13 @@ describe('record CRUD schemas', () => {
     })).toMatchObject({ valid: false, error: '面積(㎡)必須是非負有限數值。' });
   });
 
-  it('records special-needs student counts with an optional note', () => {
+  it('records special-needs student counts with a categorized dropdown that still allows a custom category, plus an optional note', () => {
     expect(schemas.genericRecordSchemas.specialNeeds.fields.map((field) => field.label))
       .toEqual(['類別', '人數', '說明']);
+    expect(schemas.genericRecordSchemas.specialNeeds.fields[0]).toMatchObject({
+      kind: 'select', options: schemas.SPECIAL_NEEDS_CATEGORIES, allowCustom: true,
+    });
+    expect(schemas.SPECIAL_NEEDS_CATEGORIES).toEqual(['原住民', '新住民', '低收入戶', '身障生', '單親生']);
     expect(schemas.validateGenericRecord('specialNeeds', {
       category: '原住民', count: '17', note: '',
     })).toEqual({
@@ -138,5 +146,10 @@ describe('record CRUD schemas', () => {
     expect(schemas.validateGenericRecord('specialNeeds', {
       category: '原住民', count: '-1', note: '',
     })).toMatchObject({ valid: false, error: '人數必須是非負整數。' });
+    // A category outside the fixed option list is still accepted — the
+    // dropdown's "其他（自訂）" choice falls back to free text.
+    expect(schemas.validateGenericRecord('specialNeeds', {
+      category: '外籍配偶子女', count: '3', note: '',
+    })).toMatchObject({ valid: true, data: { category: '外籍配偶子女', count: 3 } });
   });
 });

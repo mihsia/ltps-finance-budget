@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { fmtNum, fmtDate } from '../lib/format';
 import { buildCouncilWorkbook } from '../lib/councilExport';
 import { buildOverviewPdf, buildOverviewWorkbook } from '../lib/overviewExport';
-import { buildOverviewReport } from '../lib/overviewReport';
+import { buildOverviewReport, OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_COLORS } from '../lib/overviewReport';
 import { languageRecordSummary } from '../lib/recordDerivations';
 import { runAuthorized } from '../lib/accessPolicy';
 import {
@@ -17,7 +17,7 @@ import {
 const OPTIONAL_MODULE_CHOICES = [
   { key: 'library', label: '圖書藏書量' },
   { key: 'language', label: '族語開班' },
-  { key: 'specialNeeds', label: '特殊生統計' },
+  { key: 'specialNeeds', label: '特生統計' },
   { key: 'awards', label: '獲獎紀錄' },
   { key: 'club', label: '課後社團' },
   { key: 'land', label: '土地現值' },
@@ -249,13 +249,33 @@ export default function Report({ year, years }) {
           </div>
         ))}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, marginBottom: 24, maxWidth: 900 }}>
-        {OPTIONAL_MODULE_CHOICES.filter((m) => selected[m.key] && report.modules[m.key]).map((m) => (
-          <div key={m.key} style={{ border: '1px solid #E3DFD3', borderRadius: 9, padding: '12px 14px' }}>
-            <div style={{ font: "600 11.5px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 5 }}>{m.label}</div>
-            <div style={{ font: '800 17px Inter, sans-serif' }}>{moduleValueText(m.key)}</div>
-          </div>
-        ))}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12, marginBottom: 24, maxWidth: 900 }}>
+        {OPTIONAL_MODULE_CHOICES.filter((m) => selected[m.key] && report.modules[m.key]).map((m) => {
+          const color = OPTIONAL_MODULE_COLORS[m.key] || '#1F5F52';
+          const fields = OPTIONAL_MODULE_DETAIL_FIELDS[m.key] || [];
+          const detailRows = report.modules[m.key].rows || [];
+          const columns = fields.map(() => '1fr').join(' ');
+          return (
+            <div key={m.key} style={{ border: '1px solid #E3DFD3', borderLeft: `4px solid ${color}`, borderRadius: 9, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px' }}>
+                <div style={{ font: "600 11.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>{m.label}</div>
+                <div style={{ font: '800 17px Inter, sans-serif' }}>{moduleValueText(m.key)}</div>
+              </div>
+              {detailRows.length > 0 && (
+                <div style={{ borderTop: '1px solid #EEEBE2' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: columns, padding: '6px 14px', background: '#F5F3EE', font: "700 10.5px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
+                    {fields.map((field) => <span key={field.key}>{field.label}</span>)}
+                  </div>
+                  {detailRows.map((row, i) => (
+                    <div key={i} style={{ display: 'grid', gridTemplateColumns: columns, padding: '6px 14px', borderTop: '1px solid #EEEBE2', font: "500 11.5px 'Noto Sans TC', sans-serif", color: '#454B45' }}>
+                      {fields.map((field) => <span key={field.key}>{row[field.key] == null || row[field.key] === '' ? '—' : row[field.key]}</span>)}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div style={sectionLabel}>匯出格式</div>

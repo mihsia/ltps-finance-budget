@@ -152,10 +152,19 @@ export function validateLanguageRecord(recordType, source) {
   return valid({ recordType, ...result.data });
 }
 
+// "select" fields validate identically to free text (any non-blank string up
+// to maxLength) — `options` and `allowCustom` are UI hints consumed by
+// Generic.jsx to render a dropdown, optionally with a custom-entry fallback.
+export const AWARD_CATEGORIES = ['語文類', '藝文類', '體育類', '科學類'];
+export const SPECIAL_NEEDS_CATEGORIES = ['原住民', '新住民', '低收入戶', '身障生', '單親生'];
+
 export const genericRecordSchemas = {
   awards: {
     recordType: 'award',
     fields: [
+      {
+        key: 'category', label: '類別', kind: 'select', options: AWARD_CATEGORIES, maxLength: 20,
+      },
       { key: 'item', label: '獲獎項目', kind: 'text', maxLength: 160 },
       { key: 'level', label: '等級', kind: 'text', maxLength: 80 },
       { key: 'date', label: '日期', kind: 'date' },
@@ -189,7 +198,14 @@ export const genericRecordSchemas = {
   specialNeeds: {
     recordType: 'specialNeeds',
     fields: [
-      { key: 'category', label: '類別', kind: 'text', maxLength: 60 },
+      {
+        key: 'category',
+        label: '類別',
+        kind: 'select',
+        options: SPECIAL_NEEDS_CATEGORIES,
+        allowCustom: true,
+        maxLength: 60,
+      },
       { key: 'count', label: '人數', kind: 'integer' },
       { key: 'note', label: '說明', kind: 'text', maxLength: 200, optional: true },
     ],
