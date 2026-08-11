@@ -75,7 +75,11 @@ export default function Budget({
     )
     : [];
   const total = rows.reduce((sum, record) => sum + record.amount, 0);
+  const actualRows = rows.filter((record) => record.actualAmount != null);
+  const hasActual = actualRows.length > 0;
+  const actualTotal = actualRows.reduce((sum, record) => sum + record.actualAmount, 0);
   const writeVisible = recoveryAllowed && !recordState.loading && !recordState.error;
+  const rowColumns = `${tab === 'expense' ? '1fr 1.5fr' : '1.6fr'} 88px 88px 1.2fr${writeVisible ? ' 92px' : ''}`;
 
   const startAdd = () => actions.runControl(() => {
     setFormState({
@@ -199,19 +203,23 @@ export default function Budget({
       </div>
 
       {!includeDeleted && (
-        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 720 }}>
-          <div style={tableHeadRow(tab === 'expense' ? '1.2fr 2fr 1fr 92px' : '2fr 1fr 92px')}>
+        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 980 }}>
+          <div style={tableHeadRow(rowColumns)}>
             <span>{tab === 'expense' ? '項目名稱' : '來源項目'}</span>
             {tab === 'expense' && <span>內容說明</span>}
-            <span>金額（千元）</span>
+            <span>預算金額（千元）</span>
+            <span>決算金額（千元）</span>
+            <span>差異原因說明</span>
             {writeVisible && <span>操作</span>}
           </div>
           {rows.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無{tab === 'expense' ? '歲出' : '歲入'}資料</div>}
           {rows.map((record) => (
-            <div key={record.id} style={{ ...tableRow(tab === 'expense' ? '1.2fr 2fr 1fr 92px' : '2fr 1fr 92px'), alignItems: 'center' }}>
+            <div key={record.id} style={{ ...tableRow(rowColumns), alignItems: 'center' }}>
               <span>{record.label}</span>
               {tab === 'expense' && <span>{record.formula}</span>}
               <b>{fmtNum(record.amount)}</b>
+              <span>{record.actualAmount == null ? '—' : fmtNum(record.actualAmount)}</span>
+              <span style={{ color: '#8A9089' }}>{record.varianceNote || '—'}</span>
               {writeVisible && (
                 <span style={{ display: 'flex', gap: 8 }}>
                   <button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯</button>
@@ -221,8 +229,13 @@ export default function Budget({
             </div>
           ))}
           <div style={{ display: 'flex', justifyContent: 'space-between', padding: '13px 18px', borderTop: '2px solid #1F5F52', color: '#1F5F52' }}>
-            <b>{tab === 'expense' ? '歲出' : '歲入'}合計</b><b>{fmtNum(total)} 千元</b>
+            <b>{tab === 'expense' ? '歲出' : '歲入'}合計（預算）</b><b>{fmtNum(total)} 千元</b>
           </div>
+          {hasActual && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0 18px 13px', color: '#454B45' }}>
+              <span>{tab === 'expense' ? '歲出' : '歲入'}合計（決算，僅計入已填寫項目）</span><span>{fmtNum(actualTotal)} 千元</span>
+            </div>
+          )}
         </div>
       )}
 

@@ -14,6 +14,7 @@ export const icons = {
   download: 'M7.2 2H8.8V8.6L11 6.4L12.1 7.5L8 11.6L3.9 7.5L5 6.4L7.2 8.6ZM2.5 12.5H13.5V14H2.5Z',
   archive: 'M1.5 2H14.5V5H1.5ZM2.5 5.6H13.5V13C13.5 13.6 13 14 12.5 14H3.5C3 14 2.5 13.6 2.5 13ZM6.2 7.8H9.8V9H6.2',
   user: 'M8 1.8C9.8 1.8 11.2 3.2 11.2 5C11.2 6.8 9.8 8.2 8 8.2C6.2 8.2 4.8 6.8 4.8 5C4.8 3.2 6.2 1.8 8 1.8ZM2 14.4C2.4 11 4.9 8.8 8 8.8C11.1 8.8 13.6 11 14 14.4Z',
+  heart: 'M8 14L1.5 8.2C0 6.8 0 4.4 1.8 3.1C3.3 2 5.4 2.3 6.6 3.7L8 5.3L9.4 3.7C10.6 2.3 12.7 2 14.2 3.1C16 4.4 16 6.8 14.5 8.2L8 14Z',
 };
 
 export const navGroups = [
@@ -22,6 +23,7 @@ export const navGroups = [
   ] },
   { label: '資料模組', items: [
     { key: 'basic', label: '基本資料', icon: 'school', color: '#C9832F' },
+    { key: 'specialNeeds', label: '特殊生統計', icon: 'heart', color: '#A0764A' },
     { key: 'budget', label: '歲入歲出', icon: 'coin', color: '#B5533E' },
     { key: 'library', label: '圖書藏書', icon: 'book', color: '#7D5BA6' },
     { key: 'language', label: '族語開班', icon: 'chat', color: '#2E7DAF' },
@@ -38,11 +40,12 @@ export const navGroups = [
   ] },
 ];
 
-export const genericModuleKeys = ['awards', 'club', 'land', 'inquiry'];
+export const genericModuleKeys = ['awards', 'club', 'land', 'inquiry', 'specialNeeds'];
 
 export const genericModuleMeta = {
   awards: { title: '獲獎紀錄', desc: '記錄學生與學校各項競賽獲獎資訊', columns: ['獲獎項目', '等級', '日期'] },
   club: { title: '課後社團', desc: '課後社團開設班別與人數', columns: ['社團名稱', '指導老師', '人數', '上課時間'] },
   land: { title: '土地公告現值', desc: '學校用地地號與公告現值資訊', columns: ['地號', '面積(㎡)', '公告現值(元/㎡)'] },
   inquiry: { title: '議會質詢／答詢紀錄', desc: '議員質詢與學校答詢內容存檔', columns: ['日期', '議員/題目', '答詢狀態'] },
+  specialNeeds: { title: '特殊生統計', desc: '原住民、新住民、低收入戶、身障生、單親生等統計人數', columns: ['類別', '人數', '說明'] },
 };

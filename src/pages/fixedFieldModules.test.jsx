@@ -154,6 +154,8 @@ beforeEach(() => {
       regularTeachers: '19',
       substitute: '9',
       partTimeTeachers: '2',
+      tuitionFeeAvg: '827',
+      lunchSubsidyTotal: '236',
       status: 'draft',
       unrelated: { keep: true },
     }),
@@ -236,7 +238,7 @@ describe('Basic fixed-field module', () => {
     const write = deferred();
     const save = vi.fn(() => write.promise);
     hookMocks.modules.basic = readyModule({
-      classes: '13', students: '262', staff: '28', regularTeachers: '19', substitute: '9', partTimeTeachers: '2', status: 'draft', unrelated: { keep: true },
+      classes: '13', students: '262', staff: '28', regularTeachers: '19', substitute: '9', partTimeTeachers: '2', tuitionFeeAvg: '827', lunchSubsidyTotal: '236', status: 'draft', unrelated: { keep: true },
     }, save);
     const mounted = mount(Basic);
 
@@ -267,10 +269,12 @@ describe('Basic fixed-field module', () => {
       regularTeachers: '19',
       substitute: '9',
       partTimeTeachers: '2',
+      tuitionFeeAvg: '827',
+      lunchSubsidyTotal: '236',
       status: 'submitted',
     }, {
       actor: { uid: 'admin-fixed', name: '校務管理員' },
-      fields: ['classes', 'students', 'staff', 'regularTeachers', 'substitute', 'partTimeTeachers', 'status'],
+      fields: ['classes', 'students', 'staff', 'regularTeachers', 'substitute', 'partTimeTeachers', 'tuitionFeeAvg', 'lunchSubsidyTotal', 'status'],
     });
     expect(mounted.renderer.root.findAllByType('input').every((field) => field.props.disabled)).toBe(true);
 
@@ -288,6 +292,7 @@ describe('Basic fixed-field module', () => {
     const save = vi.fn(() => firstWrite.promise);
     const source = {
       classes: '13', students: '262', staff: '28', regularTeachers: '19', substitute: '9', partTimeTeachers: '2',
+      tuitionFeeAvg: '827', lunchSubsidyTotal: '236',
       status: 'draft', unrelated: { keep: true }, updatedAt: { seconds: 1 },
     };
     hookMocks.modules.basic = readyModule(source, save);
@@ -344,7 +349,7 @@ describe('Basic fixed-field module', () => {
     hookMocks.meta.meta = { locked: false, deadlines: { basic: false } };
     await act(async () => retainedCancel());
 
-    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(6);
+    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(8);
     expect(pageText(mounted.renderer)).toContain('基本資料填報截止日格式錯誤');
     expect(control(mounted.renderer, '編輯資料')).toBeUndefined();
 
@@ -355,7 +360,7 @@ describe('Basic fixed-field module', () => {
     await act(async () => retainedSave());
 
     expect(save).not.toHaveBeenCalled();
-    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(6);
+    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(8);
     expect(pageText(mounted.renderer)).toContain('基本資料填報截止日格式錯誤');
     mounted.unmount();
   });

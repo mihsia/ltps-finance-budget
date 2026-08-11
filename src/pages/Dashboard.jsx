@@ -6,6 +6,7 @@ import { pageTitle, pageSubtitle, statTile, card, sectionLabel, progressBar } fr
 
 const COMPLETION_MODULES = [
   { key: 'basic', label: '學校基本資料' },
+  { key: 'specialNeeds', label: '特殊生統計' },
   { key: 'budget', label: '預算數' },
   { key: 'library', label: '圖書館藏書' },
   { key: 'language', label: '本土語開班' },
@@ -29,6 +30,7 @@ export default function Dashboard({ years, latestYear }) {
     club: useYearRecords(latestYear, 'club'),
     land: useYearRecords(latestYear, 'land'),
     inquiry: useYearRecords(latestYear, 'inquiry'),
+    specialNeeds: useYearRecords(latestYear, 'specialNeeds'),
   };
 
   const expenseTotalOf = (state) => (

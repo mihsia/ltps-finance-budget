@@ -66,6 +66,17 @@ const PLACEHOLDER_INQUIRY = [
   { date: '2025-11-08', subject: '李議員：圖書館藏書更新', status: '已答詢' },
   { date: '2026-05-20', subject: '陳議員：課後社團經費', status: '待答詢' },
 ];
+const PLACEHOLDER_SPECIAL_NEEDS = [
+  { category: '身心障礙', count: 14, note: '含資源班與巡迴輔導' },
+  { category: '原住民', count: 17, note: '' },
+  { category: '新住民子女', count: 25, note: '' },
+];
+// 校方尚未提供 115 年度正式決算數字（決算須待年度結束後陸續填報），此處僅為
+// 示意資料，用以展示「預算／決算／差異原因」報表呈現方式，正式啟用前請由
+// 承辦人員以系統表單填入實際決算數字。
+const PLACEHOLDER_115_EXPENSE_VARIANCE = {
+  國民教育計畫: { actualAmount: 6020, varianceNote: '部分計畫延至次年度執行' },
+};
 
 const SEED_YEARS = ['113', '114', '115'];
 
@@ -76,8 +87,14 @@ const indexed = (recordType, rows) => rows.map((data, i) => ({
 
 function budgetRecordsFor(year) {
   if (year === '115') {
+    const expenseRows = REAL_115_EXPENSE_BREAKDOWN.map((row) => ({
+      ...row,
+      actualAmount: null,
+      varianceNote: null,
+      ...(PLACEHOLDER_115_EXPENSE_VARIANCE[row.label] || {}),
+    }));
     return [
-      ...indexed('expense', REAL_115_EXPENSE_BREAKDOWN),
+      ...indexed('expense', expenseRows),
       ...indexed('revenue', REAL_115_REVENUE_ROWS),
     ];
   }
@@ -109,6 +126,8 @@ function buildYearPlan(year) {
         path: 'years/115/modules/basic',
         data: {
           classes: '13', students: '262', staff: '28', regularTeachers: '19', substitute: '9', partTimeTeachers: '2', status: 'submitted',
+          // 學雜費／午餐補助為新增欄位，尚未取得校方正式數字，暫以示意資料填入。
+          tuitionFeeAvg: '827', lunchSubsidyTotal: '236',
         },
       },
       { path: 'years/115/modules/library', data: { generalBooks: 17296, indigenousBooks: 36 } },
@@ -126,6 +145,7 @@ function buildYearPlan(year) {
       { modulePath: 'years/115/modules/club', rows: indexed('club', PLACEHOLDER_CLUBS) },
       { modulePath: 'years/115/modules/land', rows: indexed('land', PLACEHOLDER_LAND) },
       { modulePath: 'years/115/modules/inquiry', rows: indexed('inquiry', PLACEHOLDER_INQUIRY) },
+      { modulePath: 'years/115/modules/specialNeeds', rows: indexed('specialNeeds', PLACEHOLDER_SPECIAL_NEEDS) },
     );
   }
   return plan;

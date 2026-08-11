@@ -16,6 +16,8 @@ const COUNT_FIELDS = [
   'regularTeachers',
   'substitute',
   'partTimeTeachers',
+  'tuitionFeeAvg',
+  'lunchSubsidyTotal',
 ];
 const AUDIT_FIELDS = [...COUNT_FIELDS, 'status'];
 const FIELD_LABELS = {
@@ -25,6 +27,8 @@ const FIELD_LABELS = {
   regularTeachers: '正式教師人數',
   substitute: '代理教師人數',
   partTimeTeachers: '兼任／支援教師人數',
+  tuitionFeeAvg: '學雜費（各年級平均，元）',
+  lunchSubsidyTotal: '午餐補助（全年度，千元）',
 };
 
 function messageStyle(message) {

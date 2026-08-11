@@ -184,12 +184,12 @@ describe('Budget records CRUD page', () => {
     await act(async () => control(mounted.renderer, '＋ 新增歲出').props.onClick());
     change(mounted.renderer, '項目名稱', '  國民教育計畫  ');
     change(mounted.renderer, '內容說明', '  辦理教學活動  ');
-    change(mounted.renderer, '金額（千元）', '-1');
+    change(mounted.renderer, '預算金額（千元）', '-1');
     await act(async () => control(mounted.renderer, '新增').props.onClick());
     expect(records.create).not.toHaveBeenCalled();
     expect(pageText(mounted.renderer)).toContain('金額必須是非負有限數值');
 
-    change(mounted.renderer, '金額（千元）', '1200.5');
+    change(mounted.renderer, '預算金額（千元）', '1200.5');
     authMocks.actor = { uid: 'current-budget', name: '現在承辦人' };
     await act(async () => control(mounted.renderer, '新增').props.onClick());
     expect(records.create).toHaveBeenCalledWith({
@@ -197,6 +197,8 @@ describe('Budget records CRUD page', () => {
       label: '國民教育計畫',
       formula: '辦理教學活動',
       amount: 1200.5,
+      actualAmount: null,
+      varianceNote: null,
     }, { uid: 'current-budget', name: '現在承辦人' });
     expect(pageText(mounted.renderer)).toContain('新增成功。');
     mounted.unmount();
@@ -210,11 +212,11 @@ describe('Budget records CRUD page', () => {
     await act(async () => control(mounted.renderer, '歲入（收入）').props.onClick());
     await act(async () => control(mounted.renderer, '＋ 新增歲入').props.onClick());
     change(mounted.renderer, '來源項目', ' 利息收入 ');
-    change(mounted.renderer, '金額（千元）', '2');
+    change(mounted.renderer, '預算金額（千元）', '2');
     await act(async () => control(mounted.renderer, '新增').props.onClick());
 
     expect(records.create).toHaveBeenCalledWith({
-      recordType: 'revenue', label: '利息收入', amount: 2,
+      recordType: 'revenue', label: '利息收入', amount: 2, actualAmount: null, varianceNote: null,
     }, authMocks.actor);
     mounted.unmount();
   });
@@ -232,7 +234,7 @@ describe('Budget records CRUD page', () => {
     const mounted = mount(Budget);
 
     await act(async () => control(mounted.renderer, '編輯').props.onClick());
-    change(mounted.renderer, '金額（千元）', '250');
+    change(mounted.renderer, '預算金額（千元）', '250');
     const save = control(mounted.renderer, '儲存');
     let first;
     let duplicate;
@@ -243,9 +245,9 @@ describe('Budget records CRUD page', () => {
     await act(async () => Promise.resolve());
     expect(active.update).toHaveBeenCalledOnce();
     expect(active.update).toHaveBeenCalledWith('expense-1', {
-      label: '教育計畫', formula: '說明', amount: 250,
+      label: '教育計畫', formula: '說明', amount: 250, actualAmount: null, varianceNote: null,
     }, authMocks.actor);
-    expect(field(mounted.renderer, '金額（千元）').props.disabled).toBe(true);
+    expect(field(mounted.renderer, '預算金額（千元）').props.disabled).toBe(true);
     write.resolve();
     await act(async () => { await first; await duplicate; });
 

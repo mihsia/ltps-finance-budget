@@ -191,8 +191,8 @@ describe('Task 5 downstream record authority', () => {
       { id: 'expense-deleted', recordType: 'expense', label: '停用項目', formula: '說明', amount: 999, deletedAt: { seconds: 1 } },
     ]));
     const mounted = mount(Report);
-    expect(pageText(mounted.renderer)).toContain('115年度預算數（千元）321');
-    expect(pageText(mounted.renderer)).toContain('本土語開班語系及班級數總和2');
+    expect(pageText(mounted.renderer)).toContain('115年度歲出預算321 千元');
+    expect(pageText(mounted.renderer)).toContain('族語開班2 班');
     expect(pageText(mounted.renderer)).not.toContain('999');
 
     hookMocks.records.set('115/budget', readyRecords([], { loading: true }));

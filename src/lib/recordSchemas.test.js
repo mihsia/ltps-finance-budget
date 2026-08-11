@@ -21,6 +21,8 @@ describe('record CRUD schemas', () => {
         label: '國民教育計畫',
         formula: '教學活動',
         amount: 1200.5,
+        actualAmount: null,
+        varianceNote: null,
       },
       error: null,
     });
@@ -42,6 +44,38 @@ describe('record CRUD schemas', () => {
     expect(schemas.validateBudgetRecord('expense', {
       label: '項目', formula: '說'.repeat(301), amount: '1',
     })).toMatchObject({ valid: false, error: '內容說明不得超過 300 個字。' });
+  });
+
+  it('accepts a blank 決算/差異原因 pair (settled after year-end) but validates them once entered', () => {
+    expect(schemas.validateBudgetRecord('revenue', {
+      label: '租金收入', amount: '40', actualAmount: '', varianceNote: '',
+    })).toEqual({
+      valid: true,
+      data: {
+        recordType: 'revenue',
+        label: '租金收入',
+        amount: 40,
+        actualAmount: null,
+        varianceNote: null,
+      },
+      error: null,
+    });
+    expect(schemas.validateBudgetRecord('revenue', {
+      label: '租金收入', amount: '40', actualAmount: '38', varianceNote: '場地租借需求較預期少',
+    })).toEqual({
+      valid: true,
+      data: {
+        recordType: 'revenue',
+        label: '租金收入',
+        amount: 40,
+        actualAmount: 38,
+        varianceNote: '場地租借需求較預期少',
+      },
+      error: null,
+    });
+    expect(schemas.validateBudgetRecord('revenue', {
+      label: '租金收入', amount: '40', actualAmount: '-1', varianceNote: '',
+    })).toMatchObject({ valid: false, error: '決算金額必須是非負有限數值。' });
   });
 
   it('normalizes language variants and rejects invalid integer or aggregate relationships', () => {
@@ -83,5 +117,26 @@ describe('record CRUD schemas', () => {
     expect(schemas.validateGenericRecord('land', {
       parcel: '五結段123地號', area: 'Infinity', announcedValue: '12800',
     })).toMatchObject({ valid: false, error: '面積(㎡)必須是非負有限數值。' });
+  });
+
+  it('records special-needs student counts with an optional note', () => {
+    expect(schemas.genericRecordSchemas.specialNeeds.fields.map((field) => field.label))
+      .toEqual(['類別', '人數', '說明']);
+    expect(schemas.validateGenericRecord('specialNeeds', {
+      category: '原住民', count: '17', note: '',
+    })).toEqual({
+      valid: true,
+      data: { recordType: 'specialNeeds', category: '原住民', count: 17, note: null },
+      error: null,
+    });
+    expect(schemas.validateGenericRecord('specialNeeds', {
+      category: '原住民', count: '17', note: '泰雅：11，阿美：3，太魯閣：2',
+    })).toMatchObject({
+      valid: true,
+      data: { category: '原住民', count: 17, note: '泰雅：11，阿美：3，太魯閣：2' },
+    });
+    expect(schemas.validateGenericRecord('specialNeeds', {
+      category: '原住民', count: '-1', note: '',
+    })).toMatchObject({ valid: false, error: '人數必須是非負整數。' });
   });
 });

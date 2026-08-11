@@ -11,7 +11,7 @@ import { yearDataRepository } from '../lib/yearDataRepository';
 export const YEARS = ['113', '114', '115'];
 export const CURRENT_YEAR = '115';
 
-const MODULE_KEYS = ['basic', 'budget', 'library', 'language', 'awards', 'club', 'land', 'inquiry', 'budgetbook'];
+const MODULE_KEYS = ['basic', 'budget', 'library', 'language', 'awards', 'club', 'land', 'inquiry', 'specialNeeds', 'budgetbook'];
 
 export function yearRecordsScopeTag(year, moduleKey, includeDeleted = false) {
   return `${year}\0${moduleKey}\0${includeDeleted ? 1 : 0}`;

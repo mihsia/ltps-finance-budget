@@ -10,3 +10,4 @@ storage-debug.log
 *.local
 serviceAccountKey.json
 .superpowers/
+.pdf-font-build-tmp/

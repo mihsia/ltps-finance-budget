@@ -8,7 +8,13 @@ function invalid(error) {
   return { valid: false, data: null, error };
 }
 
-function textValue(value, label, maxLength) {
+function isBlank(value) {
+  return value === '' || value === null || value === undefined
+    || (typeof value === 'string' && value.trim() === '');
+}
+
+function textValue(value, label, maxLength, optional) {
+  if (optional && isBlank(value)) return valid(null);
   if (typeof value !== 'string') return invalid(`${label}格式不正確。`);
   const normalized = value.trim();
   if (!normalized) return invalid(`${label}不得留白。`);
@@ -16,7 +22,8 @@ function textValue(value, label, maxLength) {
   return valid(normalized);
 }
 
-function numericValue(value, label, integer) {
+function numericValue(value, label, integer, optional) {
+  if (optional && isBlank(value)) return valid(null);
   const text = typeof value === 'number' ? String(value) : value;
   const pattern = integer ? /^\d+$/ : /^(?:\d+(?:\.\d*)?|\.\d+)$/;
   const kind = integer ? '非負整數' : '非負有限數值';
@@ -56,15 +63,23 @@ function collect(fields, source) {
   const data = {};
   for (const field of fields) {
     let result;
-    if (field.kind === 'integer') result = numericValue(source[field.key], field.label, true);
-    else if (field.kind === 'number') result = numericValue(source[field.key], field.label, false);
+    if (field.kind === 'integer') result = numericValue(source[field.key], field.label, true, field.optional);
+    else if (field.kind === 'number') result = numericValue(source[field.key], field.label, false, field.optional);
     else if (field.kind === 'date') result = dateValue(source[field.key], field.label);
-    else result = textValue(source[field.key], field.label, field.maxLength);
+    else result = textValue(source[field.key], field.label, field.maxLength, field.optional);
     if (!result.valid) return result;
     data[field.key] = result.data;
   }
   return valid(data);
 }
+
+// actualAmount (決算) and varianceNote (差異原因) are both optional: the
+// budgeted amount is known up front, but the settled/actual figure is only
+// known after the fiscal year closes and gets filled in later via an edit.
+const BUDGET_VARIANCE_FIELDS = [
+  { key: 'actualAmount', label: '決算金額', inputLabel: '決算金額（千元，年度結束後填寫）', kind: 'number', optional: true },
+  { key: 'varianceNote', label: '差異原因說明', kind: 'text', maxLength: 300, optional: true },
+];
 
 export const BUDGET_RECORD_SCHEMAS = {
   expense: {
@@ -72,14 +87,16 @@ export const BUDGET_RECORD_SCHEMAS = {
     fields: [
       { key: 'label', label: '項目名稱', kind: 'text', maxLength: 120 },
       { key: 'formula', label: '內容說明', kind: 'text', maxLength: 300 },
-      { key: 'amount', label: '金額', inputLabel: '金額（千元）', kind: 'number' },
+      { key: 'amount', label: '金額', inputLabel: '預算金額（千元）', kind: 'number' },
+      ...BUDGET_VARIANCE_FIELDS,
     ],
   },
   revenue: {
     recordType: 'revenue',
     fields: [
       { key: 'label', label: '來源項目', kind: 'text', maxLength: 120 },
-      { key: 'amount', label: '金額', inputLabel: '金額（千元）', kind: 'number' },
+      { key: 'amount', label: '金額', inputLabel: '預算金額（千元）', kind: 'number' },
+      ...BUDGET_VARIANCE_FIELDS,
     ],
   },
 };
@@ -167,6 +184,14 @@ export const genericRecordSchemas = {
       { key: 'date', label: '日期', kind: 'date' },
       { key: 'subject', label: '議員/題目', kind: 'text', maxLength: 240 },
       { key: 'status', label: '答詢狀態', kind: 'text', maxLength: 60 },
+    ],
+  },
+  specialNeeds: {
+    recordType: 'specialNeeds',
+    fields: [
+      { key: 'category', label: '類別', kind: 'text', maxLength: 60 },
+      { key: 'count', label: '人數', kind: 'integer' },
+      { key: 'note', label: '說明', kind: 'text', maxLength: 200, optional: true },
     ],
   },
 };
