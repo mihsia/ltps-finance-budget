@@ -5,10 +5,14 @@ import { FIRESTORE_DATABASE_ID } from '../functions/firestoreConfig.cjs';
 const firebaseMocks = vi.hoisted(() => ({
   app: { name: 'ltps-app' },
   db: { name: 'ltps-db' },
+  localCache: { name: 'persistent-local-cache' },
+  tabManager: { name: 'multi-tab-manager' },
   initializeApp: vi.fn(),
   getApps: vi.fn(),
   getAuth: vi.fn(),
-  getFirestore: vi.fn(),
+  initializeFirestore: vi.fn(),
+  persistentLocalCache: vi.fn(),
+  persistentMultipleTabManager: vi.fn(),
   getStorage: vi.fn(),
   getFunctions: vi.fn(),
   connectAuthEmulator: vi.fn(),
@@ -26,7 +30,9 @@ vi.mock('firebase/auth', () => ({
   connectAuthEmulator: firebaseMocks.connectAuthEmulator,
 }));
 vi.mock('firebase/firestore', () => ({
-  getFirestore: firebaseMocks.getFirestore,
+  initializeFirestore: firebaseMocks.initializeFirestore,
+  persistentLocalCache: firebaseMocks.persistentLocalCache,
+  persistentMultipleTabManager: firebaseMocks.persistentMultipleTabManager,
   connectFirestoreEmulator: firebaseMocks.connectFirestoreEmulator,
 }));
 vi.mock('firebase/storage', () => ({
@@ -53,18 +59,23 @@ describe('Firebase named Firestore configuration', () => {
     firebaseMocks.getApps.mockReturnValue([]);
     firebaseMocks.initializeApp.mockReturnValue(firebaseMocks.app);
     firebaseMocks.getAuth.mockReturnValue({ name: 'auth' });
-    firebaseMocks.getFirestore.mockReturnValue(firebaseMocks.db);
+    firebaseMocks.persistentMultipleTabManager.mockReturnValue(firebaseMocks.tabManager);
+    firebaseMocks.persistentLocalCache.mockReturnValue(firebaseMocks.localCache);
+    firebaseMocks.initializeFirestore.mockReturnValue(firebaseMocks.db);
     firebaseMocks.getStorage.mockReturnValue({ name: 'storage' });
     firebaseMocks.getFunctions.mockReturnValue({ name: 'functions' });
   });
 
-  it('initializes the web SDK Firestore client with the shared named database', async () => {
+  it('initializes the web SDK Firestore client with the shared named database and a persistent, multi-tab local cache', async () => {
     const firebase = await import('./firebase.js');
 
     expect(firebase.FIRESTORE_DATABASE_ID).toBe('ltps-finance-data');
     expect(firebase.db).toBe(firebaseMocks.db);
-    expect(firebaseMocks.getFirestore).toHaveBeenCalledWith(
+    expect(firebaseMocks.persistentMultipleTabManager).toHaveBeenCalledWith();
+    expect(firebaseMocks.persistentLocalCache).toHaveBeenCalledWith({ tabManager: firebaseMocks.tabManager });
+    expect(firebaseMocks.initializeFirestore).toHaveBeenCalledWith(
       firebaseMocks.app,
+      { localCache: firebaseMocks.localCache },
       FIRESTORE_DATABASE_ID,
     );
   });
