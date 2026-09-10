@@ -1,6 +1,11 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  connectFirestoreEmulator,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
 import { FIRESTORE_DATABASE_ID } from './lib/firestoreConfig.js';
@@ -38,7 +43,21 @@ const app = isFirebaseConfigured
   : null;
 
 export const auth = app ? getAuth(app) : null;
-export const db = app ? getFirestore(app, FIRESTORE_DATABASE_ID) : null;
+// persistentLocalCache gives the app's onSnapshot listeners an IndexedDB-backed
+// read cache, so a flaky connection still shows the last-synced data instead of
+// a blank screen. persistentMultipleTabManager (rather than the single-tab
+// default) is used because a school office user may have this app open in two
+// tabs at once. This only affects reads — writes still go straight through
+// src/lib/yearDataRepository.js's network calls and fail immediately when
+// offline, which is required to preserve its locking/audit invariants; this
+// must not be extended into an offline write queue.
+export const db = app
+  ? initializeFirestore(
+    app,
+    { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) },
+    FIRESTORE_DATABASE_ID,
+  )
+  : null;
 export const storage = app ? getStorage(app) : null;
 export const functions = app ? getFunctions(app) : null;
 
