@@ -1,4 +1,5 @@
 import { useAuth } from '../contexts/AuthContext';
+import BrandMark from './BrandMark';
 
 export default function Header({ year, setYear, years, onMenuClick }) {
   const { profile, user, logout } = useAuth();
@@ -19,11 +20,7 @@ export default function Header({ year, setYear, years, onMenuClick }) {
             </svg>
           </button>
         )}
-        <div style={{
-          width: 32, height: 32, borderRadius: 8, background: '#1F5F52',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          font: "700 14px Inter, sans-serif", color: '#fff', flex: 'none',
-        }}>利</div>
+        <BrandMark size={32} />
         <div style={{
           font: "700 15px 'Noto Sans TC', sans-serif", color: '#1E2420',
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
