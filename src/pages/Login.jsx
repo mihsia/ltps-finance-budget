@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { isFirebaseConfigured } from '../firebase';
 import { card, input, label, btnPrimary } from '../styles';
+import BrandMark from '../components/BrandMark';
 
 export default function Login() {
   const {
@@ -46,7 +47,7 @@ export default function Login() {
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F3EE', padding: 20 }}>
       <div style={{ ...card, width: 'min(400px, 100%)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: '#1F5F52', display: 'flex', alignItems: 'center', justifyContent: 'center', font: "700 14px Inter, sans-serif", color: '#fff' }}>利</div>
+          <BrandMark size={32} />
           <div style={{ font: "700 15px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>利澤國小基金預算管理系統</div>
         </div>
 
