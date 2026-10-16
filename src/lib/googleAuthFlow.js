@@ -90,6 +90,14 @@ export function mapAuthError(code, { stage } = {}) {
     case 'auth/wrong-password':
     case 'auth/user-not-found':
       return '帳號或密碼錯誤';
+    case 'auth/user-disabled':
+      return '此帳號已停用，請聯絡系統管理員';
+    // The beforeCreate/beforeSignIn blocking functions (functions/index.js)
+    // reject any email without an active /users profile; the client SDK
+    // surfaces that rejection as this generic code rather than the original
+    // Chinese message, so map it to an equally specific one here instead.
+    case 'auth/internal-error':
+      return '此帳號尚未列入系統，或已被停用，請聯絡系統管理員確認帳號是否已建立';
     case 'auth/too-many-requests':
       return '嘗試次數過多，請稍後再試';
     default:

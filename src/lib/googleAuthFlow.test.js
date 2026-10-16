@@ -129,4 +129,16 @@ describe('mapAuthError', () => {
         .toBe('Google 登入憑證已失效，請取消連結後重新使用 Google 帳號登入');
     },
   );
+
+  it('explains a disabled account', () => {
+    expect(mapAuthError('auth/user-disabled')).toBe('此帳號已停用，請聯絡系統管理員');
+  });
+
+  // The beforeCreate/beforeSignIn blocking functions (functions/index.js)
+  // reject sign-ins for emails without an active /users profile; the client
+  // SDK surfaces that rejection as this generic code.
+  it('explains a sign-in rejected by the account allow-list blocking functions', () => {
+    expect(mapAuthError('auth/internal-error'))
+      .toBe('此帳號尚未列入系統，或已被停用，請聯絡系統管理員確認帳號是否已建立');
+  });
 });

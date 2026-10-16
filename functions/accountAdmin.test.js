@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
   ACCOUNT_MODULE_KEYS,
+  DEFAULT_IMPORT_EMAIL_DOMAIN,
   buildCreatedProfile,
   buildStatusChange,
+  describeSignInDenial,
+  normalizeImportRow,
   validateAccountProfile,
   validateStatusRequest,
 } from './accountAdmin.cjs';
@@ -56,6 +59,10 @@ describe('validateAccountProfile', () => {
   it('accepts every real module key', () => {
     const result = validateAccountProfile({ ...validInput, modules: [...ACCOUNT_MODULE_KEYS] });
     expect(result.valid).toBe(true);
+  });
+
+  it('includes specialNeeds (特生統計), added after the module keys list was first written', () => {
+    expect(ACCOUNT_MODULE_KEYS).toContain('specialNeeds');
   });
 
   it('clears module scope for admins so role and scope cannot disagree', () => {
@@ -138,5 +145,63 @@ describe('buildStatusChange', () => {
     const change = buildStatusChange({ status: 'active', callerUid: 'admin-1', now: '2026-08-09T01:00:00.000Z' });
     expect(change.profile.status).toBe('active');
     expect(change.authDisabled).toBe(false);
+  });
+});
+
+describe('describeSignInDenial', () => {
+  it('allows an active, listed profile through', () => {
+    expect(describeSignInDenial({ status: 'active' })).toBeNull();
+  });
+
+  it('rejects a sign-in with no matching /users profile at all', () => {
+    expect(describeSignInDenial(null)).toMatch(/尚未建立/);
+  });
+
+  it('rejects a disabled profile even though it exists', () => {
+    expect(describeSignInDenial({ status: 'disabled' })).toMatch(/已停用/);
+  });
+});
+
+describe('normalizeImportRow', () => {
+  it('appends the default school domain to a bare account name', () => {
+    const row = normalizeImportRow({
+      name: ' 王小明 ', account: 'wang.xm', dept: '總務處', role: '填報人員', modules: '歲入歲出、圖書藏書',
+    });
+    expect(row).toEqual({
+      name: '王小明',
+      email: `wang.xm${DEFAULT_IMPORT_EMAIL_DOMAIN}`,
+      dept: '總務處',
+      role: 'editor',
+      modules: ['budget', 'library'],
+    });
+  });
+
+  it('keeps a full email as-is instead of appending the default domain', () => {
+    const row = normalizeImportRow({ name: '陳小華', account: 'Chen@Other-School.edu.tw', dept: '教務處', role: '管理者', modules: '' });
+    expect(row.email).toBe('chen@other-school.edu.tw');
+    expect(row.role).toBe('admin');
+    expect(row.modules).toEqual([]);
+  });
+
+  it('accepts comma or whitespace separated modules alongside 頓號', () => {
+    const row = normalizeImportRow({
+      name: '林小美', account: 'lin', dept: '學務處', role: '填報人員', modules: '獲獎紀錄,課後社團 土地現值',
+    });
+    expect(row.modules).toEqual(['awards', 'club', 'land']);
+  });
+
+  it('passes through a raw module key or role value unmapped, letting validateAccountProfile reject it', () => {
+    const row = normalizeImportRow({
+      name: '林小美', account: 'lin', dept: '學務處', role: 'editor', modules: 'budget、not-a-real-module',
+    });
+    expect(row.role).toBe('editor');
+    expect(row.modules).toEqual(['budget', 'not-a-real-module']);
+  });
+
+  it('feeds validateAccountProfile a shape it accepts end to end', () => {
+    const row = normalizeImportRow({
+      name: '王小明', account: 'wang.xm', dept: '總務處', role: '填報人員', modules: '歲入歲出',
+    });
+    expect(validateAccountProfile(row)).toMatchObject({ valid: true });
   });
 });

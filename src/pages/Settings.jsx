@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { collection, onSnapshot } from 'firebase/firestore';
 import { httpsCallable } from 'firebase/functions';
 import { db, functions, isFirebaseConfigured } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { runAuthorized } from '../lib/accessPolicy';
 import { navGroups } from '../lib/nav';
+import { buildAccountImportTemplateWorkbook, parseAccountImportFile } from '../lib/accountImport';
 import {
   pageTitle, pageSubtitle, card, input, label, btnPrimary, btnOutline, btnSecondary,
   chip, badge, tableHeadRow, tableRow,
@@ -59,6 +61,9 @@ export default function Settings() {
   const [status, setStatus] = useState(null);
   const [resetLink, setResetLink] = useState(null);
 
+  const importFileRef = useRef(null);
+  const [importState, setImportState] = useState(null);
+
   const [editingUid, setEditingUid] = useState(null);
   const [editForm, setEditForm] = useState(null);
   const [busyUid, setBusyUid] = useState(null);
@@ -89,6 +94,46 @@ export default function Settings() {
         setStatus(e.message || '新增失敗');
       }
     });
+  };
+
+  const downloadImportTemplate = () => {
+    XLSX.writeFile(buildAccountImportTemplateWorkbook(), '帳號匯入範本.xlsx');
+  };
+
+  const openImportPicker = () => importFileRef.current?.click();
+
+  const handleImportFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setImportState({ status: 'parsing' });
+    let rows;
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const parsed = parseAccountImportFile(workbook);
+      if (parsed.error) {
+        setImportState({ status: 'error', error: parsed.error });
+        return;
+      }
+      rows = parsed.rows;
+    } catch {
+      setImportState({ status: 'error', error: '無法讀取檔案，請確認是有效的 .xlsx 檔案。' });
+      return;
+    }
+
+    const result = await runAuthorized(() => authorizeAdmin(), async () => {
+      setImportState({ status: 'uploading' });
+      try {
+        const importAccounts = httpsCallable(functions, 'importAccounts');
+        const res = await importAccounts({ rows });
+        setImportState({ status: 'done', results: res.data.results });
+      } catch (e) {
+        setImportState({ status: 'error', error: e.message || '匯入失敗，請稍後再試。' });
+      }
+    });
+    if (!result.executed) setImportState({ status: 'error', error: result.reason });
   };
 
   const startEdit = (account) => {
@@ -254,8 +299,61 @@ export default function Settings() {
         </div>
       ))}
 
-      {isAdmin && !adding && (
-        <div style={{ ...btnOutline, marginTop: 6 }} onClick={() => setAdding(true)}>＋ 新增帳號</div>
+      {isAdmin && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 6, marginBottom: 18 }}>
+          {!adding && <div style={btnOutline} onClick={() => setAdding(true)}>＋ 新增帳號</div>}
+          <div style={btnOutline} onClick={downloadImportTemplate}>⬇ 下載帳號範例檔</div>
+          <div
+            style={{ ...btnOutline, opacity: importState?.status === 'parsing' || importState?.status === 'uploading' ? .6 : 1 }}
+            onClick={importState?.status === 'parsing' || importState?.status === 'uploading' ? undefined : openImportPicker}
+          >
+            {importState?.status === 'parsing' || importState?.status === 'uploading' ? '匯入中…' : '⬆ 匯入帳號（.xlsx）'}
+          </div>
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".xlsx"
+            style={{ display: 'none' }}
+            onChange={handleImportFile}
+          />
+        </div>
+      )}
+
+      {isAdmin && importState?.status === 'error' && (
+        <div style={{ ...errorText(), maxWidth: 820 }}>{importState.error}</div>
+      )}
+
+      {isAdmin && importState?.status === 'done' && (
+        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 820, marginBottom: 18 }} className="table-scroll">
+          <div style={{ minWidth: 640 }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '10px 18px', background: '#F5F3EE',
+            }}
+            >
+              <span style={{ font: "700 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>
+                匯入結果：成功 {importState.results.filter((r) => r.ok).length} 筆／失敗 {importState.results.filter((r) => !r.ok).length} 筆
+              </span>
+              <span style={{ font: "600 12px 'Noto Sans TC', sans-serif", color: '#1F5F52', cursor: 'pointer' }} onClick={() => setImportState(null)}>關閉</span>
+            </div>
+            {importState.results.map((r) => (
+              <div key={r.row} style={{ padding: '10px 18px', borderTop: '1px solid #EEEBE2', font: "500 12.5px 'Noto Sans TC', sans-serif" }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span style={badge(r.ok, '#2F8F5B', '#E9F5EE', '#B5533E', '#FBEAE6')}>{r.ok ? '成功' : '失敗'}</span>
+                  <span>第 {r.row} 列</span>
+                  <span style={{ color: '#454B45' }}>{r.name || '—'}</span>
+                  <span style={{ color: '#8A9089' }}>{r.email || '—'}</span>
+                </div>
+                {!r.ok && <div style={{ color: '#B5533E', marginTop: 4 }}>{r.error}</div>}
+                {r.ok && r.resetLink && (
+                  <div style={{ color: '#2F8F5B', marginTop: 4, wordBreak: 'break-all' }}>
+                    設定密碼連結：<a href={r.resetLink} target="_blank" rel="noreferrer">{r.resetLink}</a>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
       )}
 
       {isAdmin && adding && (

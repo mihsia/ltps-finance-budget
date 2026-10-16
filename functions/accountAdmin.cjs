@@ -4,7 +4,7 @@
 // Mirrors the left-nav module keys in src/lib/nav.js (minus 'dashboard', which
 // every signed-in user can already see and so is never an assignable scope).
 const ACCOUNT_MODULE_KEYS = [
-  'basic', 'budget', 'library', 'language',
+  'basic', 'specialNeeds', 'budget', 'library', 'language',
   'awards', 'club', 'land', 'inquiry',
   'budgetbook', 'report', 'archive', 'settings',
 ];
@@ -106,14 +106,93 @@ function buildStatusChange({ status, callerUid, now }) {
   };
 }
 
+/**
+ * Decides whether a Firebase Auth sign-in (any provider, including a brand
+ * new Google account that has never been seen before) should be allowed to
+ * proceed, given the /users profile (if any) matching its email. Returns
+ * null when the sign-in is allowed, or a Chinese message to reject it with
+ * otherwise — called from the beforeCreate/beforeSignIn blocking functions
+ * in index.js so an email never listed in /users (or no longer active)
+ * can never obtain a session in the first place, not just get a denied
+ * screen after the fact like evaluateProfileAccess on the client.
+ */
+function describeSignInDenial(profile) {
+  if (!profile) return '此帳號尚未建立，請聯絡系統管理員新增帳號後再登入。';
+  if (profile.status !== 'active') return '此帳號已停用，請聯絡系統管理員。';
+  return null;
+}
+
+// Reverse of src/lib/nav.js's module labels, for the subset of modules an
+// account can actually be scoped to (ACCOUNT_MODULE_KEYS) — lets an xlsx
+// import use the same Chinese names shown in the Settings UI instead of
+// requiring the raw module keys. Keep in sync with src/lib/nav.js.
+const MODULE_LABELS = {
+  basic: '基本資料',
+  specialNeeds: '特生統計',
+  budget: '歲入歲出',
+  library: '圖書藏書',
+  language: '族語開班',
+  awards: '獲獎紀錄',
+  club: '課後社團',
+  land: '土地現值',
+  inquiry: '質詢答詢',
+  budgetbook: '預算書表',
+  report: '報表匯出',
+  archive: '歷史歸檔',
+  settings: '帳號管理',
+};
+const MODULE_LABEL_TO_KEY = Object.fromEntries(
+  Object.entries(MODULE_LABELS).map(([key, label]) => [label, key]),
+);
+
+const ROLE_LABEL_TO_VALUE = { 管理者: 'admin', 填報人員: 'editor' };
+
+const DEFAULT_IMPORT_EMAIL_DOMAIN = '@tmail.ilc.edu.tw';
+
+/**
+ * Turns one raw xlsx import row (every field a plain string, however the
+ * admin typed it) into the {name, email, dept, role, modules} shape
+ * validateAccountProfile expects — the default-domain, role-label, and
+ * module-label handling an xlsx import needs that a single manual create
+ * through the Settings form doesn't.
+ */
+function normalizeImportRow(raw) {
+  const name = typeof raw?.name === 'string' ? raw.name.trim() : '';
+
+  const rawAccount = typeof raw?.account === 'string' ? raw.account.trim() : '';
+  const email = rawAccount
+    ? (rawAccount.includes('@') ? rawAccount : `${rawAccount}${DEFAULT_IMPORT_EMAIL_DOMAIN}`).toLowerCase()
+    : '';
+
+  const dept = typeof raw?.dept === 'string' ? raw.dept.trim() : raw?.dept;
+
+  const rawRole = typeof raw?.role === 'string' ? raw.role.trim() : '';
+  const role = ROLE_LABEL_TO_VALUE[rawRole] || rawRole.toLowerCase();
+
+  const rawModules = typeof raw?.modules === 'string' ? raw.modules : '';
+  const modules = rawModules
+    .split(/[、,，\s]+/)
+    .map((piece) => piece.trim())
+    .filter(Boolean)
+    .map((piece) => MODULE_LABEL_TO_KEY[piece] || piece);
+
+  return { name, email, dept, role, modules };
+}
+
 module.exports = {
   ACCOUNT_MODULE_KEYS,
   VALID_DEPTS,
   VALID_ROLES,
   VALID_STATUSES,
+  MODULE_LABELS,
+  MODULE_LABEL_TO_KEY,
+  ROLE_LABEL_TO_VALUE,
+  DEFAULT_IMPORT_EMAIL_DOMAIN,
   validateAccountProfile,
   buildCreatedProfile,
   buildUpdatedProfile,
   validateStatusRequest,
   buildStatusChange,
+  describeSignInDenial,
+  normalizeImportRow,
 };

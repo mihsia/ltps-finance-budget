@@ -1,4 +1,5 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
+const { beforeUserCreated, beforeUserSignedIn, HttpsError: IdentityHttpsError } = require('firebase-functions/v2/identity');
 const { initializeApp } = require('firebase-admin/app');
 const { getAuth } = require('firebase-admin/auth');
 const { getFirestore } = require('firebase-admin/firestore');
@@ -10,10 +11,50 @@ const {
   buildUpdatedProfile,
   validateStatusRequest,
   buildStatusChange,
+  describeSignInDenial,
+  normalizeImportRow,
 } = require('./accountAdmin.cjs');
 const { validateUploadRequest } = require('./pdfStorage.cjs');
 
 initializeApp();
+
+/**
+ * Looks up the /users profile matching a sign-in attempt's email (not uid —
+ * a brand new Google sign-in has no uid in our system yet, only an email).
+ * Firestore only auto-indexes this kind of single-field equality query, so
+ * no index.json change is needed.
+ */
+async function findProfileByEmail(db, email) {
+  const normalized = typeof email === 'string' ? email.trim().toLowerCase() : '';
+  if (!normalized) return null;
+  const snap = await db.collection('users').where('email', '==', normalized).limit(1).get();
+  return snap.empty ? null : snap.docs[0].data();
+}
+
+/**
+ * Rejects the sign-in (or, from beforeCreate, the underlying Auth account
+ * creation itself) unless the email already has an active /users profile —
+ * i.e. an account an admin created through this system. Without this, any
+ * Google account could sign in and reach the app's own (client-side, after
+ * the fact) access-denied screen; this blocks it before a session, or even
+ * an Auth user record, is ever created. Admin-SDK account creation (this
+ * file's own createAccount/importAccounts) is unaffected — blocking
+ * functions only fire for client-SDK sign-up/sign-in, never Admin SDK calls.
+ */
+async function assertListedActiveAccount(event) {
+  const db = getNamedFirestore(getFirestore);
+  const profile = await findProfileByEmail(db, event.data.email);
+  const denial = describeSignInDenial(profile);
+  if (denial) throw new IdentityHttpsError('permission-denied', denial);
+}
+
+exports.beforeAccountCreate = beforeUserCreated(async (event) => {
+  await assertListedActiveAccount(event);
+});
+
+exports.beforeAccountSignIn = beforeUserSignedIn(async (event) => {
+  await assertListedActiveAccount(event);
+});
 
 /**
  * Re-verifies on the server that the caller is a signed-in, active admin.
@@ -196,6 +237,73 @@ exports.setAccountStatus = onCall(async (request) => {
   });
 
   return { uid, status };
+});
+
+const MAX_IMPORT_ROWS = 200;
+
+/**
+ * Admin-only: creates many accounts at once from a parsed xlsx (src/lib/
+ * accountImport.js does the client-side sheet reading; this only ever sees
+ * plain row objects). Each row is independent — one bad row (duplicate
+ * email, missing department, unknown module, ...) is reported back without
+ * aborting the rest of the batch, since an admin re-uploading the same file
+ * after fixing one row's typo shouldn't have to wait on an all-or-nothing
+ * transaction across unrelated Auth account creations.
+ */
+exports.importAccounts = onCall({ timeoutSeconds: 120 }, async (request) => {
+  const { db, callerUid } = await requireActiveAdmin(request);
+
+  const { rows } = request.data || {};
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new HttpsError('invalid-argument', '請提供至少一筆帳號資料');
+  }
+  if (rows.length > MAX_IMPORT_ROWS) {
+    throw new HttpsError('invalid-argument', `單次匯入最多 ${MAX_IMPORT_ROWS} 筆，請分批匯入`);
+  }
+
+  const auth = getAuth();
+  const now = new Date().toISOString();
+  const results = [];
+
+  for (let i = 0; i < rows.length; i += 1) {
+    const rowNumber = i + 2; // row 1 is the header in the source spreadsheet
+    const normalized = normalizeImportRow(rows[i]);
+    const validation = validateAccountProfile(normalized);
+    if (!validation.valid) {
+      results.push({
+        row: rowNumber, name: normalized.name, email: normalized.email, ok: false, error: validation.error,
+      });
+      continue;
+    }
+
+    const tempPassword = `${Math.random().toString(36).slice(-10)}A1!`;
+    let userRecord;
+    try {
+      userRecord = await auth.createUser({
+        email: validation.value.email,
+        password: tempPassword,
+        displayName: validation.value.name,
+      });
+    } catch (err) {
+      const message = err.code === 'auth/email-already-exists' ? '此 Email 已有帳號' : '建立帳號失敗，請稍後再試';
+      results.push({
+        row: rowNumber, name: validation.value.name, email: validation.value.email, ok: false, error: message,
+      });
+      continue;
+    }
+
+    const profile = buildCreatedProfile({ value: validation.value, callerUid, now });
+    await db.collection('users').doc(userRecord.uid).set(profile);
+    await writeAccountLog(db, {
+      action: 'create', targetUid: userRecord.uid, actorUid: callerUid, before: null, after: profile,
+    });
+    const resetLink = await auth.generatePasswordResetLink(validation.value.email);
+    results.push({
+      row: rowNumber, name: validation.value.name, email: validation.value.email, ok: true, uid: userRecord.uid, resetLink,
+    });
+  }
+
+  return { results };
 });
 
 /**

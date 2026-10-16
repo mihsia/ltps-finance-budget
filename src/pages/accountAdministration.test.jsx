@@ -1,6 +1,8 @@
 import TestRenderer, { act } from 'react-test-renderer';
+import * as XLSX from 'xlsx';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAuthorizationSource } from '../lib/accessPolicy';
+import { ACCOUNT_IMPORT_HEADERS } from '../lib/accountImport';
 
 const firestoreMocks = vi.hoisted(() => ({
   users: [],
@@ -84,6 +86,18 @@ function control(renderer, text) {
 
 function field(renderer, ariaLabel) {
   return renderer.root.findAll((node) => node.props['aria-label'] === ariaLabel)[0];
+}
+
+function fileInput(renderer) {
+  return renderer.root.findAll((node) => node.type === 'input' && node.props.type === 'file')[0];
+}
+
+/** A File-like object (arrayBuffer() only, matching what Settings.jsx reads) built from plain rows, so import tests never touch the real filesystem. */
+function fakeXlsxFile(rows) {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Sheet1');
+  const buffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  return { name: 'import.xlsx', arrayBuffer: async () => buffer };
 }
 
 function setAuth({ role = 'admin', modules = [], actor = { uid: 'admin-1', name: '系統管理員' } } = {}) {
@@ -251,5 +265,77 @@ describe('Settings account administration', () => {
     expect(control(renderer, '編輯')).toBeUndefined();
     expect(control(renderer, '停用')).toBeUndefined();
     expect(control(renderer, '＋ 新增帳號')).toBeUndefined();
+    expect(control(renderer, '⬇ 下載帳號範例檔')).toBeUndefined();
+    expect(fileInput(renderer)).toBeUndefined();
+  });
+
+  it('offers the template download and xlsx import controls to an admin', async () => {
+    const renderer = await render();
+    expect(control(renderer, '⬇ 下載帳號範例檔')).toBeTruthy();
+    expect(fileInput(renderer)).toBeTruthy();
+  });
+});
+
+describe('Settings account xlsx import', () => {
+  it('imports every row and shows a per-row success/failure summary', async () => {
+    callableMocks.impl = vi.fn(async () => ({
+      data: {
+        results: [
+          { row: 2, name: '王小明', email: 'wang.xm@tmail.ilc.edu.tw', ok: true, uid: 'new-1', resetLink: 'https://example.test/reset/1' },
+          { row: 3, name: '陳小華', email: 'chen.xh@example.com', ok: false, error: '此 Email 已有帳號' },
+        ],
+      },
+    }));
+    const renderer = await render();
+    const file = fakeXlsxFile([
+      ACCOUNT_IMPORT_HEADERS,
+      ['王小明', 'wang.xm', '總務處', '填報人員', '歲入歲出'],
+      ['陳小華', 'chen.xh@example.com', '教務處', '管理者', ''],
+    ]);
+
+    await act(async () => { await fileInput(renderer).props.onChange({ target: { files: [file], value: '' } }); });
+
+    const call = callableMocks.calls.find((c) => c.name === 'importAccounts');
+    expect(call.payload.rows).toEqual([
+      { name: '王小明', account: 'wang.xm', dept: '總務處', role: '填報人員', modules: '歲入歲出' },
+      { name: '陳小華', account: 'chen.xh@example.com', dept: '教務處', role: '管理者', modules: '' },
+    ]);
+
+    const text = pageText(renderer);
+    expect(text).toContain('成功 1 筆／失敗 1 筆');
+    expect(text).toContain('王小明');
+    expect(text).toContain('此 Email 已有帳號');
+    expect(text).toContain('https://example.test/reset/1');
+  });
+
+  it('rejects an obviously malformed file without ever calling the server', async () => {
+    const renderer = await render();
+    const file = fakeXlsxFile([
+      ['Name', 'Account'],
+      ['王小明', 'wang.xm'],
+    ]);
+
+    await act(async () => { await fileInput(renderer).props.onChange({ target: { files: [file], value: '' } }); });
+
+    expect(callableMocks.calls.some((c) => c.name === 'importAccounts')).toBe(false);
+    expect(pageText(renderer)).toContain('範本格式');
+  });
+
+  it('rejects an import issued after the admin role was revoked mid-session', async () => {
+    const renderer = await render();
+    const file = fakeXlsxFile([
+      ACCOUNT_IMPORT_HEADERS,
+      ['王小明', 'wang.xm', '總務處', '填報人員', ''],
+    ]);
+
+    authMocks.authorization.replace(
+      { allowed: true, code: 'access-granted', reason: null, role: 'editor', modules: ['settings'] },
+      { uid: 'admin-1', name: '系統管理員' },
+    );
+
+    await act(async () => { await fileInput(renderer).props.onChange({ target: { files: [file], value: '' } }); });
+
+    expect(callableMocks.calls.some((c) => c.name === 'importAccounts')).toBe(false);
+    expect(pageText(renderer)).toContain('此功能僅限系統管理員使用');
   });
 });
