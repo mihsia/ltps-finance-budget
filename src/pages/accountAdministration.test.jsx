@@ -375,14 +375,18 @@ describe('Settings single account creation', () => {
     expect(call.payload.email).toBe('meng29@other-school.edu.tw');
   });
 
-  it('shows what each module does next to the picker, in both the create and edit forms', async () => {
+  it('shows a module description only once that module is clicked, in both the create and edit forms', async () => {
     const renderer = await render();
 
     await act(async () => { control(renderer, '＋ 新增帳號').props.onClick(); });
+    expect(pageText(renderer)).not.toContain('年度歲入歲出預算與決算金額');
+    await act(async () => { control(renderer, '歲入歲出').props.onClick(); });
     expect(pageText(renderer)).toContain('年度歲入歲出預算與決算金額');
 
     await act(async () => { control(renderer, '取消').props.onClick(); });
     await act(async () => { control(renderer, '編輯').props.onClick(); });
-    expect(pageText(renderer)).toContain('年度歲入歲出預算與決算金額');
+    expect(pageText(renderer)).not.toContain('圖書館藏書量統計');
+    await act(async () => { control(renderer, '圖書藏書').props.onClick(); });
+    expect(pageText(renderer)).toContain('圖書館藏書量統計');
   });
 });
