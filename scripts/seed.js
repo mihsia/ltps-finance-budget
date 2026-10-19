@@ -66,7 +66,7 @@ if (!adminEmail) {
   if (adminUid) {
     console.log(`Admin profile ready for ${adminEmail} (uid ${adminUid}).`);
     if (!dryRun) {
-      console.log('If this Auth user is new, send them a password-reset link so they can sign in.');
+      console.log('This account is Google-sign-in only (no password was set) — they can sign in directly with that Google account.');
     }
   }
   console.log(dryRun ? 'Dry run complete.' : 'Seed complete.');

@@ -281,7 +281,7 @@ describe('Settings account xlsx import', () => {
     callableMocks.impl = vi.fn(async () => ({
       data: {
         results: [
-          { row: 2, name: '王小明', email: 'wang.xm@tmail.ilc.edu.tw', ok: true, uid: 'new-1', resetLink: 'https://example.test/reset/1' },
+          { row: 2, name: '王小明', email: 'wang.xm@tmail.ilc.edu.tw', ok: true, uid: 'new-1' },
           { row: 3, name: '陳小華', email: 'chen.xh@example.com', ok: false, error: '此 Email 已有帳號' },
         ],
       },
@@ -305,7 +305,6 @@ describe('Settings account xlsx import', () => {
     expect(text).toContain('成功 1 筆／失敗 1 筆');
     expect(text).toContain('王小明');
     expect(text).toContain('此 Email 已有帳號');
-    expect(text).toContain('https://example.test/reset/1');
   });
 
   it('rejects an obviously malformed file without ever calling the server', async () => {
@@ -337,5 +336,53 @@ describe('Settings account xlsx import', () => {
 
     expect(callableMocks.calls.some((c) => c.name === 'importAccounts')).toBe(false);
     expect(pageText(renderer)).toContain('此功能僅限系統管理員使用');
+  });
+});
+
+describe('Settings single account creation', () => {
+  it('composes the email from the account name and the selected domain, with no password or reset link', async () => {
+    callableMocks.impl = vi.fn(async () => ({ data: { uid: 'new-uid' } }));
+    const renderer = await render();
+
+    await act(async () => { control(renderer, '＋ 新增帳號').props.onClick(); });
+    await act(async () => { field(renderer, '姓名').props.onChange({ target: { value: '謝孟君' } }); });
+    await act(async () => { field(renderer, '帳號名稱').props.onChange({ target: { value: 'meng29' } }); });
+    await act(async () => { control(renderer, '人事室').props.onClick(); });
+    await act(async () => { control(renderer, '獲獎紀錄').props.onClick(); });
+    await act(async () => { control(renderer, '建立帳號').props.onClick(); });
+
+    const call = callableMocks.calls.find((c) => c.name === 'createAccount');
+    expect(call.payload).toEqual({
+      name: '謝孟君', email: 'meng29@tmail.ilc.edu.tw', dept: '人事室', role: 'editor', modules: ['awards'],
+    });
+    expect(call.payload).not.toHaveProperty('password');
+    const text = pageText(renderer);
+    expect(text).toContain('現在可以使用 Google 帳號登入系統');
+    expect(text).not.toContain('設定密碼連結');
+  });
+
+  it('lets a custom domain be chosen so a full email can be typed directly', async () => {
+    callableMocks.impl = vi.fn(async () => ({ data: { uid: 'new-uid' } }));
+    const renderer = await render();
+
+    await act(async () => { control(renderer, '＋ 新增帳號').props.onClick(); });
+    await act(async () => { field(renderer, '姓名').props.onChange({ target: { value: '謝孟君' } }); });
+    await act(async () => { field(renderer, '網域').props.onChange({ target: { value: '__custom__' } }); });
+    await act(async () => { field(renderer, '帳號名稱').props.onChange({ target: { value: 'meng29@other-school.edu.tw' } }); });
+    await act(async () => { control(renderer, '建立帳號').props.onClick(); });
+
+    const call = callableMocks.calls.find((c) => c.name === 'createAccount');
+    expect(call.payload.email).toBe('meng29@other-school.edu.tw');
+  });
+
+  it('shows what each module does next to the picker, in both the create and edit forms', async () => {
+    const renderer = await render();
+
+    await act(async () => { control(renderer, '＋ 新增帳號').props.onClick(); });
+    expect(pageText(renderer)).toContain('年度歲入歲出預算與決算金額');
+
+    await act(async () => { control(renderer, '取消').props.onClick(); });
+    await act(async () => { control(renderer, '編輯').props.onClick(); });
+    expect(pageText(renderer)).toContain('年度歲入歲出預算與決算金額');
   });
 });

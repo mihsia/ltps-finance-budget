@@ -117,9 +117,13 @@ async function requireUnlockedYear(db, year) {
 
 /**
  * Admin-only: creates a Firebase Auth account + /users profile doc for a new
- * department staff member, and returns a password-setup link (this project
- * has no transactional-email provider wired up, so the admin shares the link
- * directly rather than it being emailed automatically).
+ * department staff member. Deliberately created with no password — these
+ * accounts are Google-sign-in only. `auth.createUser({email, ...})` with no
+ * `password` makes a "shell" Auth record with no credential attached yet; the
+ * first time that person signs in with Google using the same email, Firebase
+ * attaches the Google credential to this existing uid instead of creating a
+ * new one (beforeAccountSignIn then finds this /users profile and allows it
+ * straight through — see the blocking functions above).
  */
 exports.createAccount = onCall(async (request) => {
   const { db, callerUid } = await requireActiveAdmin(request);
@@ -130,14 +134,11 @@ exports.createAccount = onCall(async (request) => {
   const auth = getAuth();
   const now = new Date().toISOString();
 
-  // A random throwaway password: the account is only reachable through the
-  // reset link below, so this value is never shown to anyone.
-  const tempPassword = `${Math.random().toString(36).slice(-10)}A1!`;
   let userRecord;
   try {
     userRecord = await auth.createUser({
       email: validation.value.email,
-      password: tempPassword,
+      emailVerified: true,
       displayName: validation.value.name,
     });
   } catch (err) {
@@ -157,8 +158,7 @@ exports.createAccount = onCall(async (request) => {
     after: profile,
   });
 
-  const resetLink = await auth.generatePasswordResetLink(validation.value.email);
-  return { uid: userRecord.uid, resetLink };
+  return { uid: userRecord.uid };
 });
 
 /**
@@ -276,12 +276,12 @@ exports.importAccounts = onCall({ timeoutSeconds: 120 }, async (request) => {
       continue;
     }
 
-    const tempPassword = `${Math.random().toString(36).slice(-10)}A1!`;
+    // No password — same Google-sign-in-only shell account as createAccount.
     let userRecord;
     try {
       userRecord = await auth.createUser({
         email: validation.value.email,
-        password: tempPassword,
+        emailVerified: true,
         displayName: validation.value.name,
       });
     } catch (err) {
@@ -297,9 +297,8 @@ exports.importAccounts = onCall({ timeoutSeconds: 120 }, async (request) => {
     await writeAccountLog(db, {
       action: 'create', targetUid: userRecord.uid, actorUid: callerUid, before: null, after: profile,
     });
-    const resetLink = await auth.generatePasswordResetLink(validation.value.email);
     results.push({
-      row: rowNumber, name: validation.value.name, email: validation.value.email, ok: true, uid: userRecord.uid, resetLink,
+      row: rowNumber, name: validation.value.name, email: validation.value.email, ok: true, uid: userRecord.uid,
     });
   }
 

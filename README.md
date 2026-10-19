@@ -39,7 +39,7 @@ npm run dev
    npm run seed:dry-run
    SEED_ADMIN_EMAIL=you@school.edu.tw npm run seed
    ```
-   `seed` 腳本會印出一個密碼設定連結，交給管理者本人設定密碼後即可登入。
+   管理者帳號只能以 Google 帳號登入（不會設定密碼），請確認 `SEED_ADMIN_EMAIL` 是一個可登入 Google 的信箱，設定完成後該管理者即可直接用該 Google 帳號登入系統。
 
 ### GitHub Actions 自動部署
 
@@ -80,9 +80,10 @@ Storage：`budget-books/{year}/{fileName}`（公開讀取，僅能透過 `upload
 - **管理者**：可存取所有模組、建立新年度、匯入預算書、新增／編輯／停用帳號。
 - **填報人員**：僅能編輯 `/users/{uid}.modules` 中列出的模組，且限於未鎖定年度。
 - 帳號需 `status: 'active'` 才能存取系統；停用（`status: 'disabled'`）不會刪除帳號或其稽核歷史，只會撤銷存取權與 Firebase Auth session。
-- 帳號的新增／編輯／停用／重新啟用皆透過 `functions/index.js` 的 Cloud Function（`createAccount`／`updateAccount`／`setAccountStatus`）以 Admin SDK 執行，並在伺服器端重新驗證呼叫者仍是 active 管理者。新增帳號會回傳密碼設定連結（本專案未串接寄信服務，需由管理者手動轉交連結）。
+- 帳號的新增／編輯／停用／重新啟用皆透過 `functions/index.js` 的 Cloud Function（`createAccount`／`updateAccount`／`setAccountStatus`）以 Admin SDK 執行，並在伺服器端重新驗證呼叫者仍是 active 管理者。
+- **帳號一律僅限 Google 帳號登入**：`createAccount`／`importAccounts` 建立 Firebase Auth 使用者時都不會設定密碼（只是一個掛著 Email 的「空殼」帳號），該使用者第一次以同一個 Email 的 Google 帳號登入時，Firebase 會直接把 Google 登入方式掛上這筆既有帳號，不會另外產生新帳號。帳號管理頁建立帳號時，Email 欄位可從下拉選單選擇網域（`tmail.ilc.edu.tw`／`gmail.com`／自行輸入完整 Email）。
 - **帳號白名單登入限制（含 Google 登入）**：`functions/index.js` 註冊了 `beforeAccountCreate`／`beforeAccountSignIn` 兩個 Firebase Auth Blocking Functions，任何登入（含第一次使用 Google 帳號登入）都會先比對該 Email 是否已存在一筆 `status: 'active'` 的 `/users` 帳號；不符合則直接在伺服器端拒絕，連 Firebase Auth 使用者都不會建立，而不只是登入後才被畫面擋下來。這兩個函式**需要額外執行 `firebase deploy --only functions` 才會生效**；Firebase CLI 會自動將其註冊為 Blocking Functions，不需要在 Console 另外設定，但每個專案的 `beforeCreate`／`beforeSignIn` 事件各自只能有一個函式，若專案已有其他 Blocking Function 需合併邏輯。
-- **批次匯入帳號**：帳號管理頁可下載「帳號匯入範例檔」（`.xlsx`，內附填寫說明與可用模組／處室清單），填好後以「匯入帳號」上傳；每一列各自驗證與建立，單列失敗（例如 Email 重複）不會中斷其他列，上傳後會列出逐列的成功／失敗結果與密碼設定連結。帳號欄位只要輸入帳號名稱，系統會自動補上預設網域 `@tmail.ilc.edu.tw`（輸入含 `@` 的完整 Email 則直接使用）；實際邏輯見 `functions/accountAdmin.cjs` 的 `normalizeImportRow` 與 `importAccounts` Cloud Function。
+- **批次匯入帳號**：帳號管理頁可下載「帳號匯入範例檔」（`.xlsx`，內附填寫說明與可用模組／處室清單），填好後以「匯入帳號」上傳；每一列各自驗證與建立，單列失敗（例如 Email 重複）不會中斷其他列，上傳後會列出逐列的成功／失敗結果。帳號欄位只要輸入帳號名稱，系統會自動補上預設網域 `@tmail.ilc.edu.tw`（輸入含 `@` 的完整 Email 則直接使用）；實際邏輯見 `functions/accountAdmin.cjs` 的 `normalizeImportRow` 與 `importAccounts` Cloud Function。
 - 預算書 PDF 上傳／替換透過 `uploadBudgetBookPdf` Cloud Function（同樣以 Admin SDK 寫入 Storage），因為 `storage.rules` 完全禁止用戶端直接寫入 `budget-books/**`。
 
 ## 測試

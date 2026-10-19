@@ -17,6 +17,39 @@ const MODULE_OPTIONS = navGroups.flatMap((g) => g.items).filter((it) => it.key !
 const ROLE_OPTIONS = [['admin', '管理者'], ['editor', '填報人員']];
 const ROW_COLS = '1fr 1fr 1.2fr 0.7fr 0.7fr 1.2fr';
 
+// New accounts sign in with Google only (see functions/index.js's
+// createAccount — no password is ever set), so the admin only needs to pick
+// which Google-capable domain the account's email belongs to; "自訂" covers
+// anything outside those two (and lets the admin type a full email as-is).
+const CUSTOM_EMAIL_DOMAIN = '__custom__';
+const EMAIL_DOMAIN_OPTIONS = ['tmail.ilc.edu.tw', 'gmail.com'];
+
+function composeEmail({ emailLocal, emailDomain }) {
+  const local = emailLocal.trim();
+  if (emailDomain === CUSTOM_EMAIL_DOMAIN) return local.toLowerCase();
+  return `${local}@${emailDomain}`.toLowerCase();
+}
+
+function emptyCreateForm() {
+  return {
+    name: '', emailLocal: '', emailDomain: EMAIL_DOMAIN_OPTIONS[0], dept: DEPT_ORDER[0], role: 'editor', modules: [],
+  };
+}
+
+/** A description legend next to a 負責模組 chip picker, so an admin can see what each module covers while assigning it. */
+function ModuleDescriptions({ options }) {
+  return (
+    <div style={{ background: '#F5F3EE', borderRadius: 8, padding: '10px 14px', maxHeight: 230, overflowY: 'auto' }}>
+      {options.map((m) => (
+        <div key={m.key} style={{ font: "500 12px 'Noto Sans TC', sans-serif", marginBottom: 6, lineHeight: 1.5 }}>
+          <span style={{ color: '#1E2420', fontWeight: 700 }}>{m.label}</span>
+          <span style={{ color: '#8A9089' }}>：{m.desc}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function errorText() {
   return {
     maxWidth: 720,
@@ -57,9 +90,9 @@ export default function Settings() {
   const { isAdmin, authorizeAdmin, authorizeAdminActor } = useAuth();
 
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({ name: '', email: '', dept: DEPT_ORDER[0], role: 'editor', modules: [] });
+  const [form, setForm] = useState(emptyCreateForm);
   const [status, setStatus] = useState(null);
-  const [resetLink, setResetLink] = useState(null);
+  const [createdEmail, setCreatedEmail] = useState(null);
 
   const importFileRef = useRef(null);
   const [importState, setImportState] = useState(null);
@@ -83,13 +116,16 @@ export default function Settings() {
   const submit = async () => {
     return runAuthorized(() => authorizeAdmin(), async () => {
       setStatus('saving');
-      setResetLink(null);
+      setCreatedEmail(null);
+      const email = composeEmail(form);
       try {
         const createAccount = httpsCallable(functions, 'createAccount');
-        const res = await createAccount(form);
+        await createAccount({
+          name: form.name, email, dept: form.dept, role: form.role, modules: form.modules,
+        });
         setStatus('done');
-        setResetLink(res.data.resetLink);
-        setForm({ name: '', email: '', dept: DEPT_ORDER[0], role: 'editor', modules: [] });
+        setCreatedEmail(email);
+        setForm(emptyCreateForm());
       } catch (e) {
         setStatus(e.message || '新增失敗');
       }
@@ -188,7 +224,7 @@ export default function Settings() {
   return (
     <div>
       <div style={pageTitle}>帳號管理</div>
-      <div style={pageSubtitle}>帳號依「處室」分類管理，管理者可指派各處室填報人員（Firebase Auth 帳密登入）</div>
+      <div style={pageSubtitle}>帳號依「處室」分類管理，管理者可指派各處室填報人員（使用 Google 帳號登入）</div>
 
       {usersError && <div style={errorText()}>{usersError}</div>}
       {!usersError && actionError && <div style={errorText()}>{actionError}</div>}
@@ -250,10 +286,13 @@ export default function Settings() {
                     {editForm.role === 'editor' && (
                       <div style={{ marginBottom: 14 }}>
                         <label style={label}>負責模組</label>
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                          {MODULE_OPTIONS.map((m) => (
-                            <div key={m.key} onClick={() => toggleEditModule(m.key)} style={chip(editForm.modules.includes(m.key))}>{m.label}</div>
-                          ))}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignContent: 'flex-start' }}>
+                            {MODULE_OPTIONS.map((m) => (
+                              <div key={m.key} onClick={() => toggleEditModule(m.key)} style={chip(editForm.modules.includes(m.key))}>{m.label}</div>
+                            ))}
+                          </div>
+                          <ModuleDescriptions options={MODULE_OPTIONS} />
                         </div>
                       </div>
                     )}
@@ -345,11 +384,6 @@ export default function Settings() {
                   <span style={{ color: '#8A9089' }}>{r.email || '—'}</span>
                 </div>
                 {!r.ok && <div style={{ color: '#B5533E', marginTop: 4 }}>{r.error}</div>}
-                {r.ok && r.resetLink && (
-                  <div style={{ color: '#2F8F5B', marginTop: 4, wordBreak: 'break-all' }}>
-                    設定密碼連結：<a href={r.resetLink} target="_blank" rel="noreferrer">{r.resetLink}</a>
-                  </div>
-                )}
               </div>
             ))}
           </div>
@@ -361,11 +395,33 @@ export default function Settings() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16, marginBottom: 14 }}>
             <div>
               <label style={label}>姓名</label>
-              <input style={input} value={form.name} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))} />
+              <input aria-label="姓名" style={input} value={form.name} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))} />
             </div>
             <div>
-              <label style={label}>帳號（Email）</label>
-              <input style={input} value={form.email} onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))} />
+              <label style={label}>帳號（Google 登入）</label>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  aria-label="帳號名稱"
+                  style={{ ...input, flex: 1 }}
+                  placeholder={form.emailDomain === CUSTOM_EMAIL_DOMAIN ? '完整 Email' : '帳號名稱'}
+                  value={form.emailLocal}
+                  onChange={(e) => setForm((s) => ({ ...s, emailLocal: e.target.value }))}
+                />
+                <select
+                  aria-label="網域"
+                  style={{ ...input, width: 150, flex: 'none' }}
+                  value={form.emailDomain}
+                  onChange={(e) => setForm((s) => ({ ...s, emailDomain: e.target.value }))}
+                >
+                  {EMAIL_DOMAIN_OPTIONS.map((d) => <option key={d} value={d}>{d}</option>)}
+                  <option value={CUSTOM_EMAIL_DOMAIN}>自行輸入</option>
+                </select>
+              </div>
+              {form.emailLocal.trim() && (
+                <div style={{ font: "400 11.5px 'Noto Sans TC', sans-serif", color: '#8A9089', marginTop: 5 }}>
+                  將建立帳號：{composeEmail(form)}
+                </div>
+              )}
             </div>
             <div>
               <label style={label}>處室</label>
@@ -387,24 +443,26 @@ export default function Settings() {
           {form.role === 'editor' && (
             <div style={{ marginBottom: 14 }}>
               <label style={label}>負責模組</label>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {MODULE_OPTIONS.map((m) => (
-                  <div key={m.key} onClick={() => toggleModule(m.key)} style={chip(form.modules.includes(m.key))}>{m.label}</div>
-                ))}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 12 }}>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignContent: 'flex-start' }}>
+                  {MODULE_OPTIONS.map((m) => (
+                    <div key={m.key} onClick={() => toggleModule(m.key)} style={chip(form.modules.includes(m.key))}>{m.label}</div>
+                  ))}
+                </div>
+                <ModuleDescriptions options={MODULE_OPTIONS} />
               </div>
             </div>
           )}
           {status && status !== 'saving' && status !== 'done' && (
             <div style={{ font: "500 12px 'Noto Sans TC', sans-serif", color: '#B5533E', marginBottom: 10 }}>⚠ {status}</div>
           )}
-          {status === 'done' && resetLink && (
-            <div style={{ font: "500 12px 'Noto Sans TC', sans-serif", color: '#2F8F5B', marginBottom: 10, wordBreak: 'break-all' }}>
-              ✓ 帳號已建立，請將設定密碼連結交給該使用者：<br />
-              <a href={resetLink} target="_blank" rel="noreferrer">{resetLink}</a>
+          {status === 'done' && createdEmail && (
+            <div style={{ font: "500 12px 'Noto Sans TC', sans-serif", color: '#2F8F5B', marginBottom: 10 }}>
+              ✓ 帳號已建立，{createdEmail} 現在可以使用 Google 帳號登入系統。
             </div>
           )}
           <div style={{ display: 'flex', gap: 10 }}>
-            <div style={{ ...btnPrimary, opacity: status === 'saving' ? .6 : 1 }} onClick={submit}>建立帳號（將寄送設定密碼信）</div>
+            <div style={{ ...btnPrimary, opacity: status === 'saving' ? .6 : 1 }} onClick={submit}>建立帳號</div>
             <div style={btnSecondary} onClick={() => setAdding(false)}>取消</div>
           </div>
         </div>

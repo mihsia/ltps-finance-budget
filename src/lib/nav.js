@@ -19,24 +19,24 @@ export const icons = {
 
 export const navGroups = [
   { label: '總覽', items: [
-    { key: 'dashboard', label: '總覽儀表', icon: 'grid', color: '#1F5F52' },
+    { key: 'dashboard', label: '總覽儀表', icon: 'grid', color: '#1F5F52', desc: '跨年度總覽儀表板，顯示各項關鍵指標' },
   ] },
   { label: '資料模組', items: [
-    { key: 'basic', label: '基本資料', icon: 'school', color: '#C9832F' },
-    { key: 'specialNeeds', label: '特生統計', icon: 'heart', color: '#A0764A' },
-    { key: 'budget', label: '歲入歲出', icon: 'coin', color: '#B5533E' },
-    { key: 'library', label: '圖書藏書', icon: 'book', color: '#7D5BA6' },
-    { key: 'language', label: '族語開班', icon: 'chat', color: '#2E7DAF' },
-    { key: 'awards', label: '獲獎紀錄', icon: 'award', color: '#A1497E' },
-    { key: 'club', label: '課後社團', icon: 'star', color: '#4F8C3E' },
-    { key: 'land', label: '土地現值', icon: 'map', color: '#8C8C3E' },
-    { key: 'inquiry', label: '質詢答詢', icon: 'gavel', color: '#B1456B' },
+    { key: 'basic', label: '基本資料', icon: 'school', color: '#C9832F', desc: '班級數、學生人數、教師人力等學校基本統計資料' },
+    { key: 'specialNeeds', label: '特生統計', icon: 'heart', color: '#A0764A', desc: '原住民、新住民、低收入戶、身障生、單親生等統計人數' },
+    { key: 'budget', label: '歲入歲出', icon: 'coin', color: '#B5533E', desc: '年度歲入歲出預算與決算金額、差異原因說明' },
+    { key: 'library', label: '圖書藏書', icon: 'book', color: '#7D5BA6', desc: '圖書館藏書量統計' },
+    { key: 'language', label: '族語開班', icon: 'chat', color: '#2E7DAF', desc: '本土語言開班班級數、學生人數與教師認證資料' },
+    { key: 'awards', label: '獲獎紀錄', icon: 'award', color: '#A1497E', desc: '記錄學生與學校各項競賽獲獎資訊' },
+    { key: 'club', label: '課後社團', icon: 'star', color: '#4F8C3E', desc: '課後社團開設班別與人數' },
+    { key: 'land', label: '土地現值', icon: 'map', color: '#8C8C3E', desc: '學校用地地號與公告現值資訊' },
+    { key: 'inquiry', label: '質詢答詢', icon: 'gavel', color: '#B1456B', desc: '議員質詢與學校答詢內容存檔' },
   ] },
   { label: '報表與管理', items: [
-    { key: 'budgetbook', label: '預算書表', icon: 'file', color: '#4C5FAB' },
-    { key: 'report', label: '報表匯出', icon: 'download', color: '#3E8E7E' },
-    { key: 'archive', label: '歷史歸檔', icon: 'archive', color: '#556B8D' },
-    { key: 'settings', label: '帳號管理', icon: 'user', color: '#8C4A5B' },
+    { key: 'budgetbook', label: '預算書表', icon: 'file', color: '#4C5FAB', desc: '基金來源與用途明細表，含預算書 PDF 上傳' },
+    { key: 'report', label: '報表匯出', icon: 'download', color: '#3E8E7E', desc: '產出並匯出議會報表（PDF／Excel）' },
+    { key: 'archive', label: '歷史歸檔', icon: 'archive', color: '#556B8D', desc: '查閱歷年資料歸檔' },
+    { key: 'settings', label: '帳號管理', icon: 'user', color: '#8C4A5B', desc: '新增、編輯、停用系統帳號與權限' },
   ] },
 ];
 

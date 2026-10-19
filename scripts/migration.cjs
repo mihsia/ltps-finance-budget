@@ -197,7 +197,10 @@ async function ensureAdminProfile(db, auth, email, { dryRun, now, report }) {
       report.created.push(`auth-user:${email} (dry-run, not created)`);
       return null;
     }
-    user = await auth.createUser({ email, password: `${Math.random().toString(36).slice(-10)}A1!` });
+    // No password — accounts in this system are Google-sign-in only (see
+    // functions/index.js's createAccount for the same pattern); this user's
+    // first Google sign-in with this email attaches to this uid.
+    user = await auth.createUser({ email, emailVerified: true });
     report.created.push(`auth-user:${email}`);
   }
 
