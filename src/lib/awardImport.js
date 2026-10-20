@@ -1,7 +1,7 @@
 import * as XLSX from 'xlsx';
-import { AWARD_CATEGORIES, AWARD_LEVELS } from './recordSchemas';
+import { AWARD_CATEGORIES, AWARD_COMPETITION_TYPES, AWARD_LEVELS } from './recordSchemas';
 
-export const AWARD_IMPORT_HEADERS = ['類別', '獲獎項目', '等級', '日期'];
+export const AWARD_IMPORT_HEADERS = ['類別', '獲獎項目', '賽事類型', '學生姓名', '等級', '日期'];
 
 /** The downloadable 獲獎紀錄匯入範本.xlsx — a filled-in example sheet plus a plain-language instructions sheet. */
 export function buildAwardImportTemplateWorkbook() {
@@ -9,17 +9,19 @@ export function buildAwardImportTemplateWorkbook() {
 
   const exampleRows = [
     AWARD_IMPORT_HEADERS,
-    ['語文類', '全國語文競賽－朗讀', '特優', '2025-10-12'],
-    ['科學類', '宜蘭縣科學展覽會', '優等', '2025-09-20'],
+    ['語文類', '宜蘭縣語文競賽－朗讀', '個人賽', '陳○安', '特優', '2025-10-12'],
+    ['科學類', '宜蘭縣科學展覽會', '團體賽', '', '優等', '2025-09-20'],
   ];
   const sheet = XLSX.utils.aoa_to_sheet(exampleRows);
-  sheet['!cols'] = [{ wch: 10 }, { wch: 28 }, { wch: 10 }, { wch: 12 }];
+  sheet['!cols'] = [{ wch: 10 }, { wch: 28 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 12 }];
   XLSX.utils.book_append_sheet(wb, sheet, '獲獎紀錄匯入範本');
 
   const notes = [
     ['欄位', '說明'],
     ['類別', `必填，請填入以下其中一項：${AWARD_CATEGORIES.join('、')}。`],
     ['獲獎項目', '必填，可參考系統下拉選單提供的常見比賽名稱，或自行輸入其他項目名稱。'],
+    ['賽事類型', `必填，請填入以下其中一項：${AWARD_COMPETITION_TYPES.join('、')}。`],
+    ['學生姓名', '團體賽可留空；個人賽必填，請填入得獎學生姓名。'],
     ['等級', `必填，請填入以下其中一項：${AWARD_LEVELS.join('、')}，或自行輸入其他等級名稱。`],
     ['日期', '必填，格式為 YYYY-MM-DD（例如 2025-10-12）。'],
   ];
@@ -31,7 +33,7 @@ export function buildAwardImportTemplateWorkbook() {
 }
 
 const HEADER_TO_FIELD = {
-  類別: 'category', 獲獎項目: 'item', 等級: 'level', 日期: 'date',
+  類別: 'category', 獲獎項目: 'item', 賽事類型: 'competitionType', 學生姓名: 'studentName', 等級: 'level', 日期: 'date',
 };
 
 function cellText(value) {
@@ -42,9 +44,9 @@ function cellText(value) {
 /**
  * Reads an already-parsed xlsx workbook (XLSX.read(...) is the caller's job,
  * so this stays testable with a plain workbook object) into the raw row
- * shape {category, item, level, date} — no business validation here, that's
- * validateGenericRecord('awards', ...)'s job; this only turns spreadsheet
- * cells into strings, one row per data row.
+ * shape {category, item, competitionType, studentName, level, date} — no
+ * business validation here, that's validateGenericRecord('awards', ...)'s
+ * job; this only turns spreadsheet cells into strings, one row per data row.
  */
 export function parseAwardImportFile(workbook) {
   const sheetName = workbook?.SheetNames?.[0];
@@ -66,7 +68,9 @@ export function parseAwardImportFile(workbook) {
   const rows = aoa
     .slice(1)
     .map((line) => {
-      const row = { category: '', item: '', level: '', date: '' };
+      const row = {
+        category: '', item: '', competitionType: '', studentName: '', level: '', date: '',
+      };
       fieldByColumn.forEach((field, i) => {
         if (field) row[field] = cellText(line[i]);
       });
@@ -85,10 +89,12 @@ export function buildAwardExportWorkbook(records) {
   const wb = XLSX.utils.book_new();
   const rows = [
     AWARD_IMPORT_HEADERS,
-    ...records.map((r) => [r.category || '', r.item || '', r.level || '', r.date || '']),
+    ...records.map((r) => [
+      r.category || '', r.item || '', r.competitionType || '', r.studentName || '', r.level || '', r.date || '',
+    ]),
   ];
   const sheet = XLSX.utils.aoa_to_sheet(rows);
-  sheet['!cols'] = [{ wch: 10 }, { wch: 28 }, { wch: 10 }, { wch: 12 }];
+  sheet['!cols'] = [{ wch: 10 }, { wch: 28 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 12 }];
   XLSX.utils.book_append_sheet(wb, sheet, '獲獎紀錄');
   return wb;
 }

@@ -378,7 +378,7 @@ describe('Language variant records CRUD page', () => {
 
 describe('schema-driven Generic records CRUD page', () => {
   it.each([
-    ['awards', ['類別', '獲獎項目', '等級', '日期']],
+    ['awards', ['類別', '獲獎項目', '賽事類型', '學生姓名', '等級', '日期']],
     ['club', ['社團名稱', '指導老師', '人數', '上課時間']],
     ['land', ['地號', '面積(㎡)', '公告現值(元/㎡)']],
     ['inquiry', ['日期', '議員/題目', '答詢狀態']],
@@ -389,13 +389,14 @@ describe('schema-driven Generic records CRUD page', () => {
     mounted.unmount();
   });
 
-  it('validates dates and creates a typed awards record with trimmed fields', async () => {
+  it('validates dates and creates a typed awards record with trimmed fields, requiring 學生姓名 for an 個人賽', async () => {
     const records = readyRecords([]);
     installRecords('awards', records);
     const mounted = mount(Generic, { moduleKey: 'awards' });
     await act(async () => control(mounted.renderer, '＋ 新增一筆').props.onClick());
     change(mounted.renderer, '類別', '語文類');
-    change(mounted.renderer, '獲獎項目', ' 全國語文競賽 ');
+    change(mounted.renderer, '獲獎項目', ' 宜蘭縣語文競賽 ');
+    change(mounted.renderer, '賽事類型', '個人賽');
     change(mounted.renderer, '等級', ' 特優 ');
     change(mounted.renderer, '日期', '2025-02-30');
     await act(async () => control(mounted.renderer, '新增').props.onClick());
@@ -404,8 +405,30 @@ describe('schema-driven Generic records CRUD page', () => {
 
     change(mounted.renderer, '日期', '2025-02-28');
     await act(async () => control(mounted.renderer, '新增').props.onClick());
+    expect(records.create).not.toHaveBeenCalled();
+    expect(pageText(mounted.renderer)).toContain('個人賽請填寫得獎學生姓名');
+
+    change(mounted.renderer, '學生姓名', ' 陳○安 ');
+    await act(async () => control(mounted.renderer, '新增').props.onClick());
     expect(records.create).toHaveBeenCalledWith({
-      recordType: 'award', category: '語文類', item: '全國語文競賽', level: '特優', date: '2025-02-28',
+      recordType: 'award', category: '語文類', item: '宜蘭縣語文競賽', competitionType: '個人賽', studentName: '陳○安', level: '特優', date: '2025-02-28',
+    }, authMocks.actor);
+    mounted.unmount();
+  });
+
+  it('lets a 團體賽 award be created with no 學生姓名', async () => {
+    const records = readyRecords([]);
+    installRecords('awards', records);
+    const mounted = mount(Generic, { moduleKey: 'awards' });
+    await act(async () => control(mounted.renderer, '＋ 新增一筆').props.onClick());
+    change(mounted.renderer, '類別', '體育類');
+    change(mounted.renderer, '獲獎項目', '宜蘭縣運動會');
+    change(mounted.renderer, '賽事類型', '團體賽');
+    change(mounted.renderer, '等級', '第二名');
+    change(mounted.renderer, '日期', '2025-05-15');
+    await act(async () => control(mounted.renderer, '新增').props.onClick());
+    expect(records.create).toHaveBeenCalledWith({
+      recordType: 'award', category: '體育類', item: '宜蘭縣運動會', competitionType: '團體賽', studentName: null, level: '第二名', date: '2025-05-15',
     }, authMocks.actor);
     mounted.unmount();
   });
@@ -454,10 +477,14 @@ describe('schema-driven Generic records CRUD page', () => {
 
   it('edits, soft-deletes, and restores by record id through the active query scope', async () => {
     const active = readyRecords([
-      { id: 'award-1', recordType: 'award', category: '科學類', item: '縣科展', level: '優等', date: '2025-09-20', deletedAt: null },
+      {
+        id: 'award-1', recordType: 'award', category: '科學類', item: '縣科展', competitionType: '團體賽', studentName: '', level: '優等', date: '2025-09-20', deletedAt: null,
+      },
     ]);
     const recovery = readyRecords([
-      { id: 'award-old', recordType: 'award', category: '體育類', item: '舊獎項', level: '佳作', date: '2024-01-10', deletedAt: { seconds: 2 } },
+      {
+        id: 'award-old', recordType: 'award', category: '體育類', item: '舊獎項', competitionType: '團體賽', studentName: '', level: '佳作', date: '2024-01-10', deletedAt: { seconds: 2 },
+      },
     ]);
     installRecords('awards', active, recovery);
     const mounted = mount(Generic, { moduleKey: 'awards' });
@@ -466,7 +493,7 @@ describe('schema-driven Generic records CRUD page', () => {
     change(mounted.renderer, '等級', '特優');
     await act(async () => control(mounted.renderer, '儲存').props.onClick());
     expect(active.update).toHaveBeenCalledWith('award-1', {
-      category: '科學類', item: '縣科展', level: '特優', date: '2025-09-20',
+      category: '科學類', item: '縣科展', competitionType: '團體賽', studentName: null, level: '特優', date: '2025-09-20',
     }, authMocks.actor);
     await act(async () => control(mounted.renderer, '停用').props.onClick());
     expect(active.delete).toHaveBeenCalledWith('award-1', authMocks.actor);
@@ -642,8 +669,12 @@ describe('record page invocation guards', () => {
     const formWrite = deferred();
     const rowWrite = deferred();
     const records = readyRecords([
-      { id: 'award-1', recordType: 'award', category: '科學類', item: '縣科展', level: '優等', date: '2025-09-20', deletedAt: null },
-      { id: 'award-2', recordType: 'award', category: '語文類', item: '縣語文競賽', level: '特優', date: '2025-10-20', deletedAt: null },
+      {
+        id: 'award-1', recordType: 'award', category: '科學類', item: '縣科展', competitionType: '團體賽', studentName: '', level: '優等', date: '2025-09-20', deletedAt: null,
+      },
+      {
+        id: 'award-2', recordType: 'award', category: '語文類', item: '縣語文競賽', competitionType: '團體賽', studentName: '', level: '特優', date: '2025-10-20', deletedAt: null,
+      },
     ], {
       update: vi.fn(() => formWrite.promise),
       delete: vi.fn((recordId) => (recordId === 'award-2' ? rowWrite.promise : Promise.resolve())),
@@ -804,14 +835,14 @@ describe('Generic awards xlsx export/import', () => {
 
     const file = fakeXlsxFile([
       AWARD_IMPORT_HEADERS,
-      ['語文類', '全國語文競賽－朗讀', '特優', '2025-10-12'],
-      ['科學類', '縣科展', '優等', 'not-a-date'],
+      ['語文類', '宜蘭縣語文競賽－朗讀', '個人賽', '陳○安', '特優', '2025-10-12'],
+      ['科學類', '縣科展', '團體賽', '', '優等', 'not-a-date'],
     ]);
     await act(async () => { await fileInput(mounted.renderer).props.onChange({ target: { files: [file], value: '' } }); });
 
     expect(records.create).toHaveBeenCalledOnce();
     expect(records.create).toHaveBeenCalledWith({
-      recordType: 'award', category: '語文類', item: '全國語文競賽－朗讀', level: '特優', date: '2025-10-12',
+      recordType: 'award', category: '語文類', item: '宜蘭縣語文競賽－朗讀', competitionType: '個人賽', studentName: '陳○安', level: '特優', date: '2025-10-12',
     }, authMocks.actor);
 
     const text = pageText(mounted.renderer);
@@ -827,7 +858,7 @@ describe('Generic awards xlsx export/import', () => {
 
     const file = fakeXlsxFile([
       ['Name', 'Date'],
-      ['全國語文競賽', '2025-10-12'],
+      ['宜蘭縣語文競賽', '2025-10-12'],
     ]);
     await act(async () => { await fileInput(mounted.renderer).props.onChange({ target: { files: [file], value: '' } }); });
 
@@ -844,11 +875,11 @@ describe('Generic awards xlsx export/import', () => {
     change(mounted.renderer, '類別', '科學類');
     let options = field(mounted.renderer, '獲獎項目').findAllByType('option').map((o) => o.props.value);
     expect(options).toContain('宜蘭縣科學展覽會');
-    expect(options).not.toContain('全縣運動會');
+    expect(options).not.toContain('宜蘭縣運動會');
 
     change(mounted.renderer, '類別', '體育類');
     options = field(mounted.renderer, '獲獎項目').findAllByType('option').map((o) => o.props.value);
-    expect(options).toContain('全縣運動會');
+    expect(options).toContain('宜蘭縣運動會');
     expect(options).not.toContain('宜蘭縣科學展覽會');
     mounted.unmount();
   });

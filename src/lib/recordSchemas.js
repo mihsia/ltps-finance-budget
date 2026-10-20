@@ -159,27 +159,31 @@ export const AWARD_CATEGORIES = ['語文類', '藝文類', '體育類', '科學�
 export const SPECIAL_NEEDS_CATEGORIES = ['原住民', '新住民', '低收入戶', '身障生', '單親生'];
 
 // 獲獎項目 options, grouped by 類別 so the dropdown only offers items that make
-// sense for whichever category was picked — common competitions Yilan County
-// elementary schools actually enter; anything else falls back to 其他（自訂）.
+// sense for whichever category was picked. Kept to 宜蘭縣／全縣層級賽事 —
+// students place in those far more often than at the national level, so a
+// 全國賽 preset would mostly go unused; anything outside this list (national
+// or otherwise) still works via 其他（自訂）.
 export const AWARD_ITEM_OPTIONS_BY_CATEGORY = {
   語文類: [
-    '全國語文競賽－朗讀', '全國語文競賽－演說', '全國語文競賽－作文', '全國語文競賽－寫字',
-    '全國語文競賽－字音字形', '宜蘭縣語文競賽', '全國學生閱讀心得寫作比賽',
+    '宜蘭縣語文競賽－朗讀', '宜蘭縣語文競賽－演說', '宜蘭縣語文競賽－作文', '宜蘭縣語文競賽－寫字',
+    '宜蘭縣語文競賽－字音字形', '宜蘭縣學生閱讀心得寫作比賽',
   ],
   藝文類: [
-    '宜蘭縣學生美術比賽', '全國學生美術比賽', '全國學生音樂比賽', '直笛比賽', '合唱比賽', '書法比賽',
+    '宜蘭縣學生美術比賽', '宜蘭縣學生音樂比賽', '宜蘭縣直笛比賽', '宜蘭縣合唱比賽', '宜蘭縣書法比賽',
   ],
   體育類: [
-    '全縣運動會', '全國中小學運動會', '宜蘭縣游泳錦標賽', '躲避球錦標賽', '跳繩比賽', '直排輪競賽',
+    '宜蘭縣運動會', '宜蘭縣游泳錦標賽', '宜蘭縣躲避球錦標賽', '宜蘭縣跳繩比賽', '宜蘭縣直排輪競賽',
   ],
   科學類: [
-    '宜蘭縣科學展覽會', '全國科學展覽會', '機器人競賽', '科技創意賽', '小論文寫作比賽',
+    '宜蘭縣科學展覽會', '宜蘭縣創意機器人競賽', '宜蘭縣科技創作競賽', '宜蘭縣小論文寫作比賽',
   ],
 };
 
 export const AWARD_LEVELS = [
   '特優', '優等', '甲等', '第一名', '第二名', '第三名', '第四名', '第五名', '第六名', '佳作',
 ];
+
+export const AWARD_COMPETITION_TYPES = ['個人賽', '團體賽'];
 
 export const genericRecordSchemas = {
   awards: {
@@ -196,6 +200,12 @@ export const genericRecordSchemas = {
         optionsMap: AWARD_ITEM_OPTIONS_BY_CATEGORY,
         allowCustom: true,
         maxLength: 160,
+      },
+      {
+        key: 'competitionType', label: '賽事類型', kind: 'select', options: AWARD_COMPETITION_TYPES, maxLength: 10,
+      },
+      {
+        key: 'studentName', label: '學生姓名', kind: 'text', maxLength: 60, optional: true,
       },
       {
         key: 'level', label: '等級', kind: 'select', options: AWARD_LEVELS, allowCustom: true, maxLength: 80,
@@ -249,7 +259,12 @@ export function validateGenericRecord(moduleKey, source) {
   const schema = genericRecordSchemas[moduleKey];
   if (!schema) return invalid('資料模組類型不正確。');
   const result = collect(schema.fields, source);
-  return result.valid ? valid({ recordType: schema.recordType, ...result.data }) : result;
+  if (!result.valid) return result;
+  // 團體賽沒有單一得獎人，姓名留空即可；個人賽則需要知道是哪位學生得獎。
+  if (moduleKey === 'awards' && result.data.competitionType === '個人賽' && !result.data.studentName) {
+    return invalid('個人賽請填寫得獎學生姓名。');
+  }
+  return valid({ recordType: schema.recordType, ...result.data });
 }
 
 export function emptyRecordForm(fields) {

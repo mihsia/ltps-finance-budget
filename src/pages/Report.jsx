@@ -10,6 +10,7 @@ import { buildOverviewPdf, buildOverviewWorkbook } from '../lib/overviewExport';
 import { buildOverviewReport, OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_COLORS } from '../lib/overviewReport';
 import { languageRecordSummary } from '../lib/recordDerivations';
 import { summarizeByCategory, summarizeByLevel } from '../lib/awardStats';
+import { summarizeSpecialNeeds } from '../lib/specialNeedsStats';
 import { runAuthorized } from '../lib/accessPolicy';
 import {
   pageTitle, sectionLabel, card, statTile, btnOutline, btnPrimary, btnSecondary, chip,
@@ -103,6 +104,86 @@ export function AwardLevelBars({ data }) {
           <span style={{ font: '700 12px Inter, sans-serif', color: '#1E2420', textAlign: 'right' }}>{d.count}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+// Fixed SPECIAL_NEEDS_CATEGORIES order (原住民/新住民/低收入戶/身障生/單親生);
+// a ring-adjacent (not all-pairs) CVD check is the right standard here since
+// the donut always renders these 5 in this same fixed order, so only true
+// neighbors — including the wrap from 單親生 back to 原住民 — ever touch.
+// All 5 ring-adjacent pairs, in both light and dark steps, clear the CVD and
+// normal-vision floors. A category outside the fixed 5 (custom 其他自訂)
+// falls back to neutral gray rather than a 6th hue.
+const SPECIAL_NEEDS_CATEGORY_COLORS = {
+  原住民: '#2a78d6',
+  新住民: '#eb6834',
+  低收入戶: '#1baf7a',
+  身障生: '#eda100',
+  單親生: '#e87ba4',
+};
+const SPECIAL_NEEDS_OTHER_COLOR = '#8A9089';
+
+/** A donut chart of 特生統計 by 類別, sized to each category's share of the whole student body (not of the displayed counts, since a student can belong to more than one category) — the unfilled ring is the rest of the student body. */
+export function SpecialNeedsDonut({ data, totalStudents }) {
+  if (data.length === 0) {
+    return <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>尚無特生統計資料可供統計。</div>;
+  }
+  if (!totalStudents) {
+    return <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>尚未填寫學生人數（基本資料），無法計算佔全體學生的百分比。</div>;
+  }
+  const size = 160;
+  const radius = 54;
+  const ringWidth = 20;
+  const circumference = 2 * Math.PI * radius;
+  let drawn = 0;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="特生統計依類別佔全體學生百分比圓環圖">
+        <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#EEEBE2" strokeWidth={ringWidth} />
+          {data.map((d) => {
+            // Categories can overlap (a student may count under more than
+            // one), so clamp each slice to whatever ring length remains
+            // rather than letting the total run past a full circle.
+            const rawLength = (d.count / totalStudents) * circumference;
+            const length = Math.max(Math.min(rawLength, circumference - drawn), 0);
+            const visibleLength = Math.max(length - 2, 0);
+            const dashoffset = -drawn;
+            drawn += length;
+            return (
+              <circle
+                key={d.category}
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="none"
+                stroke={SPECIAL_NEEDS_CATEGORY_COLORS[d.category] || SPECIAL_NEEDS_OTHER_COLOR}
+                strokeWidth={ringWidth}
+                strokeDasharray={`${visibleLength} ${circumference - visibleLength}`}
+                strokeDashoffset={dashoffset}
+              />
+            );
+          })}
+        </g>
+        <text x={size / 2} y={size / 2 - 4} textAnchor="middle" style={{ font: '800 20px Inter, sans-serif', fill: '#1E2420' }}>{totalStudents}</text>
+        <text x={size / 2} y={size / 2 + 14} textAnchor="middle" style={{ font: "500 10.5px 'Noto Sans TC', sans-serif", fill: '#8A9089' }}>學生總數</text>
+      </svg>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {data.map((d) => (
+          <div key={d.category} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{
+              width: 10, height: 10, borderRadius: 3, flex: 'none',
+              background: SPECIAL_NEEDS_CATEGORY_COLORS[d.category] || SPECIAL_NEEDS_OTHER_COLOR,
+            }}
+            />
+            <span style={{ font: "600 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>{d.category}</span>
+            <span style={{ font: '700 12px Inter, sans-serif', color: '#454B45' }}>{d.count} 人</span>
+            <span style={{ font: "500 11.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>（佔全體學生 {d.pct}%）</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -215,6 +296,9 @@ export default function Report({ year, years }) {
   const activeAwards = (awardsState.data || []).filter((r) => !r.deletedAt);
   const awardCategoryStats = summarizeByCategory(activeAwards);
   const awardLevelStats = summarizeByLevel(activeAwards);
+  const activeSpecialNeeds = (specialNeedsState.data || []).filter((r) => !r.deletedAt);
+  const totalStudents = Number(basicState.data?.students) || 0;
+  const specialNeedsStats = summarizeSpecialNeeds(activeSpecialNeeds, totalStudents);
   const trend = trendStates.map(({ year: y, state }) => ({
     year: y,
     expenseTotal: (state.data || [])
@@ -231,7 +315,7 @@ export default function Report({ year, years }) {
     revenueRows: activeRevenue,
     trend,
     language: languageRecordSummary(languageState.data),
-    specialNeedsRows: (specialNeedsState.data || []).filter((r) => !r.deletedAt),
+    specialNeedsRows: activeSpecialNeeds,
     awardsRows: activeAwards,
     clubRows: (clubState.data || []).filter((r) => !r.deletedAt),
     landRows: (landState.data || []).filter((r) => !r.deletedAt),
@@ -414,6 +498,11 @@ export default function Report({ year, years }) {
           <div style={{ font: "700 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 14 }}>依等級分布</div>
           <AwardLevelBars data={awardLevelStats} />
         </div>
+      </div>
+
+      <div style={sectionLabel}>特生統計分析</div>
+      <div style={{ ...card, marginBottom: 24, maxWidth: 900 }}>
+        <SpecialNeedsDonut data={specialNeedsStats} totalStudents={totalStudents} />
       </div>
 
       <div style={sectionLabel}>匯出格式</div>

@@ -100,19 +100,21 @@ describe('record CRUD schemas', () => {
   it('uses field-specific Generic schemas and validates real calendar dates', () => {
     expect(schemas.validateGenericRecord).toBeTypeOf('function');
     expect(schemas.genericRecordSchemas.awards.fields.map((field) => field.label))
-      .toEqual(['類別', '獲獎項目', '等級', '日期']);
+      .toEqual(['類別', '獲獎項目', '賽事類型', '學生姓名', '等級', '日期']);
     expect(schemas.genericRecordSchemas.awards.fields[0]).toMatchObject({
       kind: 'select', options: schemas.AWARD_CATEGORIES,
     });
     expect(schemas.AWARD_CATEGORIES).toEqual(['語文類', '藝文類', '體育類', '科學類']);
     expect(schemas.validateGenericRecord('awards', {
-      category: '科學類', item: ' 縣科展 ', level: ' 優等 ', date: '2025-02-29',
+      category: '科學類', item: ' 縣科展 ', competitionType: '團體賽', level: ' 優等 ', date: '2025-02-29',
     })).toMatchObject({ valid: false, error: '日期必須是有效的 YYYY-MM-DD。' });
     expect(schemas.validateGenericRecord('awards', {
-      category: '科學類', item: ' 縣科展 ', level: ' 優等 ', date: '2024-02-29',
+      category: '科學類', item: ' 縣科展 ', competitionType: '團體賽', level: ' 優等 ', date: '2024-02-29',
     })).toEqual({
       valid: true,
-      data: { recordType: 'award', category: '科學類', item: '縣科展', level: '優等', date: '2024-02-29' },
+      data: {
+        recordType: 'award', category: '科學類', item: '縣科展', competitionType: '團體賽', studentName: null, level: '優等', date: '2024-02-29',
+      },
       error: null,
     });
     expect(schemas.validateGenericRecord('club', {
@@ -121,6 +123,18 @@ describe('record CRUD schemas', () => {
     expect(schemas.validateGenericRecord('land', {
       parcel: '五結段123地號', area: 'Infinity', announcedValue: '12800',
     })).toMatchObject({ valid: false, error: '面積(㎡)必須是非負有限數值。' });
+  });
+
+  it('requires a 學生姓名 for an 個人賽 award but lets 團體賽 leave it blank', () => {
+    expect(schemas.validateGenericRecord('awards', {
+      category: '體育類', item: '宜蘭縣運動會', competitionType: '個人賽', studentName: '', level: '第一名', date: '2025-05-15',
+    })).toMatchObject({ valid: false, error: '個人賽請填寫得獎學生姓名。' });
+    expect(schemas.validateGenericRecord('awards', {
+      category: '體育類', item: '宜蘭縣運動會', competitionType: '個人賽', studentName: ' 陳○安 ', level: '第一名', date: '2025-05-15',
+    })).toMatchObject({ valid: true, data: { competitionType: '個人賽', studentName: '陳○安' } });
+    expect(schemas.validateGenericRecord('awards', {
+      category: '體育類', item: '宜蘭縣運動會', competitionType: '團體賽', studentName: '', level: '第一名', date: '2025-05-15',
+    })).toMatchObject({ valid: true, data: { competitionType: '團體賽', studentName: null } });
   });
 
   it('records special-needs student counts with a categorized dropdown that still allows a custom category, plus an optional note', () => {

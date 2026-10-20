@@ -6,7 +6,7 @@ vi.mock('../firebase', () => ({
   isFirebaseConfigured: true,
 }));
 
-const { AwardCategoryDonut, AwardLevelBars } = await import('./Report.jsx');
+const { AwardCategoryDonut, AwardLevelBars, SpecialNeedsDonut } = await import('./Report.jsx');
 
 function textOf(node) {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
@@ -78,5 +78,57 @@ describe('AwardLevelBars', () => {
   it('renders a single full-width bar without error for one level', () => {
     const renderer = render(<AwardLevelBars data={[{ level: '甲等', count: 2 }]} />);
     expect(textOf(renderer.root)).toContain('甲等');
+  });
+});
+
+describe('SpecialNeedsDonut', () => {
+  it('shows a placeholder message instead of an empty chart when there is no data', () => {
+    const renderer = render(<SpecialNeedsDonut data={[]} totalStudents={262} />);
+    expect(textOf(renderer.root)).toContain('尚無特生統計資料可供統計');
+    expect(renderer.root.findAllByType('svg')).toHaveLength(0);
+  });
+
+  it('shows a placeholder instead of a divide-by-zero chart when total students is unavailable', () => {
+    const data = [{ category: '原住民', count: 17, pct: null }];
+    const renderer = render(<SpecialNeedsDonut data={data} totalStudents={0} />);
+    expect(textOf(renderer.root)).toContain('尚未填寫學生人數');
+    expect(renderer.root.findAllByType('svg')).toHaveLength(0);
+  });
+
+  it('renders each category as a ring segment sized to its share of the whole student body, with no NaN leaking into SVG attributes', () => {
+    const data = [
+      { category: '原住民', count: 17, pct: 6.5 },
+      { category: '低收入戶', count: 10, pct: 3.8 },
+    ];
+    const renderer = render(<SpecialNeedsDonut data={data} totalStudents={262} />);
+    const text = textOf(renderer.root);
+    expect(text).toContain('原住民');
+    expect(text).toContain('17 人');
+    expect(text).toContain('（佔全體學生 6.5%）');
+    expect(text).toContain('262'); // total students shown in the donut's center
+
+    const circles = renderer.root.findAllByType('circle');
+    expect(circles).toHaveLength(data.length + 1);
+    for (const circle of circles.slice(1)) {
+      expect(circle.props.strokeDasharray).not.toMatch(/NaN/);
+      expect(circle.props.strokeDashoffset).not.toBeNaN();
+    }
+  });
+
+  it('clamps slice length defensively instead of overflowing the ring when counts would sum past the total', () => {
+    // Categories overlap (a student may count under more than one), so this
+    // is a contrived edge case, not a realistic one — the chart must still
+    // not produce a negative or NaN dasharray if it ever happens.
+    const data = [
+      { category: '原住民', count: 200, pct: 95 },
+      { category: '新住民', count: 150, pct: 71 },
+    ];
+    const renderer = render(<SpecialNeedsDonut data={data} totalStudents={210} />);
+    const circles = renderer.root.findAllByType('circle');
+    for (const circle of circles.slice(1)) {
+      const [visible] = circle.props.strokeDasharray.split(' ').map(Number);
+      expect(visible).toBeGreaterThanOrEqual(0);
+      expect(Number.isFinite(visible)).toBe(true);
+    }
   });
 });
