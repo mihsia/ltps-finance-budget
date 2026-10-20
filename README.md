@@ -98,6 +98,7 @@ Storage：`budget-books/{year}/{fileName}`（公開讀取，僅能透過 `upload
 ## 族語開班與族語認證
 
 - **拆分為兩個獨立模組**：「族語開班」（開班資料：語系、班級數、學生人數，`src/pages/Language.jsx`，Firestore moduleKey `language`）與「族語認證」（認證統計、學生通過名冊，`src/pages/LanguageCert.jsx`，Firestore moduleKey `languageCert`）原本合併在同一頁、同一個 Firestore 子集合，容易讓填報人員搞混兩種性質不同的資料，現已拆成左方選單兩個獨立項目，帳號管理頁的「負責模組」也可分別授權（模組清單直接取自 `src/lib/nav.js` 的 `navGroups`，新增項目會自動出現在帳號管理頁，不需另外維護）。
+- **`languageCert` 也需要加入 Cloud Functions 的帳號模組白名單**：帳號新增／編輯（含 xlsx 批次匯入）由 `functions/accountAdmin.cjs` 的 `ACCOUNT_MODULE_KEYS`／`MODULE_LABELS` 在伺服器端驗證「負責模組」是否為已知模組，這份清單與 `src/lib/nav.js` 是分開維護的兩份清單，新增模組時兩邊都要同步更新（已修正並加入 `languageCert`／「族語認證」）。這個檔案屬於 Cloud Functions，**同樣需要執行 `firebase deploy --only functions` 才會在正式環境生效**，否則帳號管理頁指派「族語認證」模組時仍會收到「負責模組不存在：languageCert」的錯誤。
 - **既有認證／名冊資料需手動搬移一次**：這個拆分只影響「之後新增的資料」存放位置；若系統先前已透過「族語開班」頁輸入過認證統計或名冊資料，那些紀錄仍留在舊的 `language` 子集合中，不會自動出現在新的「族語認證」頁。請在取得 Firebase 服務帳戶金鑰（`scripts/serviceAccountKey.json`，流程同 `npm run seed` 所需的金鑰）後，執行一次搬移腳本：
   ```
   npm run migrate:language-cert:dry-run   # 預覽會搬移哪些紀錄，不會寫入
@@ -131,7 +132,7 @@ Storage：`budget-books/{year}/{fileName}`（公開讀取，僅能透過 `upload
 
 - 登入頁下方顯示目前系統版本與最後更新日期；版號不是 `package.json` 的版本號，而是從系統第一次上線起算，每次有使用者可見的異動就加一（v1.0、v1.1……）。版號與異動說明集中定義在 `src/lib/appInfo.js` 的 `CHANGELOG` 陣列，`APP_VERSION`／`APP_UPDATED_AT` 一律取陣列最後一筆，單一真實來源；每次出新版時在陣列尾端新增一筆（`version`／`date`／`notes`），不修改或重排舊紀錄。
 - **登入畫面以 Google 帳號登入為主**：由於系統帳號已全面改用 Google 登入，登入頁預設只顯示「使用 Google 帳號登入」按鈕，帳號密碼表單收合為「仍使用舊版帳號密碼登入」連結，點選後才展開，避免使用者誤填密碼表單造成登入錯誤。既有的 Google／密碼帳號連結流程（`pendingGoogleEmail`）不受影響：當 Google 帳號需要連結既有密碼帳號時，密碼表單會自動強制展開並要求輸入原密碼。版面並加大卡片留白、置中品牌標題、縮短按鈕下方說明文字，避免換行斷字。
-- **版本更新說明**：左方選單「報表與管理」新增「版本更新說明」頁面（`src/pages/Changelog.jsx`），列出 `CHANGELOG` 所有版本紀錄（新到舊），左側以固定色塊顯示版號、右側顯示日期與說明，並依版次交錯背景色以利逐筆閱讀；此頁面刻意不做模組權限檢查，所有已登入使用者皆可檢視，不受帳號的「負責模組」設定影響。
+- **更新日誌**：左方選單「報表與管理」新增「更新日誌」頁面（`src/pages/Changelog.jsx`），列出 `CHANGELOG` 所有版本紀錄（新到舊），左側以固定色塊顯示版號、右側顯示日期與說明，並依版次交錯背景色以利逐筆閱讀；導覽標籤維持四字，與其他模組的標籤長度一致。此頁面刻意不做模組權限檢查，所有已登入使用者皆可檢視，不受帳號的「負責模組」設定影響。
 - 畫面右上角使用者頭像改為顯示 Google 帳號的大頭貼（`photoURL`）；若無法載入則自動回退為原本的姓名字首圓形圖示。
 - 帳號管理頁的「負責模組」欄位最多顯示 3 個模組標籤，超過的數量以「+N」徽章呈現，滑鼠移至徽章上可看到完整清單（`title` 屬性），避免模組數量多時版面過於擁擠。
 

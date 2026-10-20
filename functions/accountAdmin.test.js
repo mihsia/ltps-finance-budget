@@ -190,6 +190,14 @@ describe('normalizeImportRow', () => {
     expect(row.modules).toEqual(['awards', 'club', 'land']);
   });
 
+  it('maps 族語開班 and 族語認證 to their distinct module keys', () => {
+    const row = normalizeImportRow({
+      name: '林小美', account: 'lin', dept: '教務處', role: '填報人員', modules: '族語開班、族語認證',
+    });
+    expect(row.modules).toEqual(['language', 'languageCert']);
+    expect(validateAccountProfile(row)).toMatchObject({ valid: true });
+  });
+
   it('passes through a raw module key or role value unmapped, letting validateAccountProfile reject it', () => {
     const row = normalizeImportRow({
       name: '林小美', account: 'lin', dept: '學務處', role: 'editor', modules: 'budget、not-a-real-module',

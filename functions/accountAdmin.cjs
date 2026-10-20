@@ -4,7 +4,7 @@
 // Mirrors the left-nav module keys in src/lib/nav.js (minus 'dashboard', which
 // every signed-in user can already see and so is never an assignable scope).
 const ACCOUNT_MODULE_KEYS = [
-  'basic', 'specialNeeds', 'budget', 'library', 'language',
+  'basic', 'specialNeeds', 'budget', 'library', 'language', 'languageCert',
   'awards', 'club', 'land', 'inquiry',
   'budgetbook', 'report', 'archive', 'settings',
 ];
@@ -132,6 +132,7 @@ const MODULE_LABELS = {
   budget: '歲入歲出',
   library: '圖書藏書',
   language: '族語開班',
+  languageCert: '族語認證',
   awards: '獲獎紀錄',
   club: '課後社團',
   land: '土地現值',

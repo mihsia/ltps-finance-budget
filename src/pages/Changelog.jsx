@@ -13,7 +13,7 @@ export default function Changelog() {
 
   return (
     <div>
-      <div style={pageTitle}>版本更新說明</div>
+      <div style={pageTitle}>更新日誌</div>
       <div style={pageSubtitle}>系統每次修正或新增功能的紀錄，由新到舊排列</div>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, maxWidth: 760 }}>

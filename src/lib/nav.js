@@ -40,7 +40,7 @@ export const navGroups = [
     { key: 'report', label: '報表匯出', icon: 'download', color: '#3E8E7E', desc: '產出並匯出議會報表（PDF／Excel）' },
     { key: 'archive', label: '歷史歸檔', icon: 'archive', color: '#556B8D', desc: '查閱歷年資料歸檔' },
     { key: 'settings', label: '帳號管理', icon: 'user', color: '#8C4A5B', desc: '新增、編輯、停用系統帳號與權限' },
-    { key: 'changelog', label: '版本更新說明', icon: 'info', color: '#6B6F76', desc: '系統每次修正或新增功能的紀錄，所有使用者皆可檢視' },
+    { key: 'changelog', label: '更新日誌', icon: 'info', color: '#6B6F76', desc: '系統每次修正或新增功能的紀錄，所有使用者皆可檢視' },
   ] },
 ];
 
