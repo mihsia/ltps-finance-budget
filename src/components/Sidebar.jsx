@@ -45,10 +45,12 @@ export default function Sidebar({ nav, setNav, open = false, onClose }) {
         style={{
           marginTop: 8, paddingTop: 14, borderTop: '1px solid #E3DFD3',
           cursor: 'pointer', textAlign: 'center',
+          display: 'flex', flexDirection: 'column', gap: 2,
           font: "400 11px 'Noto Sans TC', sans-serif", color: '#9BA097',
         }}
       >
-        系統版本 v{APP_VERSION} · {APP_UPDATED_AT}
+        <span>系統版本 v{APP_VERSION}</span>
+        <span>{APP_UPDATED_AT}</span>
       </div>
     </div>
   );

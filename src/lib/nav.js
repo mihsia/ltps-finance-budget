@@ -23,15 +23,19 @@ export const navGroups = [
   { label: '總覽', items: [
     { key: 'dashboard', label: '總覽儀表', icon: 'grid', color: '#1F5F52', desc: '跨年度總覽儀表板，顯示各項關鍵指標' },
   ] },
-  { label: '資料模組', items: [
+  { label: '校務與學生', items: [
     { key: 'basic', label: '基本資料', icon: 'school', color: '#C9832F', desc: '班級數、學生人數、教師人力等學校基本統計資料' },
     { key: 'specialNeeds', label: '特生統計', icon: 'heart', color: '#A0764A', desc: '原住民、新住民、低收入戶、身障生、單親生等統計人數' },
-    { key: 'budget', label: '歲入歲出', icon: 'coin', color: '#B5533E', desc: '年度歲入歲出預算與決算金額、差異原因說明' },
+  ] },
+  { label: '教學與活動', items: [
     { key: 'library', label: '圖書藏書', icon: 'book', color: '#7D5BA6', desc: '圖書館藏書量統計' },
     { key: 'language', label: '族語開班', icon: 'chat', color: '#2E7DAF', desc: '本土語言（閩南語、客語）及原住民族語開班班級數與學生人數' },
     { key: 'languageCert', label: '族語認證', icon: 'certificate', color: '#3E7A8C', desc: '師資與學生族語能力認證統計、通過名冊登錄' },
-    { key: 'awards', label: '獲獎紀錄', icon: 'award', color: '#A1497E', desc: '記錄學生與學校各項競賽獲獎資訊' },
     { key: 'club', label: '課後社團', icon: 'star', color: '#4F8C3E', desc: '課後社團開設班別與人數' },
+    { key: 'awards', label: '獲獎紀錄', icon: 'award', color: '#A1497E', desc: '記錄學生與學校各項競賽獲獎資訊' },
+  ] },
+  { label: '財務與行政', items: [
+    { key: 'budget', label: '歲入歲出', icon: 'coin', color: '#B5533E', desc: '年度歲入歲出預算與決算金額、差異原因說明' },
     { key: 'land', label: '土地現值', icon: 'map', color: '#8C8C3E', desc: '學校用地地號與公告現值資訊' },
     { key: 'inquiry', label: '質詢答詢', icon: 'gavel', color: '#B1456B', desc: '議員質詢與學校答詢內容存檔' },
   ] },
