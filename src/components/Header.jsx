@@ -2,11 +2,22 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import BrandMark from './BrandMark';
 
+// Keeps the header's quick year-switcher from growing forever as fiscal
+// years pile up — only the most recent few are offered here, plus whichever
+// older year is currently selected (reached via 歷史歸檔) so it still shows
+// as the active chip instead of silently disappearing from the row.
+const RECENT_YEARS_SHOWN = 3;
+
 export default function Header({ year, setYear, years, onMenuClick }) {
   const { profile, user, logout } = useAuth();
   const initial = (profile?.name || user?.email || '?').trim().charAt(0);
   const [photoFailed, setPhotoFailed] = useState(false);
   const showPhoto = Boolean(user?.photoURL) && !photoFailed;
+
+  const recentYears = years.slice(-RECENT_YEARS_SHOWN);
+  const displayYears = recentYears.includes(year)
+    ? recentYears
+    : [...recentYears, year].sort((a, b) => Number(a) - Number(b));
 
   return (
     <div className="app-header">
@@ -33,7 +44,7 @@ export default function Header({ year, setYear, years, onMenuClick }) {
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', background: '#F5F3EE', borderRadius: 8, padding: 3 }}>
-          {years.map((y) => {
+          {displayYears.map((y) => {
             const active = year === y;
             return (
               <div

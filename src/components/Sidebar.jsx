@@ -1,4 +1,5 @@
 import { navGroups, icons } from '../lib/nav';
+import { APP_UPDATED_AT, APP_VERSION } from '../lib/appInfo';
 
 export default function Sidebar({ nav, setNav, open = false, onClose }) {
   const select = (key) => {
@@ -39,6 +40,16 @@ export default function Sidebar({ nav, setNav, open = false, onClose }) {
           })}
         </div>
       ))}
+      <div
+        onClick={() => select('changelog')}
+        style={{
+          marginTop: 8, paddingTop: 14, borderTop: '1px solid #E3DFD3',
+          cursor: 'pointer', textAlign: 'center',
+          font: "400 11px 'Noto Sans TC', sans-serif", color: '#9BA097',
+        }}
+      >
+        系統版本 v{APP_VERSION} · {APP_UPDATED_AT}
+      </div>
     </div>
   );
 }

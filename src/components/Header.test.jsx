@@ -21,6 +21,24 @@ const baseAuthValue = {
   logout: () => {},
 };
 
+function yearChipTexts(renderer) {
+  return renderer.root
+    .findAll((node) => typeof node.type === 'string' && (node.children || []).join('').endsWith('年度'))
+    .map((node) => (node.children || []).join(''));
+}
+
+describe('Header year switcher', () => {
+  it('only offers the most recent 3 years once more years pile up', () => {
+    const renderer = renderHeader(baseAuthValue, { year: '117', years: ['113', '114', '115', '116', '117'] });
+    expect(yearChipTexts(renderer)).toEqual(['115年度', '116年度', '117年度']);
+  });
+
+  it('still shows an older selected year (reached via 歷史歸檔) as its own chip', () => {
+    const renderer = renderHeader(baseAuthValue, { year: '113', years: ['113', '114', '115', '116', '117'] });
+    expect(yearChipTexts(renderer)).toEqual(['113年度', '115年度', '116年度', '117年度']);
+  });
+});
+
 describe('Header avatar', () => {
   it('shows the Google account photo when one is available', () => {
     const renderer = renderHeader({ ...baseAuthValue, user: { ...baseAuthValue.user, photoURL: 'https://example.com/photo.jpg' } });
