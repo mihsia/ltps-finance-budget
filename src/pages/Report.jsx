@@ -216,6 +216,30 @@ export function ClubParticipationMeter({ stats }) {
   );
 }
 
+/**
+ * A bigger, divided header for a top-level zone of the report (財務概況／
+ * 各模組現況／統計分析／匯出與紀錄) — one step up from `sectionLabel`, which
+ * stays for the sub-heading inside each zone. The report has grown enough
+ * sections over time that a flat run of same-weight sectionLabels reads as
+ * one long undifferentiated list; this gives the eye something to group by.
+ */
+function ZoneHeader({ children }) {
+  return (
+    <div style={{
+      font: "800 15px 'Noto Sans TC', sans-serif", color: '#1E2420',
+      marginTop: 36, marginBottom: 14, paddingBottom: 8,
+      borderBottom: '2px solid #E3DFD3',
+    }}
+    >
+      {children}
+    </div>
+  );
+}
+
+const analysisCardHeading = {
+  font: "700 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 14,
+};
+
 const OPTIONAL_MODULE_CHOICES = [
   { key: 'library', label: '圖書藏書量' },
   { key: 'language', label: '族語開班' },
@@ -438,49 +462,57 @@ export default function Report({ year, years }) {
         </div>
       </div>
 
-      <div style={sectionLabel}>歲出三年比較（千元）</div>
-      <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 640, marginBottom: 20 }} className="table-scroll">
-        <div style={{ minWidth: 420 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '10px 18px', background: '#F5F3EE', font: "700 12px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
-            <span>年度</span><span>金額</span><span>較上年增減</span>
-          </div>
-          {report.trend.map((entry) => (
-            <div key={entry.year} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '10px 18px', borderTop: '1px solid #EEEBE2', font: "500 13px 'Noto Sans TC', sans-serif" }}>
-              <span>{entry.year}年度</span>
-              <span style={{ font: '700 13px Inter, sans-serif' }}>{fmtNum(entry.expenseTotal)}</span>
-              <span style={{ font: '700 12px Inter, sans-serif', color: entry.deltaPct == null ? '#8A9089' : (entry.deltaPct < 0 ? '#B5533E' : '#2F8F5B') }}>
-                {entry.deltaPct == null ? '—' : `${entry.deltaPct < 0 ? '▼' : '▲'} ${Math.abs(entry.deltaPct).toFixed(2)}%`}
-              </span>
+      <ZoneHeader>財務概況</ZoneHeader>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20, alignItems: 'start', marginBottom: 8, maxWidth: 960 }}>
+        <div>
+          <div style={sectionLabel}>歲出三年比較（千元）</div>
+          <div style={{ ...card, padding: 0, overflow: 'hidden' }} className="table-scroll">
+            <div style={{ minWidth: 380 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '10px 18px', background: '#F5F3EE', font: "700 12px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
+                <span>年度</span><span>金額</span><span>較上年增減</span>
+              </div>
+              {report.trend.map((entry) => (
+                <div key={entry.year} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '10px 18px', borderTop: '1px solid #EEEBE2', font: "500 13px 'Noto Sans TC', sans-serif" }}>
+                  <span>{entry.year}年度</span>
+                  <span style={{ font: '700 13px Inter, sans-serif' }}>{fmtNum(entry.expenseTotal)}</span>
+                  <span style={{ font: '700 12px Inter, sans-serif', color: entry.deltaPct == null ? '#8A9089' : (entry.deltaPct < 0 ? '#B5533E' : '#2F8F5B') }}>
+                    {entry.deltaPct == null ? '—' : `${entry.deltaPct < 0 ? '▼' : '▲'} ${Math.abs(entry.deltaPct).toFixed(2)}%`}
+                  </span>
+                </div>
+              ))}
             </div>
-          ))}
+          </div>
+        </div>
+
+        <div>
+          <div style={sectionLabel}>業務計畫別預算與決算（千元）</div>
+          <div style={{ ...card, padding: 0, overflow: 'hidden' }} className="table-scroll">
+            <div style={{ minWidth: 500 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1.6fr', padding: '10px 18px', background: '#F5F3EE', font: "700 12px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
+                <span>項目</span><span>預算金額</span><span>決算金額</span><span>差異原因說明</span>
+              </div>
+              {report.expenseVariance.rows.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無歲出資料</div>}
+              {report.expenseVariance.rows.map((row) => (
+                <div key={row.label} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1.6fr', padding: '10px 18px', borderTop: '1px solid #EEEBE2', font: "500 13px 'Noto Sans TC', sans-serif" }}>
+                  <span>{row.label}</span>
+                  <span style={{ font: '700 13px Inter, sans-serif' }}>{fmtNum(row.budgetAmount)}</span>
+                  <span>{row.actualAmount == null ? '—' : fmtNum(row.actualAmount)}</span>
+                  <span style={{ color: '#8A9089' }}>{row.note || '—'}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          {!report.expenseVariance.complete && (
+            <div style={{ font: "400 12px 'Noto Sans TC', sans-serif", color: '#8A9089', marginTop: 8 }}>
+              ＊決算數為年度結束後陸續填報，尚未全數到齊前不列入決算合計。
+            </div>
+          )}
         </div>
       </div>
 
-      <div style={sectionLabel}>業務計畫別預算與決算（千元）</div>
-      <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 900, marginBottom: 8 }} className="table-scroll">
-        <div style={{ minWidth: 620 }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1.6fr', padding: '10px 18px', background: '#F5F3EE', font: "700 12px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
-            <span>項目</span><span>預算金額</span><span>決算金額</span><span>差異原因說明</span>
-          </div>
-          {report.expenseVariance.rows.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無歲出資料</div>}
-          {report.expenseVariance.rows.map((row) => (
-            <div key={row.label} style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1.6fr', padding: '10px 18px', borderTop: '1px solid #EEEBE2', font: "500 13px 'Noto Sans TC', sans-serif" }}>
-              <span>{row.label}</span>
-              <span style={{ font: '700 13px Inter, sans-serif' }}>{fmtNum(row.budgetAmount)}</span>
-              <span>{row.actualAmount == null ? '—' : fmtNum(row.actualAmount)}</span>
-              <span style={{ color: '#8A9089' }}>{row.note || '—'}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      {!report.expenseVariance.complete && (
-        <div style={{ font: "400 12px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 20, maxWidth: 900 }}>
-          ＊決算數為年度結束後陸續填報，尚未全數到齊前不列入決算合計。
-        </div>
-      )}
-
-      <div style={sectionLabel}>選擇涵蓋模組（各模組現況）</div>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20, maxWidth: 900 }}>
+      <ZoneHeader>各模組現況</ZoneHeader>
+      <div style={sectionLabel}>選擇涵蓋模組</div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20, maxWidth: 960 }}>
         {OPTIONAL_MODULE_CHOICES.map((m) => (
           <div
             key={m.key}
@@ -491,7 +523,7 @@ export default function Report({ year, years }) {
           </div>
         ))}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginBottom: 24, maxWidth: 900 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginBottom: 24, maxWidth: 960 }}>
         {OPTIONAL_MODULE_CHOICES.filter((m) => selected[m.key] && report.modules[m.key]).map((m) => {
           const color = OPTIONAL_MODULE_COLORS[m.key] || '#1F5F52';
           const fields = OPTIONAL_MODULE_DETAIL_FIELDS[m.key] || [];
@@ -522,28 +554,27 @@ export default function Report({ year, years }) {
         })}
       </div>
 
-      <div style={sectionLabel}>獲獎項目統計分析</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginBottom: 24, maxWidth: 900 }}>
+      <ZoneHeader>統計分析</ZoneHeader>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginBottom: 24, maxWidth: 960 }}>
         <div style={card}>
-          <div style={{ font: "700 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 14 }}>依類別分布</div>
+          <div style={analysisCardHeading}>獲獎紀錄・依類別分布</div>
           <AwardCategoryDonut data={awardCategoryStats} />
         </div>
         <div style={card}>
-          <div style={{ font: "700 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 14 }}>依等級分布</div>
+          <div style={analysisCardHeading}>獲獎紀錄・依等級分布</div>
           <AwardLevelBars data={awardLevelStats} />
+        </div>
+        <div style={card}>
+          <div style={analysisCardHeading}>特生統計分析</div>
+          <SpecialNeedsDonut data={specialNeedsStats} totalStudents={totalStudents} />
+        </div>
+        <div style={card}>
+          <div style={analysisCardHeading}>社團參與比例</div>
+          <ClubParticipationMeter stats={clubParticipationStats} />
         </div>
       </div>
 
-      <div style={sectionLabel}>特生統計分析</div>
-      <div style={{ ...card, marginBottom: 24, maxWidth: 900 }}>
-        <SpecialNeedsDonut data={specialNeedsStats} totalStudents={totalStudents} />
-      </div>
-
-      <div style={sectionLabel}>社團參與比例</div>
-      <div style={{ ...card, marginBottom: 24, maxWidth: 900 }}>
-        <ClubParticipationMeter stats={clubParticipationStats} />
-      </div>
-
+      <ZoneHeader>匯出與紀錄</ZoneHeader>
       <div style={sectionLabel}>匯出格式</div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
         <div style={btnOutline} onClick={openExcelPreview}>匯出 Excel（全貌總覽）</div>
