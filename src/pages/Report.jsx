@@ -274,6 +274,7 @@ export default function Report({ year, years }) {
   const libraryState = useYearModule(year, 'library');
   const budgetState = useYearRecords(year, 'budget');
   const languageState = useYearRecords(year, 'language');
+  const languageCertState = useYearRecords(year, 'languageCert');
   const specialNeedsState = useYearRecords(year, 'specialNeeds');
   const awardsState = useYearRecords(year, 'awards');
   const clubState = useYearRecords(year, 'club');
@@ -309,7 +310,7 @@ export default function Report({ year, years }) {
   const selectedModules = OPTIONAL_MODULE_CHOICES.map((m) => m.key).filter((key) => selected[key]);
 
   const sourceStates = [
-    basicState, libraryState, budgetState, languageState, specialNeedsState,
+    basicState, libraryState, budgetState, languageState, languageCertState, specialNeedsState,
     awardsState, clubState, landState, inquiryState, yA, yB, yC,
   ];
   if (sourceStates.some((state) => state.error)) {
@@ -344,7 +345,10 @@ export default function Report({ year, years }) {
     expenseRows: activeExpense,
     revenueRows: activeRevenue,
     trend,
-    language: languageRecordSummary(languageState.data),
+    language: languageRecordSummary([
+      ...(languageState.data || []),
+      ...(languageCertState.data || []),
+    ]),
     specialNeedsRows: activeSpecialNeeds,
     awardsRows: activeAwards,
     clubRows: activeClubs,

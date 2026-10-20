@@ -3,6 +3,7 @@ import { useYearMeta, useYearRecords } from '../hooks/useYearData';
 import { useRecordCrudActions } from '../hooks/useRecordCrudActions';
 import { useAuth } from '../contexts/AuthContext';
 import {
+  LANGUAGE_OPTIONS,
   LANGUAGE_RECORD_SCHEMAS,
   emptyRecordForm,
   recordToForm,
@@ -15,13 +16,7 @@ import {
   tableHeadRow, tableRow, lockedBanner, deadlineBanner,
 } from '../styles';
 
-const TYPE_LABELS = {
-  class: '開班資料',
-  certification: '認證統計',
-  roster: '名冊',
-};
-const LANG_OPTIONS = ['閩南語', '客語', '賽考利克泰雅語', '太魯閣語'];
-const LEVEL_OPTIONS = ['A級（初級）', 'B級（中級）', 'C級（高級）'];
+const CLASS_SCHEMA = LANGUAGE_RECORD_SCHEMAS.class;
 
 function messageStyle(message) {
   return {
@@ -74,50 +69,31 @@ export default function Language({
 
   const activeRecords = recordState.data.filter((record) => !record.deletedAt);
   const classRows = activeRecords.filter((record) => record.recordType === 'class');
-  const certificationRows = activeRecords.filter(
-    (record) => record.recordType === 'certification',
-  );
-  const rosterRows = activeRecords.filter((record) => record.recordType === 'roster');
   const deletedRecords = includeDeleted
-    ? recordState.data.filter(
-      (record) => record.deletedAt && Object.hasOwn(LANGUAGE_RECORD_SCHEMAS, record.recordType),
-    )
+    ? recordState.data.filter((record) => record.deletedAt && record.recordType === 'class')
     : [];
   const writeVisible = recoveryAllowed && !recordState.loading && !recordState.error;
 
   const classesTotal = classRows.reduce((sum, record) => sum + record.classes, 0);
-  const certifiedTeachers = certificationRows.reduce(
-    (sum, record) => sum + record.certifiedTeachers,
-    0,
-  );
-  const totalTeachers = certificationRows.reduce(
-    (sum, record) => sum + record.totalTeachers,
-    0,
-  );
-  const tested = certificationRows.reduce((sum, record) => sum + record.tested, 0);
-  const passed = certificationRows.reduce((sum, record) => sum + record.passed, 0);
-  const passRate = tested ? ((passed / tested) * 100).toFixed(1) : '0.0';
 
-  const startAdd = (recordType) => actions.runControl(() => {
+  const startAdd = () => actions.runControl(() => {
     setFormState({
       mode: 'create',
       recordId: null,
-      recordType,
-      values: emptyRecordForm(LANGUAGE_RECORD_SCHEMAS[recordType].fields),
+      values: emptyRecordForm(CLASS_SCHEMA.fields),
     });
   });
   const startEdit = (record) => actions.runControl(() => {
     setFormState({
       mode: 'update',
       recordId: record.id,
-      recordType: record.recordType,
-      values: recordToForm(record, LANGUAGE_RECORD_SCHEMAS[record.recordType].fields),
+      values: recordToForm(record, CLASS_SCHEMA.fields),
     });
   });
   const cancel = () => actions.runControl(() => setFormState(null));
   const commit = () => actions.runMutation({
     pendingKey: 'form',
-    validate: () => validateLanguageRecord(formState?.recordType, formState?.values || {}),
+    validate: () => validateLanguageRecord('class', formState?.values || {}),
     mutate: (actor, payload) => {
       if (formState.mode === 'create') return recordState.create(payload, actor);
       const { recordType: _recordType, ...editableFields } = payload;
@@ -144,21 +120,19 @@ export default function Language({
   });
 
   if (!canEditModule('language')) {
-    return <NoModuleAccess title="本土語／原住民語開班" />;
+    return <NoModuleAccess title="族語開班" />;
   }
   if (recordState.error || yearState.error) {
-    return <div><div style={pageTitle}>本土語／原住民語開班</div><div style={lockedBanner}>無法載入族語開班資料，請稍後再試。</div></div>;
+    return <div><div style={pageTitle}>族語開班</div><div style={lockedBanner}>無法載入族語開班資料，請稍後再試。</div></div>;
   }
   if (recordState.loading || yearState.loading) {
-    return <div><div style={pageTitle}>本土語／原住民語開班</div><div style={card}>正在載入族語開班資料…</div></div>;
+    return <div><div style={pageTitle}>族語開班</div><div style={card}>正在載入族語開班資料…</div></div>;
   }
-
-  const formSchema = formState ? LANGUAGE_RECORD_SCHEMAS[formState.recordType] : null;
 
   return (
     <div>
-      <div style={pageTitle}>本土語／原住民語開班</div>
-      <div style={pageSubtitle}>負責人：教務處 · {year}年度 · 開班語系及班級數總和 {classesTotal}</div>
+      <div style={pageTitle}>族語開班</div>
+      <div style={pageSubtitle}>負責人：教務處 · {year}年度 · 本土語言（閩南語、客語）及原住民族語開班 · 開班語系及班級數總和 {classesTotal}</div>
       {!yearState.exists && <div style={lockedBanner}>找不到此年度設定，無法編輯或儲存。</div>}
       {yearState.exists && yearState.meta?.locked !== false && (
         <div style={lockedBanner}>此年度未開放編輯，無法編輯或儲存。</div>
@@ -173,11 +147,7 @@ export default function Language({
 
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
         {writeVisible && !formState && !includeDeleted && (
-          <>
-            <button type="button" disabled={actions.pending} style={btnOutline} onClick={() => startAdd('class')}>＋ 新增開班資料</button>
-            <button type="button" disabled={actions.pending} style={btnOutline} onClick={() => startAdd('certification')}>＋ 新增認證統計</button>
-            <button type="button" disabled={actions.pending} style={btnOutline} onClick={() => startAdd('roster')}>＋ 新增名冊</button>
-          </>
+          <button type="button" disabled={actions.pending} style={btnOutline} onClick={startAdd}>＋ 新增開班資料</button>
         )}
         {recoveryAllowed && (
           <button type="button" disabled={actions.pending} style={btnSecondary} onClick={toggleDeleted}>
@@ -187,57 +157,25 @@ export default function Language({
       </div>
 
       {!includeDeleted && (
-        <>
-          <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 720, marginBottom: 20 }}>
-            <div style={tableHeadRow(writeVisible ? '2fr 1fr 1fr 150px' : '2fr 1fr 1fr')}><span>語系</span><span>班級數</span><span>人數</span>{writeVisible && <span>操作</span>}</div>
-            {classRows.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無開班資料</div>}
-            {classRows.map((record) => (
-              <div key={record.id} style={{ ...tableRow(writeVisible ? '2fr 1fr 1fr 150px' : '2fr 1fr 1fr'), alignItems: 'center' }}>
-                <span>{record.lang}</span><span>{record.classes}</span><span>{record.students}</span>
-                {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯開班資料</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用開班資料中…' : '停用開班資料'}</button></span>}
-              </div>
-            ))}
-          </div>
-
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>師資族語能力認證與學生通過情形</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, maxWidth: 720, marginBottom: 18 }}>
-            <div style={{ background: '#F5F3EE', borderRadius: 10, padding: 16 }}>授課教師取得認證比例<br /><b>{certifiedTeachers} / {totalTeachers} 人（{totalTeachers ? Math.round((certifiedTeachers / totalTeachers) * 100) : 0}%）</b></div>
-            <div style={{ background: '#F5F3EE', borderRadius: 10, padding: 16 }}>學生族語認證通過人數<br /><b>{passed} 人</b></div>
-            <div style={{ background: '#F5F3EE', borderRadius: 10, padding: 16 }}>學生認證通過率<br /><b>{passRate}%</b></div>
-          </div>
-          <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 720, marginBottom: 24 }}>
-            <div style={tableHeadRow(writeVisible ? '1.3fr 1fr 1fr 1fr 160px' : '1.3fr 1fr 1fr 1fr')}><span>語系</span><span>授課教師認證</span><span>應考人數</span><span>通過人數</span>{writeVisible && <span>操作</span>}</div>
-            {certificationRows.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無認證統計</div>}
-            {certificationRows.map((record) => (
-              <div key={record.id} style={{ ...tableRow(writeVisible ? '1.3fr 1fr 1fr 1fr 160px' : '1.3fr 1fr 1fr 1fr'), alignItems: 'center' }}>
-                <span>{record.lang}</span><span>{record.certifiedTeachers} / {record.totalTeachers}</span><span>{record.tested}</span><span>{record.passed}</span>
-                {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯認證統計</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用認證統計中…' : '停用認證統計'}</button></span>}
-              </div>
-            ))}
-          </div>
-
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>學生族語認證通過名冊登錄</div>
-          <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 720 }}>
-            <div style={tableHeadRow(writeVisible ? '1.2fr 1fr 1fr 140px' : '1.2fr 1fr 1fr')}><span>語系</span><span>級別</span><span>學生姓名</span>{writeVisible && <span>操作</span>}</div>
-            {rosterRows.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無名冊資料</div>}
-            {rosterRows.map((record) => (
-              <div key={record.id} style={{ ...tableRow(writeVisible ? '1.2fr 1fr 1fr 140px' : '1.2fr 1fr 1fr'), alignItems: 'center' }}>
-                <span>{record.lang}</span><span>{record.level}</span><span>{record.name}</span>
-                {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯名冊</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用名冊中…' : '停用名冊'}</button></span>}
-              </div>
-            ))}
-          </div>
-        </>
+        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 720 }}>
+          <div style={tableHeadRow(writeVisible ? '2fr 1fr 1fr 150px' : '2fr 1fr 1fr')}><span>語系</span><span>班級數</span><span>人數</span>{writeVisible && <span>操作</span>}</div>
+          {classRows.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無開班資料</div>}
+          {classRows.map((record) => (
+            <div key={record.id} style={{ ...tableRow(writeVisible ? '2fr 1fr 1fr 150px' : '2fr 1fr 1fr'), alignItems: 'center' }}>
+              <span>{record.lang}</span><span>{record.classes}</span><span>{record.students}</span>
+              {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯開班資料</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用開班資料中…' : '停用開班資料'}</button></span>}
+            </div>
+          ))}
+        </div>
       )}
 
       {includeDeleted && (
         <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 720 }}>
-          <div style={tableHeadRow('1fr 2fr 72px')}><span>類別</span><span>資料</span><span>操作</span></div>
+          <div style={tableHeadRow('2fr 1fr 1fr 72px')}><span>語系</span><span>班級數</span><span>人數</span><span>操作</span></div>
           {deletedRecords.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無已停用資料</div>}
           {deletedRecords.map((record) => (
-            <div key={record.id} style={{ ...tableRow('1fr 2fr 72px'), opacity: 0.72 }}>
-              <span>{TYPE_LABELS[record.recordType]}</span>
-              <span>{record.lang} · {record.name || `${record.classes ?? record.certifiedTeachers} / ${record.students ?? record.totalTeachers}`}</span>
+            <div key={record.id} style={{ ...tableRow('2fr 1fr 1fr 72px'), opacity: 0.72 }}>
+              <span>{record.lang}</span><span>{record.classes}</span><span>{record.students}</span>
               <button type="button" disabled={actions.pending} onClick={() => restore(record.id)}>{actions.isRowPending(record.id) ? '復原中…' : '復原'}</button>
             </div>
           ))}
@@ -245,13 +183,13 @@ export default function Language({
       )}
 
       {writeVisible && formState && !includeDeleted && (
-        <div style={{ ...card, maxWidth: 720, marginTop: 14 }}>
-          <div style={{ fontWeight: 700, marginBottom: 12 }}>{formState.mode === 'create' ? '新增' : '編輯'}{TYPE_LABELS[formState.recordType]}</div>
+        <div style={{ ...card, maxWidth: 520, marginTop: 14 }}>
+          <div style={{ fontWeight: 700, marginBottom: 12 }}>{formState.mode === 'create' ? '新增' : '編輯'}開班資料</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
-            {formSchema.fields.map((fieldSchema) => (
+            {CLASS_SCHEMA.fields.map((fieldSchema) => (
               <label key={fieldSchema.key}>
                 {fieldSchema.label}
-                {fieldSchema.key === 'lang' || fieldSchema.key === 'level' ? (
+                {fieldSchema.key === 'lang' ? (
                   <select
                     aria-label={fieldSchema.label}
                     disabled={actions.pending}
@@ -263,7 +201,7 @@ export default function Language({
                     }))}
                   >
                     <option value="">請選擇</option>
-                    {(fieldSchema.key === 'lang' ? LANG_OPTIONS : LEVEL_OPTIONS).map((option) => (
+                    {LANGUAGE_OPTIONS.map((option) => (
                       <option key={option} value={option}>{option}</option>
                     ))}
                   </select>

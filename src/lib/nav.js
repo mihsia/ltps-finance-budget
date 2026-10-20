@@ -16,6 +16,7 @@ export const icons = {
   user: 'M8 1.8C9.8 1.8 11.2 3.2 11.2 5C11.2 6.8 9.8 8.2 8 8.2C6.2 8.2 4.8 6.8 4.8 5C4.8 3.2 6.2 1.8 8 1.8ZM2 14.4C2.4 11 4.9 8.8 8 8.8C11.1 8.8 13.6 11 14 14.4Z',
   heart: 'M8 14L1.5 8.2C0 6.8 0 4.4 1.8 3.1C3.3 2 5.4 2.3 6.6 3.7L8 5.3L9.4 3.7C10.6 2.3 12.7 2 14.2 3.1C16 4.4 16 6.8 14.5 8.2L8 14Z',
   info: 'M8 1.5C4.4 1.5 1.5 4.4 1.5 8C1.5 11.6 4.4 14.5 8 14.5C11.6 14.5 14.5 11.6 14.5 8C14.5 4.4 11.6 1.5 8 1.5ZM8 3.3C10.6 3.3 12.7 5.4 12.7 8C12.7 10.6 10.6 12.7 8 12.7C5.4 12.7 3.3 10.6 3.3 8C3.3 5.4 5.4 3.3 8 3.3ZM7.2 5H8.8V6.4H7.2ZM7.2 7.6H8.8V11H7.2Z',
+  certificate: 'M8 1.5C10.2 1.5 12 3.3 12 5.5C12 7.1 11.1 8.4 9.8 9V8.9L11 14.5L8 12.6L5 14.5L6.2 8.9V9C4.9 8.4 4 7.1 4 5.5C4 3.3 5.8 1.5 8 1.5ZM8 3.3C6.8 3.3 5.8 4.3 5.8 5.5C5.8 6.7 6.8 7.7 8 7.7C9.2 7.7 10.2 6.7 10.2 5.5C10.2 4.3 9.2 3.3 8 3.3Z',
 };
 
 export const navGroups = [
@@ -27,7 +28,8 @@ export const navGroups = [
     { key: 'specialNeeds', label: '特生統計', icon: 'heart', color: '#A0764A', desc: '原住民、新住民、低收入戶、身障生、單親生等統計人數' },
     { key: 'budget', label: '歲入歲出', icon: 'coin', color: '#B5533E', desc: '年度歲入歲出預算與決算金額、差異原因說明' },
     { key: 'library', label: '圖書藏書', icon: 'book', color: '#7D5BA6', desc: '圖書館藏書量統計' },
-    { key: 'language', label: '族語開班', icon: 'chat', color: '#2E7DAF', desc: '本土語言開班班級數、學生人數與教師認證資料' },
+    { key: 'language', label: '族語開班', icon: 'chat', color: '#2E7DAF', desc: '本土語言（閩南語、客語）及原住民族語開班班級數與學生人數' },
+    { key: 'languageCert', label: '族語認證', icon: 'certificate', color: '#3E7A8C', desc: '師資與學生族語能力認證統計、通過名冊登錄' },
     { key: 'awards', label: '獲獎紀錄', icon: 'award', color: '#A1497E', desc: '記錄學生與學校各項競賽獲獎資訊' },
     { key: 'club', label: '課後社團', icon: 'star', color: '#4F8C3E', desc: '課後社團開設班別與人數' },
     { key: 'land', label: '土地現值', icon: 'map', color: '#8C8C3E', desc: '學校用地地號與公告現值資訊' },

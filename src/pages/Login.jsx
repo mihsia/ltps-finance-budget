@@ -58,10 +58,10 @@ export default function Login() {
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F3EE', padding: 20 }}>
-      <div style={{ ...card, width: 'min(400px, 100%)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 20 }}>
-          <BrandMark size={32} />
-          <div style={{ font: "700 15px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>利澤國小基金預算管理系統</div>
+      <div style={{ ...card, width: 'min(420px, 100%)', padding: 28 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, marginBottom: 26 }}>
+          <BrandMark size={36} />
+          <div style={{ font: "700 16px 'Noto Sans TC', sans-serif", color: '#1E2420', textAlign: 'center' }}>利澤國小基金預算管理系統</div>
         </div>
 
         {!isFirebaseConfigured ? (
@@ -76,30 +76,30 @@ export default function Login() {
               onClick={submitGoogle}
               disabled={submitting || Boolean(pendingGoogleEmail)}
               style={{
-                width: '100%', minHeight: 48, borderRadius: 8, border: 0,
+                width: '100%', minHeight: 50, borderRadius: 8, border: 0,
                 background: '#1F5F52', color: '#fff', display: 'flex', alignItems: 'center',
                 justifyContent: 'center', gap: 10,
                 cursor: submitting || pendingGoogleEmail ? 'default' : 'pointer',
-                font: "700 14px 'Noto Sans TC', sans-serif",
+                font: "700 14.5px 'Noto Sans TC', sans-serif",
                 opacity: submitting || pendingGoogleEmail ? .6 : 1,
               }}
             >
               <span style={{
                 font: '800 17px Inter, sans-serif', color: '#1F5F52', background: '#fff',
                 width: 22, height: 22, borderRadius: '50%', display: 'inline-flex',
-                alignItems: 'center', justifyContent: 'center',
+                alignItems: 'center', justifyContent: 'center', flexShrink: 0,
               }}
               >
                 G
               </span>
               使用 Google 帳號登入
             </button>
-            <div style={{ font: "400 11.5px/1.7 'Noto Sans TC', sans-serif", color: '#8A9089', textAlign: 'center', marginTop: 10 }}>
-              請使用學校指派的 Google 帳號登入，系統帳號已全面改用 Google 登入
+            <div style={{ font: "400 11.5px/1.7 'Noto Sans TC', sans-serif", color: '#8A9089', textAlign: 'center', marginTop: 12 }}>
+              系統帳號已全面改用 Google 登入
             </div>
 
             {pendingGoogleEmail && (
-              <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid #EEEBE2' }}>
+              <div style={{ marginTop: 22, paddingTop: 20, borderTop: '1px solid #EEEBE2' }}>
                 <div style={{ font: "600 12.5px/1.7 'Noto Sans TC', sans-serif", color: '#B5533E', marginBottom: 12 }}>
                   這個 Google 帳號已對應一個現有的密碼帳號，請輸入原密碼以完成連結：
                 </div>
@@ -133,21 +133,23 @@ export default function Login() {
             )}
 
             {!pendingGoogleEmail && !passwordFormOpen && (
-              <button
-                type="button"
-                onClick={() => setShowPasswordForm(true)}
-                style={{
-                  width: '100%', marginTop: 18, border: 0, background: 'transparent',
-                  color: '#8A9089', cursor: 'pointer', textDecoration: 'underline',
-                  font: "600 11.5px 'Noto Sans TC', sans-serif",
-                }}
-              >
-                仍使用舊版帳號密碼登入
-              </button>
+              <div style={{ marginTop: 22, paddingTop: 16, borderTop: '1px solid #EEEBE2', textAlign: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordForm(true)}
+                  style={{
+                    border: 0, background: 'transparent', padding: 0,
+                    color: '#8A9089', cursor: 'pointer', textDecoration: 'underline',
+                    font: "600 11.5px 'Noto Sans TC', sans-serif",
+                  }}
+                >
+                  仍使用舊版帳號密碼登入
+                </button>
+              </div>
             )}
 
             {!pendingGoogleEmail && passwordFormOpen && (
-              <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid #EEEBE2' }}>
+              <div style={{ marginTop: 22, paddingTop: 20, borderTop: '1px solid #EEEBE2' }}>
                 <form onSubmit={submit}>
                   <div style={{ marginBottom: 14 }}>
                     <label style={label}>帳號（Email）</label>
@@ -180,7 +182,7 @@ export default function Login() {
         )}
 
         <div style={{
-          marginTop: 20, paddingTop: 14, borderTop: '1px solid #EEEBE2',
+          marginTop: 24, paddingTop: 16, borderTop: '1px solid #EEEBE2',
           font: "400 11px 'Noto Sans TC', sans-serif", color: '#8A9089', textAlign: 'center',
         }}
         >

@@ -11,7 +11,9 @@
     "test:rules": "firebase emulators:exec --only firestore,storage \"vitest run rules-tests\"",
     "lint": "eslint .",
     "seed": "node scripts/seed.js",
-    "seed:dry-run": "node scripts/seed.js --dry-run"
+    "seed:dry-run": "node scripts/seed.js --dry-run",
+    "migrate:language-cert": "node scripts/migrateLanguageCertification.js",
+    "migrate:language-cert:dry-run": "node scripts/migrateLanguageCertification.js --dry-run"
   },
   "dependencies": {
     "firebase": "^11.0.2",

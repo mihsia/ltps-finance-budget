@@ -9,7 +9,8 @@ const COMPLETION_MODULES = [
   { key: 'specialNeeds', label: '特生統計' },
   { key: 'budget', label: '預算數' },
   { key: 'library', label: '圖書館藏書' },
-  { key: 'language', label: '本土語開班' },
+  { key: 'language', label: '族語開班' },
+  { key: 'languageCert', label: '族語認證' },
   { key: 'awards', label: '獲獎紀錄' },
   { key: 'club', label: '課後社團' },
   { key: 'land', label: '土地公告現值' },
@@ -26,6 +27,7 @@ export default function Dashboard({ years, latestYear }) {
   const language = useYearRecords(latestYear, 'language');
   const modules = {
     basic, budget: budgetC, library, language,
+    languageCert: useYearRecords(latestYear, 'languageCert'),
     awards: useYearRecords(latestYear, 'awards'),
     club: useYearRecords(latestYear, 'club'),
     land: useYearRecords(latestYear, 'land'),

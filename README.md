@@ -57,7 +57,9 @@ npm run dev
 /years/{year}/modules/budgetbook                 -- fundName、reviewAuthority、pdfUrl（PDF 存 Storage，見下）
 /years/{year}/modules/{key}/records/{recordId}   -- 多筆資料：budget（expense|revenue，各含 amount 預算
                                                      金額、actualAmount 決算金額、varianceNote 差異原因，
-                                                     後兩者選填）、language（class|certification|roster）、
+                                                     後兩者選填）、language（class，開班資料）、
+                                                     languageCert（certification|roster，認證統計與通過
+                                                     名冊，與 language 分開存放，見下「族語開班與族語認證」）、
                                                      specialNeeds（特生統計：category|count|note，
                                                      category 為下拉選單並可自訂）、awards（含 category
                                                      語文類|藝文類|體育類|科學類下拉選單）、club、land、
@@ -93,6 +95,18 @@ Storage：`budget-books/{year}/{fileName}`（公開讀取，僅能透過 `upload
 - **獨立匯出／匯入**：獲獎紀錄頁可直接「匯出 Excel」目前資料、下載「範本」、或「匯入 Excel」批次新增，與議會報表頁的全模組匯出互不相關；匯入時每一列各自驗證與建立，單列失敗不影響其他列，並列出逐列成功／失敗結果，邏輯見 `src/lib/awardImport.js`。
 - **統計分析**：議會報表頁新增「獲獎項目統計分析」區塊，提供依類別（圓環圖）與依等級（長條圖）的分布統計，計算邏輯見 `src/lib/awardStats.js`。
 
+## 族語開班與族語認證
+
+- **拆分為兩個獨立模組**：「族語開班」（開班資料：語系、班級數、學生人數，`src/pages/Language.jsx`，Firestore moduleKey `language`）與「族語認證」（認證統計、學生通過名冊，`src/pages/LanguageCert.jsx`，Firestore moduleKey `languageCert`）原本合併在同一頁、同一個 Firestore 子集合，容易讓填報人員搞混兩種性質不同的資料，現已拆成左方選單兩個獨立項目，帳號管理頁的「負責模組」也可分別授權（模組清單直接取自 `src/lib/nav.js` 的 `navGroups`，新增項目會自動出現在帳號管理頁，不需另外維護）。
+- **既有認證／名冊資料需手動搬移一次**：這個拆分只影響「之後新增的資料」存放位置；若系統先前已透過「族語開班」頁輸入過認證統計或名冊資料，那些紀錄仍留在舊的 `language` 子集合中，不會自動出現在新的「族語認證」頁。請在取得 Firebase 服務帳戶金鑰（`scripts/serviceAccountKey.json`，流程同 `npm run seed` 所需的金鑰）後，執行一次搬移腳本：
+  ```
+  npm run migrate:language-cert:dry-run   # 預覽會搬移哪些紀錄，不會寫入
+  npm run migrate:language-cert           # 實際搬移
+  ```
+  此腳本（`scripts/migrateLanguageCertification.js`／核心邏輯見 `scripts/migrateLanguageCertification.cjs`）只搬移 `recordType` 為 `certification`／`roster` 的紀錄，且具冪等性：目的地已存在的紀錄不會被覆蓋，重複執行也不會重複搬移或出錯。
+- **語系改為下拉選單**：開班資料與認證統計／名冊的「語系」欄位改為下拉選單，選項為閩南語、客語，以及原住民族委員會公告的 16 族語言（阿美語、泰雅語、排灣語、布農語、卑南語、魯凱語、鄒語、賽夏語、雅美語（達悟語）、邵語、噶瑪蘭語、太魯閣語、撒奇萊雅語、賽德克語、拉阿魯哇語、卡那卡那富語），定義見 `src/lib/recordSchemas.js` 的 `LANGUAGE_OPTIONS`。
+- **認證通過級別改採官方五級制**：原本為自訂的 A／B／C 三級，現改為「原住民族語言能力認證」官方分級：初級、中級、中高級、高級、優級（`LANGUAGE_CERT_LEVELS`），閩南語／客語認證比照同一五級制呈現。
+
 ## 特生統計
 
 - 議會報表頁新增「特生統計分析」區塊，以圓環圖依類別（原住民／新住民／低收入戶／身障生／單親生，皆以不同顏色區分）呈現各類別人數，並計算佔全校學生總數（基本資料模組的學生人數）的百分比；由於類別間可能重疊（同一學生可能同時屬於多個類別），百分比各自獨立計算，不會加總為 100%。尚未填寫學生人數時會顯示提示文字，不會顯示錯誤的百分比。計算邏輯見 `src/lib/specialNeedsStats.js`。
@@ -111,13 +125,13 @@ Storage：`budget-books/{year}/{fileName}`（公開讀取，僅能透過 `upload
 ## 權限與填報期限
 
 - **無權限時不再顯示資料**：填報人員若未被指派某模組的權限，過去仍能看到該模組資料（唯讀），現在會直接顯示「無權限，請洽系統管理員」訊息，不再顯示任何資料內容；管理者不受影響，仍可存取所有模組。
-- **填報截止日**：`/years/{year}.deadlines` 可針對任一模組（`basic`／`budget`／`library`／`language`／`budgetbook`／`awards`／`club`／`land`／`inquiry`／`specialNeeds`）個別設定填報截止日；各模組頁面會顯示醒目的截止日提示（含「截止當日 23:59 前可儲存」或「已超過填報期限」），超過期限後該模組即停用新增／編輯／刪除，伺服器端（`useRecordCrudActions`／各頁 `checkInvocation`）與畫面會同時擋下操作，不只是畫面上看不到按鈕。共用邏輯見 `src/lib/fixedFieldEditing.js` 的 `deadlineExtraCheck`／`getDeadlineState`。
+- **填報截止日**：`/years/{year}.deadlines` 可針對任一模組（`basic`／`budget`／`library`／`language`／`languageCert`／`budgetbook`／`awards`／`club`／`land`／`inquiry`／`specialNeeds`）個別設定填報截止日；各模組頁面會顯示醒目的截止日提示（含「截止當日 23:59 前可儲存」或「已超過填報期限」），超過期限後該模組即停用新增／編輯／刪除，伺服器端（`useRecordCrudActions`／各頁 `checkInvocation`）與畫面會同時擋下操作，不只是畫面上看不到按鈕。共用邏輯見 `src/lib/fixedFieldEditing.js` 的 `deadlineExtraCheck`／`getDeadlineState`。
 
 ## 登入與介面
 
 - 登入頁下方顯示目前系統版本與最後更新日期；版號不是 `package.json` 的版本號，而是從系統第一次上線起算，每次有使用者可見的異動就加一（v1.0、v1.1……）。版號與異動說明集中定義在 `src/lib/appInfo.js` 的 `CHANGELOG` 陣列，`APP_VERSION`／`APP_UPDATED_AT` 一律取陣列最後一筆，單一真實來源；每次出新版時在陣列尾端新增一筆（`version`／`date`／`notes`），不修改或重排舊紀錄。
-- **登入畫面以 Google 帳號登入為主**：由於系統帳號已全面改用 Google 登入，登入頁預設只顯示「使用 Google 帳號登入」按鈕，帳號密碼表單收合為「仍使用舊版帳號密碼登入」連結，點選後才展開，避免使用者誤填密碼表單造成登入錯誤。既有的 Google／密碼帳號連結流程（`pendingGoogleEmail`）不受影響：當 Google 帳號需要連結既有密碼帳號時，密碼表單會自動強制展開並要求輸入原密碼。
-- **版本更新說明**：左方選單「報表與管理」新增「版本更新說明」頁面（`src/pages/Changelog.jsx`），列出 `CHANGELOG` 所有版本紀錄（新到舊）；此頁面刻意不做模組權限檢查，所有已登入使用者皆可檢視，不受帳號的「負責模組」設定影響。
+- **登入畫面以 Google 帳號登入為主**：由於系統帳號已全面改用 Google 登入，登入頁預設只顯示「使用 Google 帳號登入」按鈕，帳號密碼表單收合為「仍使用舊版帳號密碼登入」連結，點選後才展開，避免使用者誤填密碼表單造成登入錯誤。既有的 Google／密碼帳號連結流程（`pendingGoogleEmail`）不受影響：當 Google 帳號需要連結既有密碼帳號時，密碼表單會自動強制展開並要求輸入原密碼。版面並加大卡片留白、置中品牌標題、縮短按鈕下方說明文字，避免換行斷字。
+- **版本更新說明**：左方選單「報表與管理」新增「版本更新說明」頁面（`src/pages/Changelog.jsx`），列出 `CHANGELOG` 所有版本紀錄（新到舊），左側以固定色塊顯示版號、右側顯示日期與說明，並依版次交錯背景色以利逐筆閱讀；此頁面刻意不做模組權限檢查，所有已登入使用者皆可檢視，不受帳號的「負責模組」設定影響。
 - 畫面右上角使用者頭像改為顯示 Google 帳號的大頭貼（`photoURL`）；若無法載入則自動回退為原本的姓名字首圓形圖示。
 - 帳號管理頁的「負責模組」欄位最多顯示 3 個模組標籤，超過的數量以「+N」徽章呈現，滑鼠移至徽章上可看到完整清單（`title` 屬性），避免模組數量多時版面過於擁擠。
 

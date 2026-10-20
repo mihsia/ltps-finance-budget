@@ -12,6 +12,7 @@ import Basic from './pages/Basic';
 import Budget from './pages/Budget';
 import Library from './pages/Library';
 import Language from './pages/Language';
+import LanguageCert from './pages/LanguageCert';
 import Generic from './pages/Generic';
 import BudgetBook from './pages/BudgetBook';
 import Report from './pages/Report';
@@ -37,6 +38,7 @@ function Shell() {
     if (nav === 'budget') return <Budget {...pageProps} />;
     if (nav === 'library') return <Library {...pageProps} />;
     if (nav === 'language') return <Language {...pageProps} />;
+    if (nav === 'languageCert') return <LanguageCert {...pageProps} />;
     if (genericModuleKeys.includes(nav)) return <Generic {...pageProps} moduleKey={nav} />;
     if (nav === 'budgetbook') return <BudgetBook {...pageProps} />;
     if (nav === 'report') return <Report {...pageProps} />;

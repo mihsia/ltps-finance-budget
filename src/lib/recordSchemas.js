@@ -116,6 +116,22 @@ export function validateBudgetRecord(recordType, source) {
   return result.valid ? valid({ recordType: schema.recordType, ...result.data }) : result;
 }
 
+// 語系 dropdown shared by 族語開班 (class offerings) and 族語認證
+// (certification/roster): 閩南語、客語 plus each of the 16 centrally
+// recognized indigenous peoples' languages (原住民族委員會公告16族), at the
+// tribe level rather than individual sub-dialects, so the list stays short
+// enough to pick from.
+export const LANGUAGE_OPTIONS = [
+  '閩南語', '客語',
+  '阿美語', '泰雅語', '排灣語', '布農語', '卑南語', '魯凱語', '鄒語', '賽夏語',
+  '雅美語（達悟語）', '邵語', '噶瑪蘭語', '太魯閣語', '撒奇萊雅語', '賽德克語',
+  '拉阿魯哇語', '卡那卡那富語',
+];
+
+// Official 原住民族語言能力認證 tiers (初級、中級、中高級、高級、優級) —
+// also used for 閩南語／客語認證, which follow the same five-tier scheme.
+export const LANGUAGE_CERT_LEVELS = ['初級', '中級', '中高級', '高級', '優級'];
+
 export const LANGUAGE_RECORD_SCHEMAS = {
   class: {
     label: '開班資料',

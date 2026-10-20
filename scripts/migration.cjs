@@ -31,21 +31,24 @@ const REAL_EXPENSE_TOTAL_BY_YEAR = { 113: 56463, 114: 55101, 115: 54358 };
 // Everything below is illustrative placeholder data (also per the README)
 // and MUST be replaced with the school's real figures via the app's own
 // forms before an actual council submission.
+// 語系 names match LANGUAGE_OPTIONS (src/lib/recordSchemas.js) — tribe-level
+// naming (e.g. 泰雅語, not a sub-dialect like 賽考利克泰雅語).
 const PLACEHOLDER_LANGUAGE_CLASSES = [
   { lang: '閩南語', classes: 13, students: 264 },
   { lang: '客語', classes: 1, students: 4 },
-  { lang: '賽考利克泰雅語', classes: 3, students: 10 },
+  { lang: '泰雅語', classes: 3, students: 10 },
   { lang: '太魯閣語', classes: 1, students: 2 },
 ];
 const PLACEHOLDER_LANGUAGE_CERTS = [
   { lang: '閩南語', certifiedTeachers: 2, totalTeachers: 2, tested: 264, passed: 138 },
   { lang: '客語', certifiedTeachers: 1, totalTeachers: 1, tested: 4, passed: 2 },
-  { lang: '賽考利克泰雅語', certifiedTeachers: 1, totalTeachers: 1, tested: 10, passed: 2 },
+  { lang: '泰雅語', certifiedTeachers: 1, totalTeachers: 1, tested: 10, passed: 2 },
   { lang: '太魯閣語', certifiedTeachers: 0, totalTeachers: 1, tested: 2, passed: 0 },
 ];
+// level 值依官方「原住民族語言能力認證」五級制（LANGUAGE_CERT_LEVELS）。
 const PLACEHOLDER_LANGUAGE_ROSTER = [
-  { lang: '閩南語', level: 'A級（初級）', name: '陳○安' },
-  { lang: '賽考利克泰雅語', level: 'B級（中級）', name: '林○恩' },
+  { lang: '閩南語', level: '初級', name: '陳○安' },
+  { lang: '泰雅語', level: '中級', name: '林○恩' },
 ];
 const PLACEHOLDER_AWARDS = [
   { category: '語文類', item: '全國語文競賽 朗讀組', level: '特優', date: '2025-10-12' },
@@ -144,8 +147,11 @@ function buildYearPlan(year) {
     plan.recordGroups.push(
       {
         modulePath: 'years/115/modules/language',
+        rows: indexed('class', PLACEHOLDER_LANGUAGE_CLASSES),
+      },
+      {
+        modulePath: 'years/115/modules/languageCert',
         rows: [
-          ...indexed('class', PLACEHOLDER_LANGUAGE_CLASSES),
           ...indexed('certification', PLACEHOLDER_LANGUAGE_CERTS),
           ...indexed('roster', PLACEHOLDER_LANGUAGE_ROSTER),
         ],
