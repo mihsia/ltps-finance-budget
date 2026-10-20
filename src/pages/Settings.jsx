@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { runAuthorized } from '../lib/accessPolicy';
 import { navGroups } from '../lib/nav';
 import { buildAccountImportTemplateWorkbook, parseAccountImportFile } from '../lib/accountImport';
+import NoModuleAccess from '../components/NoModuleAccess';
 import {
   pageTitle, pageSubtitle, card, input, label, btnPrimary, btnOutline, btnSecondary,
   chip, badge, tableHeadRow, tableRow,
@@ -115,7 +116,7 @@ function editFormFrom(account) {
 
 export default function Settings() {
   const { users, error: usersError } = useUsers();
-  const { isAdmin, authorizeAdmin, authorizeAdminActor } = useAuth();
+  const { isAdmin, canEditModule, authorizeAdmin, authorizeAdminActor } = useAuth();
 
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState(emptyCreateForm);
@@ -259,6 +260,10 @@ export default function Settings() {
     });
     if (!result.executed) setActionError(result.reason);
   };
+
+  if (!canEditModule('settings')) {
+    return <NoModuleAccess title="帳號管理" />;
+  }
 
   return (
     <div>

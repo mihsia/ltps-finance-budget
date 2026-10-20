@@ -44,6 +44,9 @@ function asEditor() {
 function asDisabledAdmin() {
   return testEnv.authenticatedContext('disabled-admin').firestore();
 }
+function asEditorWithSettings() {
+  return testEnv.authenticatedContext('editor-settings-1').firestore();
+}
 function asAnon() {
   return testEnv.unauthenticatedContext().firestore();
 }
@@ -57,6 +60,9 @@ async function seedProfiles() {
     await db.collection('users').doc('editor-1').set({
       name: '填報人員', email: 'editor@example.test', dept: '總務處', role: 'editor', status: 'active', modules: ['budget'],
     });
+    await db.collection('users').doc('editor-settings-1').set({
+      name: '帳號管理人員', email: 'settings-editor@example.test', dept: '人事室', role: 'editor', status: 'active', modules: ['settings'],
+    });
     await db.collection('users').doc('disabled-admin').set({
       name: '停用管理員', email: 'off@example.test', dept: '校長室', role: 'admin', status: 'disabled', modules: [],
     });
@@ -69,9 +75,19 @@ async function seedProfiles() {
 describe('users/{uid}', () => {
   beforeEach(seedProfiles);
 
-  it('lets any signed-in user read profiles, including their own disabled one', async () => {
-    await assertSucceeds(asEditor().collection('users').doc('admin-1').get());
+  it('lets any signed-in user read their own profile, including a disabled one', async () => {
+    await assertSucceeds(asEditor().collection('users').doc('editor-1').get());
     await assertSucceeds(asDisabledAdmin().collection('users').doc('disabled-admin').get());
+  });
+
+  it('lets an admin read any profile, but denies a plain editor reading someone else\'s', async () => {
+    await assertSucceeds(asAdmin().collection('users').doc('editor-1').get());
+    await assertFails(asEditor().collection('users').doc('admin-1').get());
+  });
+
+  it('lets an editor carrying the settings module read any profile, for 帳號管理', async () => {
+    await assertSucceeds(asEditorWithSettings().collection('users').doc('admin-1').get());
+    await assertSucceeds(asEditorWithSettings().collection('users').doc('editor-1').get());
   });
 
   it('denies anonymous reads', async () => {

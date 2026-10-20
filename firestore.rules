@@ -28,13 +28,18 @@ service cloud.firestore {
         || request.resource.data.recordType == resource.data.recordType;
     }
 
-    // Staff profiles: readable by any signed-in user (needed to resolve
-    // names/roles in the UI), writable only by an active admin — accounts are
-    // actually created/edited/disabled via Cloud Functions using the Admin
-    // SDK (createAccount/updateAccount/setAccountStatus), which re-check this
-    // same rule server-side rather than relying on it.
+    // Staff profiles: any signed-in user may always read their own doc (the
+    // login flow's access check depends on it), and an admin or an editor
+    // carrying the 'settings' module (帳號管理) may read any profile for the
+    // account-management page — mirrors Settings.jsx's own canEditModule
+    // gate, so the UI's "無權限" screen isn't just cosmetic. Writable only by
+    // an active admin — accounts are actually created/edited/disabled via
+    // Cloud Functions using the Admin SDK (createAccount/updateAccount/
+    // setAccountStatus), which re-check this same rule server-side rather
+    // than relying on it.
     match /users/{uid} {
-      allow read: if isSignedIn();
+      allow read: if isSignedIn()
+        && (request.auth.uid == uid || isActiveAdmin() || canEditModule('settings'));
       allow write: if isActiveAdmin();
     }
 

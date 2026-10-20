@@ -64,6 +64,11 @@ export const CHANGELOG = [
     date: '2026-10-20',
     notes: 'Cloud Functions 執行環境由即將於 2026-10-30 停用的 Node.js 20 升級為 Node.js 22，避免屆時無法部署；帳號白名單登入限制（Google 登入 Blocking Functions）正式部署並生效。',
   },
+  {
+    version: '1.12',
+    date: '2026-10-20',
+    notes: '修正帳號管理頁權限漏洞：先前沒有「帳號管理」模組權限的帳號仍能打開此頁並看到所有人的帳號資料，現已補上與其他模組一致的權限檢查，並同步收緊 Firestore 安全規則，從資料庫層級擋下未授權的讀取。',
+  },
 ];
 
 export const APP_VERSION = CHANGELOG[CHANGELOG.length - 1].version;

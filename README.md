@@ -126,6 +126,7 @@ Storage：`budget-books/{year}/{fileName}`（公開讀取，僅能透過 `upload
 ## 權限與填報期限
 
 - **無權限時不再顯示資料**：填報人員若未被指派某模組的權限，過去仍能看到該模組資料（唯讀），現在會直接顯示「無權限，請洽系統管理員」訊息，不再顯示任何資料內容；管理者不受影響，仍可存取所有模組。
+- **帳號管理頁補上同樣的權限檢查**：`src/pages/Settings.jsx`（帳號管理）先前漏掉了這道 `canEditModule` 檢查，只有畫面上的「編輯／停用／新增帳號」等按鈕是管理者限定（`isAdmin`），但頁面本身任何已登入帳號都能打開、看到完整帳號清單（含所有人的 Email、處室、負責模組），即使該帳號的「負責模組」裡沒有勾選「帳號管理」。現已補上與其他模組頁一致的 `canEditModule('settings')` 檢查，沒有被指派「帳號管理」模組的帳號會改看到「無權限」畫面。同時也收緊了 `firestore.rules` 的 `/users/{uid}` 讀取規則（原本是任何登入帳號都可讀取整個帳號集合，僅用畫面擋，Firestore 本身沒擋）：現在只有讀取**自己的**個人資料（登入流程需要）、管理者，或被指派「帳號管理」模組的帳號，才能讀取**其他人**的帳號資料。**這項規則異動需要額外執行 `firebase deploy --only firestore:rules` 才會在正式環境生效**，否則資料庫層級仍是舊規則。
 - **填報截止日**：`/years/{year}.deadlines` 可針對任一模組（`basic`／`budget`／`library`／`language`／`languageCert`／`budgetbook`／`awards`／`club`／`land`／`inquiry`／`specialNeeds`）個別設定填報截止日；各模組頁面會顯示醒目的截止日提示（含「截止當日 23:59 前可儲存」或「已超過填報期限」），超過期限後該模組即停用新增／編輯／刪除，伺服器端（`useRecordCrudActions`／各頁 `checkInvocation`）與畫面會同時擋下操作，不只是畫面上看不到按鈕。共用邏輯見 `src/lib/fixedFieldEditing.js` 的 `deadlineExtraCheck`／`getDeadlineState`。
 
 ## 登入與介面

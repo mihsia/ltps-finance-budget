@@ -107,6 +107,7 @@ function setAuth({ role = 'admin', modules = [], actor = { uid: 'admin-1', name:
   authMocks.authorization = createAuthorizationSource(decision, actor);
   authMocks.value = {
     isAdmin: decision.allowed && decision.role === 'admin',
+    canEditModule: (moduleKey) => authMocks.authorization.authorizeModule(moduleKey).allowed,
     authorizeAdmin: authMocks.authorization.authorizeAdmin,
     authorizeAdminActor: authMocks.authorization.authorizeAdminActor,
   };
@@ -238,8 +239,13 @@ describe('Settings account administration', () => {
 
     await act(async () => { disable.props.onClick(); });
 
+    // A disabled account now also fails canEditModule('settings')'s own
+    // check, so the whole page swaps to the no-access view rather than
+    // showing the retained callback's rejection message inline — still
+    // "no form, no write", just via the same friendlier screen every other
+    // module page already uses for a mid-session revocation.
     expect(callableMocks.calls.some((c) => c.name === 'setAccountStatus')).toBe(false);
-    expect(pageText(renderer)).toContain('此帳號已停用');
+    expect(pageText(renderer)).toContain('無權限');
   });
 
   it('freezes the controls while a change is in flight so it cannot be submitted twice', async () => {
@@ -276,7 +282,7 @@ describe('Settings account administration', () => {
     expect(pageText(renderer)).not.toContain('尚無帳號資料');
   });
 
-  it('hides every management control from a non-admin', async () => {
+  it('hides every management control from a non-admin who still has the settings module', async () => {
     setAuth({ role: 'editor', modules: ['settings'], actor: { uid: 'user-2', name: '王小明' } });
     const renderer = await render();
 
@@ -285,6 +291,15 @@ describe('Settings account administration', () => {
     expect(control(renderer, '＋ 新增帳號')).toBeUndefined();
     expect(control(renderer, '⬇ 下載帳號範例檔')).toBeUndefined();
     expect(fileInput(renderer)).toBeUndefined();
+  });
+
+  it('shows the no-access screen, not the account roster, for a non-admin without the settings module', async () => {
+    setAuth({ role: 'editor', modules: ['budget'], actor: { uid: 'user-2', name: '王小明' } });
+    const renderer = await render();
+
+    expect(pageText(renderer)).toContain('無權限');
+    expect(pageText(renderer)).not.toContain('admin@example.com');
+    expect(pageText(renderer)).not.toContain('staff@example.com');
   });
 
   it('offers the template download and xlsx import controls to an admin', async () => {
