@@ -6,6 +6,7 @@ import {
   LANGUAGE_CERT_LEVELS,
   LANGUAGE_OPTIONS,
   LANGUAGE_RECORD_SCHEMAS,
+  TEACHER_CERTIFIED_OPTIONS,
   emptyRecordForm,
   recordToForm,
   validateLanguageRecord,
@@ -18,8 +19,15 @@ import {
 } from '../styles';
 
 const TYPE_LABELS = {
-  certification: '認證統計',
-  roster: '名冊',
+  teacher: '師資名冊',
+  roster: '學生通過名冊',
+};
+
+// 語系／級別／是否已通過認證 are all dropdowns; everything else is free text.
+const SELECT_FIELD_OPTIONS = {
+  lang: LANGUAGE_OPTIONS,
+  level: LANGUAGE_CERT_LEVELS,
+  certified: TEACHER_CERTIFIED_OPTIONS,
 };
 
 function messageStyle(message) {
@@ -29,10 +37,6 @@ function messageStyle(message) {
     color: /成功/.test(message) ? '#2F7D55' : '#B5533E',
     font: "600 12.5px 'Noto Sans TC', sans-serif",
   };
-}
-
-function numericInput(field) {
-  return field.kind === 'integer';
 }
 
 export default function LanguageCert({
@@ -72,9 +76,7 @@ export default function LanguageCert({
   }, [recoveryAllowed, year]);
 
   const activeRecords = recordState.data.filter((record) => !record.deletedAt);
-  const certificationRows = activeRecords.filter(
-    (record) => record.recordType === 'certification',
-  );
+  const teacherRows = activeRecords.filter((record) => record.recordType === 'teacher');
   const rosterRows = activeRecords.filter((record) => record.recordType === 'roster');
   const deletedRecords = includeDeleted
     ? recordState.data.filter(
@@ -83,17 +85,12 @@ export default function LanguageCert({
     : [];
   const writeVisible = recoveryAllowed && !recordState.loading && !recordState.error;
 
-  const certifiedTeachers = certificationRows.reduce(
-    (sum, record) => sum + record.certifiedTeachers,
-    0,
-  );
-  const totalTeachers = certificationRows.reduce(
-    (sum, record) => sum + record.totalTeachers,
-    0,
-  );
-  const tested = certificationRows.reduce((sum, record) => sum + record.tested, 0);
-  const passed = certificationRows.reduce((sum, record) => sum + record.passed, 0);
-  const passRate = tested ? ((passed / tested) * 100).toFixed(1) : '0.0';
+  // Both figures are counted straight from the roster rows below, not typed
+  // in separately — there is only ever one place to edit "who", so the
+  // ratio/total here can never drift out of sync with the actual list.
+  const totalTeachers = teacherRows.length;
+  const certifiedTeachers = teacherRows.filter((record) => record.certified === '是').length;
+  const passedStudents = rosterRows.length;
 
   const startAdd = (recordType) => actions.runControl(() => {
     setFormState({
@@ -155,7 +152,7 @@ export default function LanguageCert({
   return (
     <div>
       <div style={pageTitle}>族語認證</div>
-      <div style={pageSubtitle}>負責人：教務處 · {year}年度 · 師資與學生族語能力認證統計、通過名冊</div>
+      <div style={pageSubtitle}>負責人：教務處 · {year}年度 · 族語師資名冊與學生認證通過名冊</div>
       {!yearState.exists && <div style={lockedBanner}>找不到此年度設定，無法編輯或儲存。</div>}
       {yearState.exists && yearState.meta?.locked !== false && (
         <div style={lockedBanner}>此年度未開放編輯，無法編輯或儲存。</div>
@@ -171,8 +168,8 @@ export default function LanguageCert({
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 14 }}>
         {writeVisible && !formState && !includeDeleted && (
           <>
-            <button type="button" disabled={actions.pending} style={btnOutline} onClick={() => startAdd('certification')}>＋ 新增認證統計</button>
-            <button type="button" disabled={actions.pending} style={btnOutline} onClick={() => startAdd('roster')}>＋ 新增名冊</button>
+            <button type="button" disabled={actions.pending} style={btnOutline} onClick={() => startAdd('teacher')}>＋ 新增師資名冊</button>
+            <button type="button" disabled={actions.pending} style={btnOutline} onClick={() => startAdd('roster')}>＋ 新增學生通過名冊</button>
           </>
         )}
         {recoveryAllowed && (
@@ -184,25 +181,25 @@ export default function LanguageCert({
 
       {!includeDeleted && (
         <>
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>師資族語能力認證與學生通過情形</div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 14, maxWidth: 720, marginBottom: 18 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14, maxWidth: 520, marginBottom: 18 }}>
             <div style={{ background: '#F5F3EE', borderRadius: 10, padding: 16 }}>授課教師取得認證比例<br /><b>{certifiedTeachers} / {totalTeachers} 人（{totalTeachers ? Math.round((certifiedTeachers / totalTeachers) * 100) : 0}%）</b></div>
-            <div style={{ background: '#F5F3EE', borderRadius: 10, padding: 16 }}>學生族語認證通過人數<br /><b>{passed} 人</b></div>
-            <div style={{ background: '#F5F3EE', borderRadius: 10, padding: 16 }}>學生認證通過率<br /><b>{passRate}%</b></div>
+            <div style={{ background: '#F5F3EE', borderRadius: 10, padding: 16 }}>學生族語認證通過人數<br /><b>{passedStudents} 人</b></div>
           </div>
-          <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 720, marginBottom: 24 }}>
-            <div style={tableHeadRow(writeVisible ? '1.3fr 1fr 1fr 1fr 160px' : '1.3fr 1fr 1fr 1fr')}><span>語系</span><span>授課教師認證</span><span>應考人數</span><span>通過人數</span>{writeVisible && <span>操作</span>}</div>
-            {certificationRows.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無認證統計</div>}
-            {certificationRows.map((record) => (
-              <div key={record.id} style={{ ...tableRow(writeVisible ? '1.3fr 1fr 1fr 1fr 160px' : '1.3fr 1fr 1fr 1fr'), alignItems: 'center' }}>
-                <span>{record.lang}</span><span>{record.certifiedTeachers} / {record.totalTeachers}</span><span>{record.tested}</span><span>{record.passed}</span>
-                {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯認證統計</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用認證統計中…' : '停用認證統計'}</button></span>}
+
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>族語師資名冊</div>
+          <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 620, marginBottom: 24 }}>
+            <div style={tableHeadRow(writeVisible ? '1.3fr 1.3fr 1fr 160px' : '1.3fr 1.3fr 1fr')}><span>語系</span><span>教師姓名</span><span>是否已通過認證</span>{writeVisible && <span>操作</span>}</div>
+            {teacherRows.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無師資名冊資料</div>}
+            {teacherRows.map((record) => (
+              <div key={record.id} style={{ ...tableRow(writeVisible ? '1.3fr 1.3fr 1fr 160px' : '1.3fr 1.3fr 1fr'), alignItems: 'center' }}>
+                <span>{record.lang}</span><span>{record.name}</span><span>{record.certified}</span>
+                {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯師資名冊</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用師資名冊中…' : '停用師資名冊'}</button></span>}
               </div>
             ))}
           </div>
 
-          <div style={{ fontWeight: 700, marginBottom: 10 }}>學生族語認證通過名冊登錄</div>
-          <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 720 }}>
+          <div style={{ fontWeight: 700, marginBottom: 10 }}>學生族語認證通過名冊</div>
+          <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 620 }}>
             <div style={tableHeadRow(writeVisible ? '1.2fr 1fr 1fr 140px' : '1.2fr 1fr 1fr')}><span>語系</span><span>級別</span><span>學生姓名</span>{writeVisible && <span>操作</span>}</div>
             {rosterRows.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無名冊資料</div>}
             {rosterRows.map((record) => (
@@ -216,13 +213,13 @@ export default function LanguageCert({
       )}
 
       {includeDeleted && (
-        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 720 }}>
+        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 620 }}>
           <div style={tableHeadRow('1fr 2fr 72px')}><span>類別</span><span>資料</span><span>操作</span></div>
           {deletedRecords.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無已停用資料</div>}
           {deletedRecords.map((record) => (
             <div key={record.id} style={{ ...tableRow('1fr 2fr 72px'), opacity: 0.72 }}>
               <span>{TYPE_LABELS[record.recordType]}</span>
-              <span>{record.lang} · {record.name || `${record.certifiedTeachers} / ${record.totalTeachers}`}</span>
+              <span>{record.lang} · {record.name}</span>
               <button type="button" disabled={actions.pending} onClick={() => restore(record.id)}>{actions.isRowPending(record.id) ? '復原中…' : '復原'}</button>
             </div>
           ))}
@@ -230,13 +227,13 @@ export default function LanguageCert({
       )}
 
       {writeVisible && formState && !includeDeleted && (
-        <div style={{ ...card, maxWidth: 720, marginTop: 14 }}>
+        <div style={{ ...card, maxWidth: 620, marginTop: 14 }}>
           <div style={{ fontWeight: 700, marginBottom: 12 }}>{formState.mode === 'create' ? '新增' : '編輯'}{TYPE_LABELS[formState.recordType]}</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 14 }}>
             {formSchema.fields.map((fieldSchema) => (
               <label key={fieldSchema.key}>
                 {fieldSchema.label}
-                {fieldSchema.key === 'lang' || fieldSchema.key === 'level' ? (
+                {SELECT_FIELD_OPTIONS[fieldSchema.key] ? (
                   <select
                     aria-label={fieldSchema.label}
                     disabled={actions.pending}
@@ -248,16 +245,13 @@ export default function LanguageCert({
                     }))}
                   >
                     <option value="">請選擇</option>
-                    {(fieldSchema.key === 'lang' ? LANGUAGE_OPTIONS : LANGUAGE_CERT_LEVELS).map((option) => (
+                    {SELECT_FIELD_OPTIONS[fieldSchema.key].map((option) => (
                       <option key={option} value={option}>{option}</option>
                     ))}
                   </select>
                 ) : (
                   <input
                     aria-label={fieldSchema.label}
-                    type={numericInput(fieldSchema) ? 'number' : 'text'}
-                    min={numericInput(fieldSchema) ? 0 : undefined}
-                    step={numericInput(fieldSchema) ? 1 : undefined}
                     disabled={actions.pending}
                     style={{ ...input, marginTop: 5 }}
                     value={formState.values[fieldSchema.key]}

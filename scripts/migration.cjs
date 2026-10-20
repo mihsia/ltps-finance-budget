@@ -39,11 +39,14 @@ const PLACEHOLDER_LANGUAGE_CLASSES = [
   { lang: '泰雅語', classes: 3, students: 10 },
   { lang: '太魯閣語', classes: 1, students: 2 },
 ];
-const PLACEHOLDER_LANGUAGE_CERTS = [
-  { lang: '閩南語', certifiedTeachers: 2, totalTeachers: 2, tested: 264, passed: 138 },
-  { lang: '客語', certifiedTeachers: 1, totalTeachers: 1, tested: 4, passed: 2 },
-  { lang: '泰雅語', certifiedTeachers: 1, totalTeachers: 1, tested: 10, passed: 2 },
-  { lang: '太魯閣語', certifiedTeachers: 0, totalTeachers: 1, tested: 2, passed: 0 },
+// 族語師資名冊 is a plain roster of named teachers (not a typed-in
+// aggregate) — 授課教師取得認證比例 is derived by counting these rows.
+const PLACEHOLDER_LANGUAGE_TEACHERS = [
+  { lang: '閩南語', name: '陳老師', certified: '是' },
+  { lang: '閩南語', name: '林老師', certified: '是' },
+  { lang: '客語', name: '黃老師', certified: '是' },
+  { lang: '泰雅語', name: '張老師', certified: '是' },
+  { lang: '太魯閣語', name: '王老師', certified: '否' },
 ];
 // level 值依官方「原住民族語言能力認證」五級制（LANGUAGE_CERT_LEVELS）。
 const PLACEHOLDER_LANGUAGE_ROSTER = [
@@ -152,7 +155,7 @@ function buildYearPlan(year) {
       {
         modulePath: 'years/115/modules/languageCert',
         rows: [
-          ...indexed('certification', PLACEHOLDER_LANGUAGE_CERTS),
+          ...indexed('teacher', PLACEHOLDER_LANGUAGE_TEACHERS),
           ...indexed('roster', PLACEHOLDER_LANGUAGE_ROSTER),
         ],
       },

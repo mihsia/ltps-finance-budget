@@ -132,6 +132,12 @@ export const LANGUAGE_OPTIONS = [
 // also used for 閩南語／客語認證, which follow the same five-tier scheme.
 export const LANGUAGE_CERT_LEVELS = ['初級', '中級', '中高級', '高級', '優級'];
 
+// 師資名冊's 是否已通過認證 field — a plain roster of named teachers, not a
+// typed-in aggregate, so "授課教師取得認證比例" on the 族語認證 page is always
+// derived by counting these rows and can't drift out of sync with a
+// separately-entered number.
+export const TEACHER_CERTIFIED_OPTIONS = ['是', '否'];
+
 export const LANGUAGE_RECORD_SCHEMAS = {
   class: {
     label: '開班資料',
@@ -141,18 +147,16 @@ export const LANGUAGE_RECORD_SCHEMAS = {
       { key: 'students', label: '學生人數', kind: 'integer' },
     ],
   },
-  certification: {
-    label: '認證統計',
+  teacher: {
+    label: '師資名冊',
     fields: [
       { key: 'lang', label: '語系', kind: 'text', maxLength: 60 },
-      { key: 'certifiedTeachers', label: '已認證教師', kind: 'integer' },
-      { key: 'totalTeachers', label: '授課教師總數', kind: 'integer' },
-      { key: 'tested', label: '應考人數', kind: 'integer' },
-      { key: 'passed', label: '通過人數', kind: 'integer' },
+      { key: 'name', label: '教師姓名', kind: 'text', maxLength: 60 },
+      { key: 'certified', label: '是否已通過認證', kind: 'text', maxLength: 10 },
     ],
   },
   roster: {
-    label: '名冊',
+    label: '學生通過名冊',
     fields: [
       { key: 'lang', label: '語系', kind: 'text', maxLength: 60 },
       { key: 'level', label: '通過級別', kind: 'text', maxLength: 40 },
@@ -166,13 +170,6 @@ export function validateLanguageRecord(recordType, source) {
   if (!schema) return invalid('族語資料類型不正確。');
   const result = collect(schema.fields, source);
   if (!result.valid) return result;
-  if (
-    recordType === 'certification'
-    && result.data.certifiedTeachers > result.data.totalTeachers
-  ) return invalid('已認證教師不可超過授課教師總數。');
-  if (recordType === 'certification' && result.data.passed > result.data.tested) {
-    return invalid('通過人數不可超過應考人數。');
-  }
   return valid({ recordType, ...result.data });
 }
 

@@ -38,15 +38,15 @@ describe('budgetRecordSummary', () => {
 });
 
 describe('languageRecordSummary', () => {
-  it('splits by recordType into class/certification/roster buckets', () => {
+  it('splits by recordType into class/teacher/roster buckets', () => {
     const records = [
       { recordType: 'class', lang: '閩南語', classes: 13, students: 264, deletedAt: null },
-      { recordType: 'certification', lang: '閩南語', tested: 264, passed: 138, deletedAt: null },
+      { recordType: 'teacher', lang: '閩南語', name: '林老師', certified: '是', deletedAt: null },
       { recordType: 'roster', lang: '閩南語', name: '陳○安', deletedAt: null },
     ];
     const summary = languageRecordSummary(records);
     expect(summary.classRows).toHaveLength(1);
-    expect(summary.certificationRows).toHaveLength(1);
+    expect(summary.teacherRows).toHaveLength(1);
     expect(summary.rosterRows).toHaveLength(1);
   });
 });

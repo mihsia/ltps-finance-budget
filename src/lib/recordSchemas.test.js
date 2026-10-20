@@ -89,12 +89,15 @@ describe('record CRUD schemas', () => {
     expect(schemas.validateLanguageRecord('class', {
       lang: '客語', classes: '1.5', students: '7',
     })).toMatchObject({ valid: false, error: '班級數必須是非負整數。' });
-    expect(schemas.validateLanguageRecord('certification', {
-      lang: '客語', certifiedTeachers: '3', totalTeachers: '2', tested: '4', passed: '2',
-    })).toMatchObject({ valid: false, error: '已認證教師不可超過授課教師總數。' });
-    expect(schemas.validateLanguageRecord('certification', {
-      lang: '客語', certifiedTeachers: '2', totalTeachers: '2', tested: '4', passed: '5',
-    })).toMatchObject({ valid: false, error: '通過人數不可超過應考人數。' });
+    expect(schemas.validateLanguageRecord('teacher', {
+      lang: '客語', name: ' 黃老師 ', certified: '是',
+    })).toMatchObject({
+      valid: true,
+      data: { recordType: 'teacher', lang: '客語', name: '黃老師', certified: '是' },
+    });
+    expect(schemas.validateLanguageRecord('teacher', {
+      lang: '客語', name: '', certified: '是',
+    })).toMatchObject({ valid: false, error: '教師姓名不得留白。' });
   });
 
   it('uses field-specific Generic schemas and validates real calendar dates', () => {

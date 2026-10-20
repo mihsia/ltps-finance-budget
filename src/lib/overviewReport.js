@@ -84,7 +84,7 @@ export function buildOverviewReport({
   expenseRows = [],
   revenueRows = [],
   trend = [],
-  language = { classRows: [], certificationRows: [] },
+  language = { classRows: [], teacherRows: [] },
   specialNeedsRows = [],
   awardsRows = [],
   clubRows = [],
@@ -104,9 +104,6 @@ export function buildOverviewReport({
   const libraryTotal = library ? num(library.generalBooks) + num(library.indigenousBooks) : null;
 
   const languageClassTotal = language.classRows.reduce((sum, row) => sum + num(row.classes), 0);
-  const languageTested = language.certificationRows.reduce((sum, row) => sum + num(row.tested), 0);
-  const languagePassed = language.certificationRows.reduce((sum, row) => sum + num(row.passed), 0);
-  const languagePassRate = languageTested ? (languagePassed / languageTested) * 100 : null;
 
   const trendWithDelta = trend.map((entry, index) => ({
     year: entry.year,
@@ -169,7 +166,7 @@ export function buildOverviewReport({
         ],
       } : null,
       language: language.classRows.length
-        ? { classTotal: languageClassTotal, passRate: languagePassRate, rows: language.classRows }
+        ? { classTotal: languageClassTotal, rows: language.classRows }
         : null,
       specialNeeds: specialNeedsRows.length ? { total: specialNeedsTotal, rows: specialNeedsRows } : null,
       awards: awardsRows.length ? { count: awardsRows.length, rows: awardsRows } : null,

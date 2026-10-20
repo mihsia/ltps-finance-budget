@@ -22,7 +22,7 @@ function sampleReport() {
       { year: '114', expenseTotal: 55101 },
       { year: '115', expenseTotal: 54298 },
     ],
-    language: { classRows: [{ lang: '閩南語', classes: 13, students: 264 }], certificationRows: [] },
+    language: { classRows: [{ lang: '閩南語', classes: 13, students: 264 }], teacherRows: [] },
     specialNeedsRows: [{ category: '原住民', count: 17 }],
     generatedAt: new Date('2026-08-11T09:30:00'),
   });

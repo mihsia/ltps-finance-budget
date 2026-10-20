@@ -100,7 +100,7 @@ describe('buildOverviewReport', () => {
   it('omits optional module summaries entirely when a module has no active records, rather than showing zero', () => {
     const report = buildOverviewReport({
       year: '115', expenseRows: [], revenueRows: [],
-      language: { classRows: [], certificationRows: [] },
+      language: { classRows: [], teacherRows: [] },
       specialNeedsRows: [], awardsRows: [], clubRows: [], landRows: [], inquiryRows: [],
     });
     expect(report.modules).toEqual({
@@ -113,7 +113,7 @@ describe('buildOverviewReport', () => {
       year: '115', expenseRows: [], revenueRows: [],
       language: {
         classRows: [{ lang: '閩南語', classes: 13, students: 264 }, { lang: '客語', classes: 1, students: 4 }],
-        certificationRows: [{ lang: '閩南語', tested: 264, passed: 138 }],
+        teacherRows: [{ lang: '閩南語', name: '林老師', certified: '是' }],
       },
       specialNeedsRows: [{ category: '原住民', count: 17 }, { category: '新住民', count: 25 }],
       awardsRows: [{ category: '科學類', item: '縣科展' }],
@@ -125,7 +125,7 @@ describe('buildOverviewReport', () => {
       ],
     });
     const languageRows = [{ lang: '閩南語', classes: 13, students: 264 }, { lang: '客語', classes: 1, students: 4 }];
-    expect(report.modules.language).toEqual({ classTotal: 14, passRate: (138 / 264) * 100, rows: languageRows });
+    expect(report.modules.language).toEqual({ classTotal: 14, rows: languageRows });
     expect(report.modules.specialNeeds).toEqual({
       total: 42,
       rows: [{ category: '原住民', count: 17 }, { category: '新住民', count: 25 }],

@@ -14,7 +14,7 @@ export function moduleCompletionPct(moduleKey, data) {
       return active.some((record) => record.recordType === 'class') ? 100 : 0;
     }
     if (moduleKey === 'languageCert') {
-      return active.some((record) => record.recordType === 'certification') ? 100 : 0;
+      return active.some((record) => record.recordType === 'teacher') ? 100 : 0;
     }
     return active.length > 0 ? 100 : 0;
   }

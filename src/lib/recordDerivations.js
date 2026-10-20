@@ -41,7 +41,7 @@ export function budgetVarianceSummary(rows) {
 export function languageRecordSummary(records) {
   return {
     classRows: activeTypedRecords(records, 'class'),
-    certificationRows: activeTypedRecords(records, 'certification'),
+    teacherRows: activeTypedRecords(records, 'teacher'),
     rosterRows: activeTypedRecords(records, 'roster'),
   };
 }

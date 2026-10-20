@@ -344,44 +344,37 @@ describe('Language class records CRUD page', () => {
 });
 
 describe('LanguageCert variant records CRUD page', () => {
-  it('derives existing certification statistics from typed records', () => {
+  it('derives teacher-certification ratio and passed-student count from typed records', () => {
     const records = readyRecords([
-      { id: 'cert-1', recordType: 'certification', lang: '閩南語', certifiedTeachers: 2, totalTeachers: 2, tested: 10, passed: 7, deletedAt: null },
+      { id: 'teacher-1', recordType: 'teacher', lang: '閩南語', name: '陳老師', certified: '是', deletedAt: null },
+      { id: 'teacher-2', recordType: 'teacher', lang: '閩南語', name: '林老師', certified: '否', deletedAt: null },
       { id: 'roster-1', recordType: 'roster', lang: '閩南語', level: '初級', name: '陳○安', deletedAt: null },
     ]);
     installRecords('languageCert', records);
     const mounted = mount(LanguageCert);
     const text = pageText(mounted.renderer);
-    expect(text).toContain('2 / 2 人（100%）');
-    expect(text).toContain('70.0%');
+    expect(text).toContain('1 / 2 人（50%）');
+    expect(text).toContain('1 人');
+    expect(text).toContain('陳老師');
     expect(text).toContain('陳○安');
     mounted.unmount();
   });
 
-  it('creates certification and roster schemas and rejects semantically invalid counts', async () => {
+  it('creates teacher and roster schemas with the lang/certified/level dropdowns', async () => {
     const records = readyRecords([]);
     installRecords('languageCert', records);
     const mounted = mount(LanguageCert);
 
-    await act(async () => control(mounted.renderer, '＋ 新增認證統計').props.onClick());
+    await act(async () => control(mounted.renderer, '＋ 新增師資名冊').props.onClick());
     change(mounted.renderer, '語系', '閩南語');
-    change(mounted.renderer, '已認證教師', '3');
-    change(mounted.renderer, '授課教師總數', '2');
-    change(mounted.renderer, '應考人數', '4');
-    change(mounted.renderer, '通過人數', '5');
-    await act(async () => control(mounted.renderer, '新增').props.onClick());
-    expect(records.create).not.toHaveBeenCalled();
-    expect(pageText(mounted.renderer)).toContain('已認證教師不可超過授課教師總數');
-
-    change(mounted.renderer, '已認證教師', '2');
-    change(mounted.renderer, '通過人數', '4');
+    change(mounted.renderer, '教師姓名', ' 陳老師 ');
+    change(mounted.renderer, '是否已通過認證', '是');
     await act(async () => control(mounted.renderer, '新增').props.onClick());
     expect(records.create).toHaveBeenLastCalledWith({
-      recordType: 'certification', lang: '閩南語', certifiedTeachers: 2,
-      totalTeachers: 2, tested: 4, passed: 4,
+      recordType: 'teacher', lang: '閩南語', name: '陳老師', certified: '是',
     }, authMocks.actor);
 
-    await act(async () => control(mounted.renderer, '＋ 新增名冊').props.onClick());
+    await act(async () => control(mounted.renderer, '＋ 新增學生通過名冊').props.onClick());
     change(mounted.renderer, '語系', '泰雅語');
     change(mounted.renderer, '通過級別', '中級');
     change(mounted.renderer, '學生姓名', ' 林○恩 ');
@@ -394,28 +387,27 @@ describe('LanguageCert variant records CRUD page', () => {
 
   it('edits, soft-deletes, and restores variant rows without changing recordType', async () => {
     const active = readyRecords([
-      { id: 'cert-1', recordType: 'certification', lang: '客語', certifiedTeachers: 1, totalTeachers: 1, tested: 4, passed: 2, deletedAt: null },
+      { id: 'teacher-1', recordType: 'teacher', lang: '客語', name: '黃老師', certified: '否', deletedAt: null },
       { id: 'roster-1', recordType: 'roster', lang: '客語', level: '初級', name: '王○明', deletedAt: null },
     ]);
     const recovery = readyRecords([
-      { id: 'cert-old', recordType: 'certification', lang: '太魯閣語', certifiedTeachers: 1, totalTeachers: 1, tested: 2, passed: 0, deletedAt: { seconds: 1 } },
+      { id: 'teacher-old', recordType: 'teacher', lang: '太魯閣語', name: '王老師', certified: '否', deletedAt: { seconds: 1 } },
     ]);
     installRecords('languageCert', active, recovery);
     const mounted = mount(LanguageCert);
 
-    await act(async () => control(mounted.renderer, '編輯認證統計').props.onClick());
-    change(mounted.renderer, '通過人數', '3');
+    await act(async () => control(mounted.renderer, '編輯師資名冊').props.onClick());
+    change(mounted.renderer, '是否已通過認證', '是');
     await act(async () => control(mounted.renderer, '儲存').props.onClick());
-    expect(active.update).toHaveBeenCalledWith('cert-1', {
-      lang: '客語', certifiedTeachers: 1,
-      totalTeachers: 1, tested: 4, passed: 3,
+    expect(active.update).toHaveBeenCalledWith('teacher-1', {
+      lang: '客語', name: '黃老師', certified: '是',
     }, authMocks.actor);
 
     await act(async () => control(mounted.renderer, '停用名冊').props.onClick());
     expect(active.delete).toHaveBeenCalledWith('roster-1', authMocks.actor);
     await act(async () => control(mounted.renderer, '顯示已停用資料').props.onClick());
     await act(async () => control(mounted.renderer, '復原').props.onClick());
-    expect(recovery.restore).toHaveBeenCalledWith('cert-old', authMocks.actor);
+    expect(recovery.restore).toHaveBeenCalledWith('teacher-old', authMocks.actor);
     mounted.unmount();
   });
 });
@@ -581,7 +573,7 @@ describe('schema-driven Generic records CRUD page', () => {
 describe('record page invocation guards', () => {
   it.each([
     ['Language', Language, 'language', {}, '正在載入族語開班資料…', '無法載入族語開班資料', '尚無開班資料'],
-    ['LanguageCert', LanguageCert, 'languageCert', {}, '正在載入族語認證資料…', '無法載入族語認證資料', '尚無認證統計'],
+    ['LanguageCert', LanguageCert, 'languageCert', {}, '正在載入族語認證資料…', '無法載入族語認證資料', '尚無師資名冊資料'],
     ['Generic', Generic, 'awards', { moduleKey: 'awards' }, '正在載入獲獎紀錄資料…', '無法載入獲獎紀錄資料', '尚無資料'],
   ])('%s exposes distinct Chinese loading, error, and empty states', (_name, Page, moduleKey, props, loadingText, errorText, emptyText) => {
     installRecords(moduleKey, readyRecords([], { loading: true }));
@@ -600,7 +592,7 @@ describe('record page invocation guards', () => {
 
   const DEFAULT_MODULE_KEY = { Budget: 'budget', Language: 'language', LanguageCert: 'languageCert', Generic: 'awards' };
   const DEFAULT_ADD_LABEL = {
-    Budget: '＋ 新增歲出', Language: '＋ 新增開班資料', LanguageCert: '＋ 新增認證統計', Generic: '＋ 新增一筆',
+    Budget: '＋ 新增歲出', Language: '＋ 新增開班資料', LanguageCert: '＋ 新增師資名冊', Generic: '＋ 新增一筆',
   };
 
   it.each([
@@ -979,7 +971,7 @@ describe('Module deadline', () => {
   it.each([
     ['Budget', Budget, {}, 'budget', '＋ 新增歲出'],
     ['Language', Language, {}, 'language', '＋ 新增開班資料'],
-    ['LanguageCert', LanguageCert, {}, 'languageCert', '＋ 新增認證統計'],
+    ['LanguageCert', LanguageCert, {}, 'languageCert', '＋ 新增師資名冊'],
     ['Generic', Generic, { moduleKey: 'awards' }, 'awards', '＋ 新增一筆'],
   ])('%s shows a deadline banner, hides write controls, and blocks a retained save once past 填報截止日', async (_name, Page, extraProps, moduleKey, addLabel) => {
     vi.useFakeTimers();

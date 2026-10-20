@@ -10,6 +10,14 @@
 // Idempotent and dry-run-safe: a row is only ever moved if nothing already
 // exists at its destination, so running this twice (or against a project
 // that was never on the old combined shape) finds nothing left to do.
+//
+// Note: 'certification' predates the later 師資名冊 redesign (an aggregate
+// certifiedTeachers/totalTeachers/tested/passed count per 語系, not a named
+// teacher roster). This script only relocates it byte-for-byte — it cannot
+// invent the individual teachers' names the new 族語認證 page's 師資名冊
+// needs, so a moved 'certification' row won't appear on that page until a
+// school admin re-enters the actual teachers through the new form. Nothing
+// is lost; it just sits inert at its new path until then.
 const MOVABLE_RECORD_TYPES = ['certification', 'roster'];
 
 async function migrateLanguageCertification({ db, years, dryRun = false }) {
