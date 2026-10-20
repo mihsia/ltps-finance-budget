@@ -89,6 +89,11 @@ export const CHANGELOG = [
     date: '2026-10-20',
     notes: '議會報表匯出頁版面重新整理：改為財務概況／各模組現況／統計分析／匯出與紀錄四個分區，財務概況的兩張表格並排顯示，獲獎統計／特生統計／社團參與比例整合成單一卡片網格，隨畫面寬度自動排成多欄，減少捲動距離、更易閱讀。',
   },
+  {
+    version: '1.17',
+    date: '2026-10-20',
+    notes: '匯出的 PDF／Excel 同步跟進報表頁的分區改版：PDF 新增財務概況／校務資料／各模組現況分區標題（跨頁自動換頁），Excel 在對應位置加上分區標籤列，不再是一路排到底的表格清單。',
+  },
 ];
 
 export const APP_VERSION = CHANGELOG[CHANGELOG.length - 1].version;

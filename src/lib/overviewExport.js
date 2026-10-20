@@ -78,6 +78,7 @@ export function buildOverviewWorkbook(report, { selectedModules } = {}) {
     ['代理教師占比', report.kpi.substituteRatio == null ? '—' : `${report.kpi.substituteRatio}%`],
     ['圖書藏書量', report.kpi.libraryTotal == null ? '—' : fmtNum(report.kpi.libraryTotal)],
     [],
+    ['財務概況'],
     ['歲出三年比較（千元）'],
     ['年度', '金額', '較上年增減'],
     ...report.trend.map((entry) => [`${entry.year}年度`, fmtNum(entry.expenseTotal), pctText(entry.deltaPct)]),
@@ -100,6 +101,7 @@ export function buildOverviewWorkbook(report, { selectedModules } = {}) {
   if (report.basicProfile) {
     rows.push(
       [],
+      ['校務資料'],
       ['學校基本資料'],
       ['班級數', report.basicProfile.classes, '學生人數', report.basicProfile.students],
       ['教師員額', report.basicProfile.staff, '正式教師', report.basicProfile.regularTeachers],
@@ -135,7 +137,15 @@ function sectionStyles(fontName, color) {
   };
 }
 
-/** Renders the same report into a jsPDF document with the embedded Chinese font, colored per-section headers, and page-number footers. */
+/**
+ * Renders the same report into a jsPDF document with the embedded Chinese
+ * font, colored per-section headers, and page-number footers.
+ *
+ * Tables are grouped under bold zone headers (財務概況／校務資料／各模組現況)
+ * with a bigger gap before a new zone than between tables inside one, so the
+ * PDF reads as the same grouped structure as the live 議會報表匯出 web page
+ * instead of one undifferentiated stack of colored tables.
+ */
 export async function buildOverviewPdf(report, { selectedModules } = {}) {
   const doc = new jsPDF();
   const fontName = await registerCjkFont(doc);
@@ -147,8 +157,35 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
   doc.setFontSize(10);
   doc.text(`製表：${report.meta.who} · 產出時間：${fmtDate(report.meta.generatedAt)}`, 14, 23);
 
-  autoTable(doc, {
-    startY: 28,
+  let y = 28;
+  const ZONE_GAP = 15;
+  const TABLE_GAP = 6;
+
+  function table(opts) {
+    autoTable(doc, { startY: y, ...opts });
+    y = doc.lastAutoTable.finalY;
+  }
+
+  function zoneHeader(label) {
+    if (y > doc.internal.pageSize.getHeight() - 30) {
+      doc.addPage();
+      y = 20;
+    } else {
+      y += ZONE_GAP;
+    }
+    doc.setFont(fontName, 'bold');
+    doc.setFontSize(12);
+    doc.setTextColor(30, 36, 32);
+    doc.text(label, 14, y);
+    doc.setDrawColor(227, 223, 211);
+    doc.setLineWidth(0.4);
+    doc.line(14, y + 2.5, doc.internal.pageSize.getWidth() - 14, y + 2.5);
+    y += 8;
+  }
+
+  // 關鍵指標 — the headline summary, shown before any zone (matches the web
+  // page's top KPI row, which also sits outside the zone grouping).
+  table({
     head: [['關鍵指標', '數值']],
     body: [
       [`${report.meta.year}年度歲出預算（千元）`, fmtNum(report.kpi.expenseTotal)],
@@ -161,15 +198,14 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
     ...sectionStyles(fontName, SECTION_COLORS.kpi),
   });
 
-  autoTable(doc, {
-    startY: doc.lastAutoTable.finalY + 8,
+  zoneHeader('財務概況');
+  table({
     head: [['歲出三年比較', '金額（千元）', '較上年增減']],
     body: report.trend.map((entry) => [`${entry.year}年度`, fmtNum(entry.expenseTotal), pctText(entry.deltaPct)]),
     ...sectionStyles(fontName, SECTION_COLORS.trend),
   });
-
-  autoTable(doc, {
-    startY: doc.lastAutoTable.finalY + 8,
+  y += TABLE_GAP;
+  table({
     head: [['業務計畫別項目', '預算金額', '決算金額', '增減', '差異原因說明']],
     body: [
       ...report.expenseVariance.rows.map((row) => [
@@ -181,9 +217,8 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
     ],
     ...sectionStyles(fontName, SECTION_COLORS.variance),
   });
-
-  autoTable(doc, {
-    startY: doc.lastAutoTable.finalY + 8,
+  y += TABLE_GAP;
+  table({
     head: [['歲入來源', '金額（千元）']],
     body: [
       ...report.revenue.rows.map((row) => [row.label, fmtNum(row.amount)]),
@@ -193,8 +228,8 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
   });
 
   if (report.basicProfile) {
-    autoTable(doc, {
-      startY: doc.lastAutoTable.finalY + 8,
+    zoneHeader('校務資料');
+    table({
       head: [['學校基本資料', '數值']],
       body: [
         ['班級數', report.basicProfile.classes],
@@ -211,8 +246,8 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
 
   const moduleKeys = (selectedModules || Object.keys(MODULE_LABELS)).filter((key) => report.modules[key]);
   if (moduleKeys.length) {
-    autoTable(doc, {
-      startY: doc.lastAutoTable.finalY + 8,
+    zoneHeader('各模組現況');
+    table({
       head: [['各模組現況', '現況']],
       body: moduleKeys.map((key) => [MODULE_LABELS[key], moduleValueText(key, report.modules[key])]),
       ...sectionStyles(fontName, SECTION_COLORS.kpi),
@@ -223,8 +258,8 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
     for (const key of moduleKeys) {
       const detail = moduleDetailTable(key, report.modules[key]);
       if (!detail.length) continue;
-      autoTable(doc, {
-        startY: doc.lastAutoTable.finalY + 6,
+      y += TABLE_GAP;
+      table({
         head: [[{ content: MODULE_LABELS[key], colSpan: detail[0].length }], detail[0]],
         body: detail.slice(1),
         ...sectionStyles(fontName, SECTION_COLORS[key] || SECTION_COLORS.kpi),
