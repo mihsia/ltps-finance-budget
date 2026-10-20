@@ -1,6 +1,8 @@
 import TestRenderer, { act } from 'react-test-renderer';
+import * as XLSX from 'xlsx';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAuthorizationSource } from '../lib/accessPolicy';
+import { AWARD_IMPORT_HEADERS } from '../lib/awardImport';
 
 const hookMocks = vi.hoisted(() => ({
   recordStates: new Map(),
@@ -75,6 +77,24 @@ function field(renderer, ariaLabel) {
 
 function change(renderer, ariaLabel, value) {
   act(() => field(renderer, ariaLabel).props.onChange({ target: { value } }));
+}
+
+// Excludes the awards module's always-mounted hidden xlsx file-picker input,
+// which isn't a record form field and shouldn't count toward "no form is open".
+function formInputs(renderer) {
+  return renderer.root.findAllByType('input').filter((node) => node.props.type !== 'file');
+}
+
+function fileInput(renderer) {
+  return renderer.root.findAll((node) => node.type === 'input' && node.props.type === 'file')[0];
+}
+
+/** A File-like object (arrayBuffer() only, matching what Generic.jsx reads) built from plain rows. */
+function fakeXlsxFile(rows) {
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Sheet1');
+  const buffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
+  return { name: 'import.xlsx', arrayBuffer: async () => buffer };
 }
 
 function mount(Page, props = {}) {
@@ -528,7 +548,7 @@ describe('record page invocation guards', () => {
     const retainedEdit = control(mounted.renderer, '編輯').props.onClick;
     active.decision = { allowed: false, code: 'records-error', reason: '資料列監聽失敗。' };
     await act(async () => retainedEdit());
-    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(0);
+    expect(formInputs(mounted.renderer)).toHaveLength(0);
 
     active.decision = { allowed: true, code: 'records-writable', reason: null };
     await act(async () => retainedEdit());
@@ -565,7 +585,7 @@ describe('record page invocation guards', () => {
     mounted.rerender({ moduleKey: 'awards', year: '115' });
     await act(async () => retainedOldAAdd());
 
-    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(0);
+    expect(formInputs(mounted.renderer)).toHaveLength(0);
     expect(oldA.create).not.toHaveBeenCalled();
     expect(newA.create).not.toHaveBeenCalled();
     mounted.unmount();
@@ -599,7 +619,7 @@ describe('record page invocation guards', () => {
 
     authMocks.actor = null;
     await act(async () => control(mounted.renderer, '編輯').props.onClick());
-    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(0);
+    expect(formInputs(mounted.renderer)).toHaveLength(0);
 
     authMocks.actor = { uid: 'actor-now', name: '即時操作者' };
     await act(async () => control(mounted.renderer, '編輯').props.onClick());
@@ -741,6 +761,95 @@ describe('record page invocation guards', () => {
       expect(control(mounted.renderer, '顯示已停用資料')).toBeUndefined();
       expect(pageText(mounted.renderer)).toContain('無法編輯或儲存');
     }
+    mounted.unmount();
+  });
+});
+
+describe('Generic awards xlsx export/import', () => {
+  it('offers export, template, and import controls once the module is editable', () => {
+    installRecords('awards', readyRecords([]));
+    const mounted = mount(Generic, { moduleKey: 'awards' });
+    expect(control(mounted.renderer, '⬇ 匯出 Excel')).toBeTruthy();
+    expect(control(mounted.renderer, '⬇ 下載範本')).toBeTruthy();
+    expect(control(mounted.renderer, '⬆ 匯入 Excel')).toBeTruthy();
+    expect(fileInput(mounted.renderer)).toBeTruthy();
+    mounted.unmount();
+  });
+
+  it('does not offer export/import controls for other generic modules', () => {
+    installRecords('club', readyRecords([]));
+    const mounted = mount(Generic, { moduleKey: 'club' });
+    expect(control(mounted.renderer, '⬇ 匯出 Excel')).toBeUndefined();
+    expect(control(mounted.renderer, '⬆ 匯入 Excel')).toBeUndefined();
+    expect(fileInput(mounted.renderer)).toBeUndefined();
+    mounted.unmount();
+  });
+
+  it('hides the import control but keeps export once the year is locked', () => {
+    installRecords('awards', readyRecords([]));
+    hookMocks.yearDecision = { allowed: false, code: 'year-locked', reason: '此年度已鎖定，無法編輯或儲存。' };
+    hookMocks.meta = {
+      meta: { locked: true, deadlines: {} }, loading: false, exists: true, error: null,
+    };
+    const mounted = mount(Generic, { moduleKey: 'awards' });
+    expect(control(mounted.renderer, '⬇ 匯出 Excel')).toBeTruthy();
+    expect(control(mounted.renderer, '⬆ 匯入 Excel')).toBeUndefined();
+    mounted.unmount();
+  });
+
+  it('imports every valid row, skips an invalid one, and shows a per-row result summary', async () => {
+    const records = readyRecords([]);
+    installRecords('awards', records);
+    const mounted = mount(Generic, { moduleKey: 'awards' });
+
+    const file = fakeXlsxFile([
+      AWARD_IMPORT_HEADERS,
+      ['語文類', '全國語文競賽－朗讀', '特優', '2025-10-12'],
+      ['科學類', '縣科展', '優等', 'not-a-date'],
+    ]);
+    await act(async () => { await fileInput(mounted.renderer).props.onChange({ target: { files: [file], value: '' } }); });
+
+    expect(records.create).toHaveBeenCalledOnce();
+    expect(records.create).toHaveBeenCalledWith({
+      recordType: 'award', category: '語文類', item: '全國語文競賽－朗讀', level: '特優', date: '2025-10-12',
+    }, authMocks.actor);
+
+    const text = pageText(mounted.renderer);
+    expect(text).toContain('成功 1 筆／失敗 1 筆');
+    expect(text).toContain('日期必須是有效的 YYYY-MM-DD');
+    mounted.unmount();
+  });
+
+  it('rejects an obviously malformed file without creating any records', async () => {
+    const records = readyRecords([]);
+    installRecords('awards', records);
+    const mounted = mount(Generic, { moduleKey: 'awards' });
+
+    const file = fakeXlsxFile([
+      ['Name', 'Date'],
+      ['全國語文競賽', '2025-10-12'],
+    ]);
+    await act(async () => { await fileInput(mounted.renderer).props.onChange({ target: { files: [file], value: '' } }); });
+
+    expect(records.create).not.toHaveBeenCalled();
+    expect(pageText(mounted.renderer)).toContain('範本格式');
+    mounted.unmount();
+  });
+
+  it('only offers 獲獎項目 options that belong to the currently selected 類別', async () => {
+    installRecords('awards', readyRecords([]));
+    const mounted = mount(Generic, { moduleKey: 'awards' });
+    await act(async () => control(mounted.renderer, '＋ 新增一筆').props.onClick());
+
+    change(mounted.renderer, '類別', '科學類');
+    let options = field(mounted.renderer, '獲獎項目').findAllByType('option').map((o) => o.props.value);
+    expect(options).toContain('宜蘭縣科學展覽會');
+    expect(options).not.toContain('全縣運動會');
+
+    change(mounted.renderer, '類別', '體育類');
+    options = field(mounted.renderer, '獲獎項目').findAllByType('option').map((o) => o.props.value);
+    expect(options).toContain('全縣運動會');
+    expect(options).not.toContain('宜蘭縣科學展覽會');
     mounted.unmount();
   });
 });

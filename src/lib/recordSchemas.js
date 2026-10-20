@@ -158,6 +158,29 @@ export function validateLanguageRecord(recordType, source) {
 export const AWARD_CATEGORIES = ['語文類', '藝文類', '體育類', '科學類'];
 export const SPECIAL_NEEDS_CATEGORIES = ['原住民', '新住民', '低收入戶', '身障生', '單親生'];
 
+// 獲獎項目 options, grouped by 類別 so the dropdown only offers items that make
+// sense for whichever category was picked — common competitions Yilan County
+// elementary schools actually enter; anything else falls back to 其他（自訂）.
+export const AWARD_ITEM_OPTIONS_BY_CATEGORY = {
+  語文類: [
+    '全國語文競賽－朗讀', '全國語文競賽－演說', '全國語文競賽－作文', '全國語文競賽－寫字',
+    '全國語文競賽－字音字形', '宜蘭縣語文競賽', '全國學生閱讀心得寫作比賽',
+  ],
+  藝文類: [
+    '宜蘭縣學生美術比賽', '全國學生美術比賽', '全國學生音樂比賽', '直笛比賽', '合唱比賽', '書法比賽',
+  ],
+  體育類: [
+    '全縣運動會', '全國中小學運動會', '宜蘭縣游泳錦標賽', '躲避球錦標賽', '跳繩比賽', '直排輪競賽',
+  ],
+  科學類: [
+    '宜蘭縣科學展覽會', '全國科學展覽會', '機器人競賽', '科技創意賽', '小論文寫作比賽',
+  ],
+};
+
+export const AWARD_LEVELS = [
+  '特優', '優等', '甲等', '第一名', '第二名', '第三名', '第四名', '第五名', '第六名', '佳作',
+];
+
 export const genericRecordSchemas = {
   awards: {
     recordType: 'award',
@@ -165,8 +188,18 @@ export const genericRecordSchemas = {
       {
         key: 'category', label: '類別', kind: 'select', options: AWARD_CATEGORIES, maxLength: 20,
       },
-      { key: 'item', label: '獲獎項目', kind: 'text', maxLength: 160 },
-      { key: 'level', label: '等級', kind: 'text', maxLength: 80 },
+      {
+        key: 'item',
+        label: '獲獎項目',
+        kind: 'select',
+        optionsKey: 'category',
+        optionsMap: AWARD_ITEM_OPTIONS_BY_CATEGORY,
+        allowCustom: true,
+        maxLength: 160,
+      },
+      {
+        key: 'level', label: '等級', kind: 'select', options: AWARD_LEVELS, allowCustom: true, maxLength: 80,
+      },
       { key: 'date', label: '日期', kind: 'date' },
     ],
   },

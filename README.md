@@ -86,6 +86,12 @@ Storage：`budget-books/{year}/{fileName}`（公開讀取，僅能透過 `upload
 - **批次匯入帳號**：帳號管理頁可下載「帳號匯入範例檔」（`.xlsx`，內附填寫說明與可用模組／處室清單），填好後以「匯入帳號」上傳；每一列各自驗證與建立，單列失敗（例如 Email 重複）不會中斷其他列，上傳後會列出逐列的成功／失敗結果。帳號欄位只要輸入帳號名稱，系統會自動補上預設網域 `@tmail.ilc.edu.tw`（輸入含 `@` 的完整 Email 則直接使用）；實際邏輯見 `functions/accountAdmin.cjs` 的 `normalizeImportRow` 與 `importAccounts` Cloud Function。
 - 預算書 PDF 上傳／替換透過 `uploadBudgetBookPdf` Cloud Function（同樣以 Admin SDK 寫入 Storage），因為 `storage.rules` 完全禁止用戶端直接寫入 `budget-books/**`。
 
+## 獲獎紀錄
+
+- **獲獎項目／等級皆為下拉選單**：「獲獎項目」依所選「類別」分組列出宜蘭縣國小常見競賽名稱（如全國語文競賽各組別、縣科展、全縣運動會等），「等級」提供特優／優等／甲等／第一～六名／佳作；兩者皆附「其他（自訂）」可自行輸入，欄位定義見 `src/lib/recordSchemas.js` 的 `AWARD_ITEM_OPTIONS_BY_CATEGORY`／`AWARD_LEVELS`。
+- **獨立匯出／匯入**：獲獎紀錄頁可直接「匯出 Excel」目前資料、下載「範本」、或「匯入 Excel」批次新增，與議會報表頁的全模組匯出互不相關；匯入時每一列各自驗證與建立，單列失敗不影響其他列，並列出逐列成功／失敗結果，邏輯見 `src/lib/awardImport.js`。
+- **統計分析**：議會報表頁新增「獲獎項目統計分析」區塊，提供依類別（圓環圖）與依等級（長條圖）的分布統計，計算邏輯見 `src/lib/awardStats.js`。
+
 ## 測試
 
 - `npm test`：快速單元測試（`src/`、`functions/`、`scripts/`），全部使用 mock，不需要任何 Firebase 服務。

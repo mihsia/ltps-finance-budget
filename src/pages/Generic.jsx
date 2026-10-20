@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import * as XLSX from 'xlsx';
 import { useYearMeta, useYearRecords } from '../hooks/useYearData';
 import { useRecordCrudActions } from '../hooks/useRecordCrudActions';
 import { useAuth } from '../contexts/AuthContext';
@@ -9,9 +10,10 @@ import {
   recordToForm,
   validateGenericRecord,
 } from '../lib/recordSchemas';
+import { buildAwardExportWorkbook, buildAwardImportTemplateWorkbook, parseAwardImportFile } from '../lib/awardImport';
 import {
   pageTitle, pageSubtitle, card, input, btnPrimary, btnOutline, btnSecondary,
-  tableHeadRow, tableRow, lockedBanner,
+  tableHeadRow, tableRow, lockedBanner, badge,
 } from '../styles';
 
 function messageStyle(message) {
@@ -40,16 +42,24 @@ function customMarkerKey(fieldSchema) {
   return `${fieldSchema.key}__custom`;
 }
 
+// A field can list its options directly (`options`) or, like 獲獎項目, depend
+// on another field's current value (`optionsKey` + `optionsMap`) so the list
+// only offers items that make sense for the category already picked.
+function resolveOptions(fieldSchema, values) {
+  if (fieldSchema.optionsKey) return fieldSchema.optionsMap[values[fieldSchema.optionsKey]] || [];
+  return fieldSchema.options;
+}
+
 function isCustomSelected(fieldSchema, values) {
   if (!fieldSchema.allowCustom) return false;
   if (values[customMarkerKey(fieldSchema)]) return true;
   const value = values[fieldSchema.key];
-  return Boolean(value) && !fieldSchema.options.includes(value);
+  return Boolean(value) && !resolveOptions(fieldSchema, values).includes(value);
 }
 
 function selectValue(fieldSchema, values) {
   const value = values[fieldSchema.key];
-  if (fieldSchema.options.includes(value)) return value;
+  if (resolveOptions(fieldSchema, values).includes(value)) return value;
   if (isCustomSelected(fieldSchema, values)) return CUSTOM_OPTION;
   return '';
 }
@@ -72,6 +82,8 @@ export default function Generic({
   const includeDeleted = showDeleted && recoveryAllowed;
   const recordState = useYearRecords(year, moduleKey, { includeDeleted });
   const [formState, setFormState] = useState(null);
+  const importFileRef = useRef(null);
+  const [importState, setImportState] = useState(null);
   const actions = useRecordCrudActions({
     scopeKey: `${year}\0${latestYear}\0${moduleKey}\0${includeDeleted ? 1 : 0}`,
     moduleKey,
@@ -95,6 +107,71 @@ export default function Generic({
     )
     : [];
   const writeVisible = recoveryAllowed && !recordState.loading && !recordState.error;
+
+  // 獲獎紀錄 gets its own standalone export/import, separate from the
+  // all-module 議會報表 exports in Report.jsx — export is read-only so it's
+  // offered whenever the module is viewable; import creates records, so it
+  // needs the same year-unlocked/current-year eligibility as 新增一筆.
+  const exportVisible = moduleKey === 'awards' && canEditModule(moduleKey)
+    && !recordState.loading && !recordState.error;
+  const importVisible = moduleKey === 'awards' && writeVisible;
+
+  const downloadImportTemplate = () => {
+    XLSX.writeFile(buildAwardImportTemplateWorkbook(), '獲獎紀錄匯入範本.xlsx');
+  };
+  const exportRecords = () => {
+    XLSX.writeFile(buildAwardExportWorkbook(activeRecords), `${year}年度獲獎紀錄.xlsx`);
+  };
+  const openImportPicker = () => importFileRef.current?.click();
+  const handleImportFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+
+    setImportState({ status: 'parsing' });
+    let rows;
+    try {
+      const buffer = await file.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: 'array' });
+      const parsed = parseAwardImportFile(workbook);
+      if (parsed.error) {
+        setImportState({ status: 'error', error: parsed.error });
+        return;
+      }
+      rows = parsed.rows;
+    } catch {
+      setImportState({ status: 'error', error: '無法讀取檔案，請確認是有效的 .xlsx 檔案。' });
+      return;
+    }
+
+    setImportState({ status: 'uploading' });
+    const ok = await actions.runMutation({
+      pendingKey: 'import',
+      validate: () => ({ valid: true, data: null, error: null }),
+      mutate: async (actor) => {
+        const results = [];
+        for (let i = 0; i < rows.length; i += 1) {
+          const row = rows[i];
+          const validation = validateGenericRecord('awards', row);
+          if (!validation.valid) {
+            results.push({ row: i + 2, ok: false, item: row.item, error: validation.error });
+            continue;
+          }
+          try {
+            await recordState.create(validation.data, actor);
+            results.push({ row: i + 2, ok: true, item: validation.data.item });
+          } catch {
+            results.push({ row: i + 2, ok: false, item: validation.data.item, error: '新增失敗，請稍後再試。' });
+          }
+        }
+        setImportState({ status: 'done', results });
+      },
+      successMessage: null,
+    });
+    if (!ok) {
+      setImportState((current) => (current?.status === 'done' ? current : { status: 'error', error: actions.message }));
+    }
+  };
 
   const startAdd = () => actions.runControl(() => {
     setFormState({ mode: 'create', recordId: null, values: emptyRecordForm(schema.fields) });
@@ -167,7 +244,55 @@ export default function Generic({
             {includeDeleted ? '返回使用中資料' : '顯示已停用資料'}
           </button>
         )}
+        {exportVisible && (
+          <button type="button" disabled={actions.pending} style={btnOutline} onClick={exportRecords}>⬇ 匯出 Excel</button>
+        )}
+        {importVisible && (
+          <>
+            <button type="button" disabled={actions.pending} style={btnOutline} onClick={downloadImportTemplate}>⬇ 下載範本</button>
+            <button
+              type="button"
+              disabled={actions.pending || importState?.status === 'parsing' || importState?.status === 'uploading'}
+              style={{ ...btnOutline, opacity: importState?.status === 'parsing' || importState?.status === 'uploading' ? .6 : 1 }}
+              onClick={openImportPicker}
+            >
+              {importState?.status === 'parsing' || importState?.status === 'uploading' ? '匯入中…' : '⬆ 匯入 Excel'}
+            </button>
+            <input ref={importFileRef} type="file" accept=".xlsx" style={{ display: 'none' }} onChange={handleImportFile} />
+          </>
+        )}
       </div>
+
+      {moduleKey === 'awards' && importState?.status === 'error' && (
+        <div style={{ maxWidth: 820, marginBottom: 14, color: '#B5533E', font: "600 12.5px 'Noto Sans TC', sans-serif" }}>{importState.error}</div>
+      )}
+
+      {moduleKey === 'awards' && importState?.status === 'done' && (
+        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 820, marginBottom: 18 }} className="table-scroll">
+          <div style={{ minWidth: 560 }}>
+            <div style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '10px 18px', background: '#F5F3EE',
+            }}
+            >
+              <span style={{ font: "700 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>
+                匯入結果：成功 {importState.results.filter((r) => r.ok).length} 筆／失敗 {importState.results.filter((r) => !r.ok).length} 筆
+              </span>
+              <span style={{ font: "600 12px 'Noto Sans TC', sans-serif", color: '#1F5F52', cursor: 'pointer' }} onClick={() => setImportState(null)}>關閉</span>
+            </div>
+            {importState.results.map((r) => (
+              <div key={r.row} style={{ padding: '10px 18px', borderTop: '1px solid #EEEBE2', font: "500 12.5px 'Noto Sans TC', sans-serif" }}>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+                  <span style={badge(r.ok, '#2F8F5B', '#E9F5EE', '#B5533E', '#FBEAE6')}>{r.ok ? '成功' : '失敗'}</span>
+                  <span>第 {r.row} 列</span>
+                  <span style={{ color: '#454B45' }}>{r.item || '—'}</span>
+                </div>
+                {!r.ok && <div style={{ color: '#B5533E', marginTop: 4 }}>{r.error}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {!includeDeleted && (
         <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 860 }} className="table-scroll">
@@ -238,7 +363,7 @@ export default function Generic({
                       }}
                     >
                       <option value="">請選擇</option>
-                      {fieldSchema.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                      {resolveOptions(fieldSchema, formState.values).map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                       {fieldSchema.allowCustom && <option value={CUSTOM_OPTION}>其他（自訂）</option>}
                     </select>
                     {isCustomSelected(fieldSchema, formState.values) && (

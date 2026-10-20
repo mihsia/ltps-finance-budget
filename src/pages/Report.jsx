@@ -9,10 +9,103 @@ import { buildCouncilWorkbook } from '../lib/councilExport';
 import { buildOverviewPdf, buildOverviewWorkbook } from '../lib/overviewExport';
 import { buildOverviewReport, OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_COLORS } from '../lib/overviewReport';
 import { languageRecordSummary } from '../lib/recordDerivations';
+import { summarizeByCategory, summarizeByLevel } from '../lib/awardStats';
 import { runAuthorized } from '../lib/accessPolicy';
 import {
   pageTitle, sectionLabel, card, statTile, btnOutline, btnPrimary, btnSecondary, chip,
 } from '../styles';
+
+// Validated against the dataviz skill's CVD-safety checks for an all-pairs
+// (every slice visually adjacent to every other) categorical context — see
+// AWARD_CATEGORY_COLORS usage below. "其他" (legacy data outside the fixed
+// category list) stays neutral gray rather than taking a 5th hue.
+const AWARD_CATEGORY_COLORS = {
+  語文類: '#2a78d6',
+  藝文類: '#eda100',
+  體育類: '#e87ba4',
+  科學類: '#008300',
+  其他: '#8A9089',
+};
+
+/** A donut chart of 獲獎紀錄 by 類別, with a direct-labeled legend (name, count, and share) so identity never rests on color alone. */
+export function AwardCategoryDonut({ data }) {
+  if (data.length === 0) {
+    return <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>尚無獲獎資料可供統計。</div>;
+  }
+  const total = data.reduce((sum, d) => sum + d.count, 0);
+  const size = 160;
+  const radius = 54;
+  const ringWidth = 20;
+  const circumference = 2 * Math.PI * radius;
+  let drawn = 0;
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="獲獎項目依類別分布圓環圖">
+        <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#EEEBE2" strokeWidth={ringWidth} />
+          {data.map((d) => {
+            const length = (d.count / total) * circumference;
+            // A small surface-color gap between slices reads as separation without drawing a border.
+            const visibleLength = Math.max(length - 2, 0);
+            const dashoffset = -drawn;
+            drawn += length;
+            return (
+              <circle
+                key={d.category}
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="none"
+                stroke={AWARD_CATEGORY_COLORS[d.category] || AWARD_CATEGORY_COLORS.其他}
+                strokeWidth={ringWidth}
+                strokeDasharray={`${visibleLength} ${circumference - visibleLength}`}
+                strokeDashoffset={dashoffset}
+              />
+            );
+          })}
+        </g>
+        <text x={size / 2} y={size / 2 - 4} textAnchor="middle" style={{ font: '800 20px Inter, sans-serif', fill: '#1E2420' }}>{total}</text>
+        <text x={size / 2} y={size / 2 + 14} textAnchor="middle" style={{ font: "500 10.5px 'Noto Sans TC', sans-serif", fill: '#8A9089' }}>筆獲獎</text>
+      </svg>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {data.map((d) => (
+          <div key={d.category} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{
+              width: 10, height: 10, borderRadius: 3, flex: 'none',
+              background: AWARD_CATEGORY_COLORS[d.category] || AWARD_CATEGORY_COLORS.其他,
+            }}
+            />
+            <span style={{ font: "600 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>{d.category}</span>
+            <span style={{ font: '700 12px Inter, sans-serif', color: '#454B45' }}>{d.count} 筆</span>
+            <span style={{ font: "500 11.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>（{d.pct}%）</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** A horizontal bar list of 獲獎紀錄 by 等級, sorted by count — levels are free-form so there's no fixed category order to preserve, magnitude order is the useful one. */
+export function AwardLevelBars({ data }) {
+  if (data.length === 0) {
+    return <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>尚無獲獎資料可供統計。</div>;
+  }
+  const max = Math.max(...data.map((d) => d.count));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 420 }}>
+      {data.map((d) => (
+        <div key={d.level} style={{ display: 'grid', gridTemplateColumns: '84px 1fr 32px', alignItems: 'center', gap: 10 }}>
+          <span style={{ font: "600 12px 'Noto Sans TC', sans-serif", color: '#454B45' }}>{d.level}</span>
+          <div style={{ height: 14, background: '#F0EEE6', borderRadius: 7, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${(d.count / max) * 100}%`, background: '#1F5F52', borderRadius: 7 }} />
+          </div>
+          <span style={{ font: '700 12px Inter, sans-serif', color: '#1E2420', textAlign: 'right' }}>{d.count}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 const OPTIONAL_MODULE_CHOICES = [
   { key: 'library', label: '圖書藏書量' },
@@ -119,6 +212,9 @@ export default function Report({ year, years }) {
 
   const activeExpense = (budgetState.data || []).filter((r) => r.recordType === 'expense' && !r.deletedAt);
   const activeRevenue = (budgetState.data || []).filter((r) => r.recordType === 'revenue' && !r.deletedAt);
+  const activeAwards = (awardsState.data || []).filter((r) => !r.deletedAt);
+  const awardCategoryStats = summarizeByCategory(activeAwards);
+  const awardLevelStats = summarizeByLevel(activeAwards);
   const trend = trendStates.map(({ year: y, state }) => ({
     year: y,
     expenseTotal: (state.data || [])
@@ -136,7 +232,7 @@ export default function Report({ year, years }) {
     trend,
     language: languageRecordSummary(languageState.data),
     specialNeedsRows: (specialNeedsState.data || []).filter((r) => !r.deletedAt),
-    awardsRows: (awardsState.data || []).filter((r) => !r.deletedAt),
+    awardsRows: activeAwards,
     clubRows: (clubState.data || []).filter((r) => !r.deletedAt),
     landRows: (landState.data || []).filter((r) => !r.deletedAt),
     inquiryRows: (inquiryState.data || []).filter((r) => !r.deletedAt),
@@ -306,6 +402,18 @@ export default function Report({ year, years }) {
             </div>
           );
         })}
+      </div>
+
+      <div style={sectionLabel}>獲獎項目統計分析</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginBottom: 24, maxWidth: 900 }}>
+        <div style={card}>
+          <div style={{ font: "700 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 14 }}>依類別分布</div>
+          <AwardCategoryDonut data={awardCategoryStats} />
+        </div>
+        <div style={card}>
+          <div style={{ font: "700 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 14 }}>依等級分布</div>
+          <AwardLevelBars data={awardLevelStats} />
+        </div>
       </div>
 
       <div style={sectionLabel}>匯出格式</div>
