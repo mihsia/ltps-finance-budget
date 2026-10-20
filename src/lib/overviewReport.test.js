@@ -120,8 +120,8 @@ describe('buildOverviewReport', () => {
       clubRows: [{ name: '桌球社' }, { name: '直笛隊' }],
       landRows: [],
       inquiryRows: [
-        { subject: '代理教師人力', status: '已答詢' },
-        { subject: '課後社團經費', status: '待答詢' },
+        { councilor: '王議員', subject: '代理教師人力', answer: '已完成', status: '已答詢' },
+        { councilor: '陳議員', subject: '課後社團經費', answer: null, status: '待答詢' },
       ],
     });
     const languageRows = [{ lang: '閩南語', classes: 13, students: 264 }, { lang: '客語', classes: 1, students: 4 }];
@@ -140,8 +140,8 @@ describe('buildOverviewReport', () => {
       total: 2,
       resolved: 1,
       rows: [
-        { subject: '代理教師人力', status: '已答詢' },
-        { subject: '課後社團經費', status: '待答詢' },
+        { councilor: '王議員', subject: '代理教師人力', answer: '已完成', status: '已答詢' },
+        { councilor: '陳議員', subject: '課後社團經費', answer: null, status: '待答詢' },
       ],
     });
   });

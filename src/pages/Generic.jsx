@@ -12,6 +12,7 @@ import {
 } from '../lib/recordSchemas';
 import { deadlineExtraCheck, getDeadlineState } from '../lib/fixedFieldEditing';
 import { buildAwardExportWorkbook, buildAwardImportTemplateWorkbook, parseAwardImportFile } from '../lib/awardImport';
+import { buildInquiryExportWorkbook, buildInquiryImportTemplateWorkbook, parseInquiryImportFile } from '../lib/inquiryImport';
 import NoModuleAccess from '../components/NoModuleAccess';
 import {
   pageTitle, pageSubtitle, card, input, btnPrimary, btnOutline, btnSecondary,
@@ -35,6 +36,29 @@ function inputType(kind) {
 }
 
 const CUSTOM_OPTION = '__custom__';
+
+// Modules with their own standalone Excel export/import, separate from the
+// all-module 議會報表 exports in Report.jsx. Keyed by moduleKey so adding a
+// module here is the only wiring needed — no more hardcoded `moduleKey ===
+// 'awards'` branches scattered through the component.
+const IMPORT_EXPORT = {
+  awards: {
+    exportFileName: (year) => `${year}年度獲獎紀錄.xlsx`,
+    templateFileName: '獲獎紀錄匯入範本.xlsx',
+    buildExportWorkbook: buildAwardExportWorkbook,
+    buildTemplateWorkbook: buildAwardImportTemplateWorkbook,
+    parseImportFile: parseAwardImportFile,
+    importItemLabel: (row) => row.item,
+  },
+  inquiry: {
+    exportFileName: (year) => `${year}年度議會質詢答詢紀錄.xlsx`,
+    templateFileName: '議會質詢答詢匯入範本.xlsx',
+    buildExportWorkbook: buildInquiryExportWorkbook,
+    buildTemplateWorkbook: buildInquiryImportTemplateWorkbook,
+    parseImportFile: parseInquiryImportFile,
+    importItemLabel: (row) => row.subject,
+  },
+};
 
 // The custom-entry text box is tracked by its own marker key (rather than
 // derived purely from the field's current value) so picking "其他（自訂）"
@@ -118,19 +142,20 @@ export default function Generic({
     : [];
   const writeVisible = recoveryAllowed && !recordState.loading && !recordState.error;
 
-  // 獲獎紀錄 gets its own standalone export/import, separate from the
-  // all-module 議會報表 exports in Report.jsx — export is read-only so it's
-  // offered whenever the module is viewable; import creates records, so it
-  // needs the same year-unlocked/current-year eligibility as 新增一筆.
-  const exportVisible = moduleKey === 'awards' && canEditModule(moduleKey)
+  // Export is read-only so it's offered whenever the module is viewable;
+  // import creates records, so it needs the same year-unlocked/current-year
+  // eligibility as 新增一筆. Which modules get this at all, and the Excel
+  // shape each one reads/writes, is declared in IMPORT_EXPORT above.
+  const importExport = IMPORT_EXPORT[moduleKey];
+  const exportVisible = Boolean(importExport) && canEditModule(moduleKey)
     && !recordState.loading && !recordState.error;
-  const importVisible = moduleKey === 'awards' && writeVisible;
+  const importVisible = Boolean(importExport) && writeVisible;
 
   const downloadImportTemplate = () => {
-    XLSX.writeFile(buildAwardImportTemplateWorkbook(), '獲獎紀錄匯入範本.xlsx');
+    XLSX.writeFile(importExport.buildTemplateWorkbook(), importExport.templateFileName);
   };
   const exportRecords = () => {
-    XLSX.writeFile(buildAwardExportWorkbook(activeRecords), `${year}年度獲獎紀錄.xlsx`);
+    XLSX.writeFile(importExport.buildExportWorkbook(activeRecords), importExport.exportFileName(year));
   };
   const openImportPicker = () => importFileRef.current?.click();
   const handleImportFile = async (event) => {
@@ -143,7 +168,7 @@ export default function Generic({
     try {
       const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: 'array' });
-      const parsed = parseAwardImportFile(workbook);
+      const parsed = importExport.parseImportFile(workbook);
       if (parsed.error) {
         setImportState({ status: 'error', error: parsed.error });
         return;
@@ -162,16 +187,16 @@ export default function Generic({
         const results = [];
         for (let i = 0; i < rows.length; i += 1) {
           const row = rows[i];
-          const validation = validateGenericRecord('awards', row);
+          const validation = validateGenericRecord(moduleKey, row);
           if (!validation.valid) {
-            results.push({ row: i + 2, ok: false, item: row.item, error: validation.error });
+            results.push({ row: i + 2, ok: false, item: importExport.importItemLabel(row), error: validation.error });
             continue;
           }
           try {
             await recordState.create(validation.data, actor);
-            results.push({ row: i + 2, ok: true, item: validation.data.item });
+            results.push({ row: i + 2, ok: true, item: importExport.importItemLabel(validation.data) });
           } catch {
-            results.push({ row: i + 2, ok: false, item: validation.data.item, error: '新增失敗，請稍後再試。' });
+            results.push({ row: i + 2, ok: false, item: importExport.importItemLabel(validation.data), error: '新增失敗，請稍後再試。' });
           }
         }
         setImportState({ status: 'done', results });
@@ -281,11 +306,11 @@ export default function Generic({
         )}
       </div>
 
-      {moduleKey === 'awards' && importState?.status === 'error' && (
+      {importExport && importState?.status === 'error' && (
         <div style={{ maxWidth: 820, marginBottom: 14, color: '#B5533E', font: "600 12.5px 'Noto Sans TC', sans-serif" }}>{importState.error}</div>
       )}
 
-      {moduleKey === 'awards' && importState?.status === 'done' && (
+      {importExport && importState?.status === 'done' && (
         <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 820, marginBottom: 18 }} className="table-scroll">
           <div style={{ minWidth: 560 }}>
             <div style={{

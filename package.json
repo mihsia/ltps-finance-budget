@@ -13,7 +13,9 @@
     "seed": "node scripts/seed.js",
     "seed:dry-run": "node scripts/seed.js --dry-run",
     "migrate:language-cert": "node scripts/migrateLanguageCertification.js",
-    "migrate:language-cert:dry-run": "node scripts/migrateLanguageCertification.js --dry-run"
+    "migrate:language-cert:dry-run": "node scripts/migrateLanguageCertification.js --dry-run",
+    "migrate:inquiry-fields": "node scripts/migrateInquiryFields.js",
+    "migrate:inquiry-fields:dry-run": "node scripts/migrateInquiryFields.js --dry-run"
   },
   "dependencies": {
     "firebase": "^11.0.2",

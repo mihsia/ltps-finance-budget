@@ -417,7 +417,7 @@ describe('schema-driven Generic records CRUD page', () => {
     ['awards', ['類別', '獲獎項目', '賽事類型', '學生姓名', '等級', '日期']],
     ['club', ['社團名稱', '指導老師', '人數', '上課星期', '開始時間', '結束時間', '上課場地', '每生費用（元）']],
     ['land', ['地號', '面積(㎡)', '公告現值(元/㎡)']],
-    ['inquiry', ['日期', '議員/題目', '答詢狀態']],
+    ['inquiry', ['日期', '議員', '題目', '答案', '答詢狀態']],
   ])('preserves %s column semantics from its record schema', (moduleKey, labels) => {
     installRecords(moduleKey, readyRecords([]));
     const mounted = mount(Generic, { moduleKey });
@@ -503,7 +503,11 @@ describe('schema-driven Generic records CRUD page', () => {
       recordType: 'club', name: '桌球社', instructor: '陳老師', participants: 18, weekday: '週二', startTime: '16:00', endTime: '17:00', venue: '活動中心', feePerStudent: 200,
     }],
     ['land', { '地號': '五結段123地號', '面積(㎡)': '8450.5', '公告現值(元/㎡)': '12800' }, { recordType: 'land', parcel: '五結段123地號', area: 8450.5, announcedValue: 12800 }],
-    ['inquiry', { '日期': '2026-05-20', '議員/題目': '陳議員：課後社團經費', '答詢狀態': '待答詢' }, { recordType: 'inquiry', date: '2026-05-20', subject: '陳議員：課後社團經費', status: '待答詢' }],
+    ['inquiry', {
+      '日期': '2026-05-20', '議員': '陳議員', '題目': '課後社團經費', '答詢狀態': '待答詢',
+    }, {
+      recordType: 'inquiry', date: '2026-05-20', councilor: '陳議員', subject: '課後社團經費', answer: null, status: '待答詢',
+    }],
   ])('creates stable %s record fields instead of cells arrays', async (moduleKey, values, expected) => {
     const records = readyRecords([]);
     installRecords(moduleKey, records);

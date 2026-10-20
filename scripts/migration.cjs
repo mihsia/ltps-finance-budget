@@ -74,9 +74,15 @@ const PLACEHOLDER_LAND = [
   { parcel: '五結段124地號', area: 2100, announcedValue: 12800 },
 ];
 const PLACEHOLDER_INQUIRY = [
-  { date: '2025-11-08', subject: '王議員：代理教師人力', status: '已答詢' },
-  { date: '2025-11-08', subject: '李議員：圖書館藏書更新', status: '已答詢' },
-  { date: '2026-05-20', subject: '陳議員：課後社團經費', status: '待答詢' },
+  {
+    date: '2025-11-08', councilor: '王議員', subject: '代理教師人力', answer: '目前代理教師到職率已達 100%，無缺額。', status: '已答詢',
+  },
+  {
+    date: '2025-11-08', councilor: '李議員', subject: '圖書館藏書更新', answer: '本學期已完成新書採購與上架。', status: '已答詢',
+  },
+  {
+    date: '2026-05-20', councilor: '陳議員', subject: '課後社團經費', answer: null, status: '待答詢',
+  },
 ];
 const PLACEHOLDER_SPECIAL_NEEDS = [
   { category: '身障生', count: 14, note: '含資源班與巡迴輔導' },

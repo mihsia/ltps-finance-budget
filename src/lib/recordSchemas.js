@@ -206,6 +206,8 @@ export const AWARD_LEVELS = [
 
 export const AWARD_COMPETITION_TYPES = ['個人賽', '團體賽'];
 
+export const INQUIRY_STATUS_OPTIONS = ['待答詢', '已答詢'];
+
 // 課後社團只在平日放學後上課，週六不開課。
 export const CLUB_WEEKDAYS = ['週一', '週二', '週三', '週四', '週五'];
 
@@ -264,8 +266,13 @@ export const genericRecordSchemas = {
     recordType: 'inquiry',
     fields: [
       { key: 'date', label: '日期', kind: 'date' },
-      { key: 'subject', label: '議員/題目', kind: 'text', maxLength: 240 },
-      { key: 'status', label: '答詢狀態', kind: 'text', maxLength: 60 },
+      { key: 'councilor', label: '議員', kind: 'text', maxLength: 60 },
+      { key: 'subject', label: '題目', kind: 'text', maxLength: 240 },
+      // 答案留空代表尚未答詢；答覆後再編輯補上，不需要在題目建立當下就先想好答案。
+      { key: 'answer', label: '答案', kind: 'text', maxLength: 1000, optional: true },
+      {
+        key: 'status', label: '答詢狀態', kind: 'select', options: INQUIRY_STATUS_OPTIONS, allowCustom: true, maxLength: 60,
+      },
     ],
   },
   specialNeeds: {

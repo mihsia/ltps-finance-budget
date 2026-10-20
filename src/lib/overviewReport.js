@@ -54,9 +54,12 @@ export const OPTIONAL_MODULE_DETAIL_FIELDS = {
     { key: 'area', label: '面積(㎡)' },
     { key: 'announcedValue', label: '公告現值(元/㎡)' },
   ],
+  // 答案內容不列入議會報表的精簡明細表（可能很長，會撐爆表格寬度）；
+  // 完整答案請到「議會質詢／答詢紀錄」模組頁面查看。
   inquiry: [
     { key: 'date', label: '日期' },
-    { key: 'subject', label: '議員/題目' },
+    { key: 'councilor', label: '議員' },
+    { key: 'subject', label: '題目' },
     { key: 'status', label: '答詢狀態' },
   ],
 };
