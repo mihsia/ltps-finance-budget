@@ -43,6 +43,25 @@ export function getDeadlineState(deadlines, moduleKey) {
   return { configured: true, invalid: false, deadline };
 }
 
+/**
+ * Builds the `extraCheck(yearDecision)` callback `useRecordCrudActions`
+ * accepts, enforcing a module's 填報截止日 the same way Basic.jsx's own
+ * hand-written checkInvocation already does — shared here so every module
+ * page reports the deadline the same way instead of re-deriving the wording.
+ * A module with no configured deadline is always allowed.
+ */
+export function deadlineExtraCheck(moduleKey, moduleTitle) {
+  return (yearDecision) => {
+    const state = getDeadlineState(yearDecision.meta?.deadlines, moduleKey);
+    if (!state.configured) return { allowed: true };
+    if (state.invalid) return { allowed: false, reason: `${moduleTitle}填報截止日格式錯誤，無法編輯。` };
+    if (Date.now() > state.deadline.getTime()) {
+      return { allowed: false, reason: `已超過${moduleTitle}填報截止日，無法編輯或儲存。` };
+    }
+    return { allowed: true };
+  };
+}
+
 export function exactValueEqual(left, right) {
   if (Object.is(left, right)) return true;
   if (typeof left !== typeof right || left === null || right === null) return false;

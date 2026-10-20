@@ -10,10 +10,12 @@ import {
   recordToForm,
   validateGenericRecord,
 } from '../lib/recordSchemas';
+import { deadlineExtraCheck, getDeadlineState } from '../lib/fixedFieldEditing';
 import { buildAwardExportWorkbook, buildAwardImportTemplateWorkbook, parseAwardImportFile } from '../lib/awardImport';
+import NoModuleAccess from '../components/NoModuleAccess';
 import {
   pageTitle, pageSubtitle, card, input, btnPrimary, btnOutline, btnSecondary,
-  tableHeadRow, tableRow, lockedBanner, badge,
+  tableHeadRow, tableRow, lockedBanner, deadlineBanner, badge,
 } from '../styles';
 
 function messageStyle(message) {
@@ -27,6 +29,7 @@ function messageStyle(message) {
 
 function inputType(kind) {
   if (kind === 'date') return 'date';
+  if (kind === 'time') return 'time';
   if (kind === 'integer' || kind === 'number') return 'number';
   return 'text';
 }
@@ -74,10 +77,16 @@ export default function Generic({
   const schema = genericRecordSchemas[moduleKey];
   const yearState = useYearMeta(year);
   const { canEditModule, authorizeModuleActor } = useAuth();
+  const deadlineState = getDeadlineState(yearState.meta?.deadlines, moduleKey);
+  const deadlineInvalid = deadlineState.invalid;
+  const pastDeadline = deadlineState.deadline !== null
+    && Date.now() > deadlineState.deadline.getTime();
   const recoveryAllowed = canEditModule(moduleKey)
     && year === latestYear
     && yearState.exists
-    && yearState.meta?.locked === false;
+    && yearState.meta?.locked === false
+    && !pastDeadline
+    && !deadlineInvalid;
   const [showDeleted, setShowDeleted] = useState(false);
   const includeDeleted = showDeleted && recoveryAllowed;
   const recordState = useYearRecords(year, moduleKey, { includeDeleted });
@@ -91,6 +100,7 @@ export default function Generic({
     yearState,
     recordState,
     authorizeModuleActor,
+    extraCheck: deadlineExtraCheck(moduleKey, meta.title),
   });
 
   useEffect(() => {
@@ -212,6 +222,9 @@ export default function Generic({
     setShowDeleted((current) => !current);
   });
 
+  if (!canEditModule(moduleKey)) {
+    return <NoModuleAccess title={meta.title} />;
+  }
   if (recordState.error || yearState.error) {
     return <div><div style={pageTitle}>{meta.title}</div><div style={lockedBanner}>無法載入{meta.title}資料，請稍後再試。</div></div>;
   }
@@ -232,7 +245,12 @@ export default function Generic({
       {yearState.exists && yearState.meta?.locked !== false && (
         <div style={lockedBanner}>此年度未開放編輯，無法編輯或儲存。</div>
       )}
-      {!canEditModule(moduleKey) && <div style={lockedBanner}>您沒有此模組的編輯權限。</div>}
+      {deadlineState.configured && (
+        <div style={(pastDeadline || deadlineInvalid) ? lockedBanner : deadlineBanner}>
+          <span>填報截止日：{deadlineInvalid ? '設定無效' : yearState.meta.deadlines[moduleKey]}</span>
+          <span>{deadlineInvalid ? `${meta.title}填報截止日格式錯誤，已停用編輯` : (pastDeadline ? '已超過填報期限' : '截止當日 23:59 前可儲存')}</span>
+        </div>
+      )}
       {actions.message && <div style={messageStyle(actions.message)}>{actions.message}</div>}
 
       <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>

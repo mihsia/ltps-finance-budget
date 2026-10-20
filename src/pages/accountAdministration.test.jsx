@@ -134,6 +134,24 @@ beforeEach(() => {
 });
 
 describe('Settings account administration', () => {
+  it('caps the visible 負責模組 pills and folds the rest into a hoverable +N badge', async () => {
+    firestoreMocks.users.push({
+      uid: 'user-4', name: '林秋月', email: 'lin@example.com', dept: '教務處', role: 'editor', modules: ['awards', 'language', 'inquiry', 'library', 'specialNeeds'], status: 'active',
+    });
+    const renderer = await render();
+
+    const text = pageText(renderer);
+    expect(text).toContain('獲獎紀錄');
+    expect(text).toContain('族語開班');
+    expect(text).toContain('質詢答詢');
+    expect(text).not.toContain('圖書藏書');
+    expect(text).not.toContain('特生統計');
+    expect(text).toContain('+2');
+
+    const overflowBadge = renderer.root.findAll((node) => node.props.title === '圖書藏書、特生統計')[0];
+    expect(overflowBadge).toBeTruthy();
+  });
+
   it('shows each account status so a disabled account is not mistaken for a working one', async () => {
     const renderer = await render();
     expect(pageText(renderer)).toContain('已停用');

@@ -4,6 +4,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { runAuthorized } from '../lib/accessPolicy';
 import { getDeadlineState, validateFixedFields } from '../lib/fixedFieldEditing';
 import { fmtDate } from '../lib/format';
+import NoModuleAccess from '../components/NoModuleAccess';
 import {
   pageTitle, pageSubtitle, sectionLabel, card, input, label,
   btnPrimary, btnSecondary, deadlineBanner, lockedBanner,
@@ -139,6 +140,9 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
     applyGuardResult(result);
   };
 
+  if (!canEditModule('basic')) {
+    return <NoModuleAccess title="學校基本資料" />;
+  }
   if (moduleState.error || yearState.error) {
     return <div><div style={pageTitle}>學校基本資料</div><div style={lockedBanner}>無法載入學校基本資料，請稍後再試。</div></div>;
   }
@@ -167,7 +171,6 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
       {yearState.exists && yearState.meta?.locked !== false && (
         <div style={lockedBanner}>此年度未開放編輯，無法編輯或儲存。</div>
       )}
-      {!canEditModule('basic') && <div style={lockedBanner}>您沒有此模組的編輯權限。</div>}
       {deadlineState.configured && (
         <div style={(pastDeadline || deadlineInvalid) ? lockedBanner : deadlineBanner}>
           <span>填報截止日：{deadlineInvalid ? '設定無效' : yearState.meta.deadlines.basic}</span>

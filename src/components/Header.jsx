@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import BrandMark from './BrandMark';
 
 export default function Header({ year, setYear, years, onMenuClick }) {
   const { profile, user, logout } = useAuth();
   const initial = (profile?.name || user?.email || '?').trim().charAt(0);
+  const [photoFailed, setPhotoFailed] = useState(false);
+  const showPhoto = Boolean(user?.photoURL) && !photoFailed;
 
   return (
     <div className="app-header">
@@ -49,11 +52,21 @@ export default function Header({ year, setYear, years, onMenuClick }) {
           })}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{
-            width: 30, height: 30, borderRadius: '50%', background: '#C9832F',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            font: "700 12px Inter, sans-serif", color: '#fff',
-          }}>{initial}</div>
+          {showPhoto ? (
+            <img
+              src={user.photoURL}
+              alt=""
+              referrerPolicy="no-referrer"
+              onError={() => setPhotoFailed(true)}
+              style={{ width: 30, height: 30, borderRadius: '50%', objectFit: 'cover', flex: 'none' }}
+            />
+          ) : (
+            <div style={{
+              width: 30, height: 30, borderRadius: '50%', background: '#C9832F',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              font: "700 12px Inter, sans-serif", color: '#fff', flex: 'none',
+            }}>{initial}</div>
+          )}
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
             <span style={{ font: "600 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>
               {profile?.name || user?.email}

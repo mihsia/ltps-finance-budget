@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it, vi } from 'vitest';
 import * as authModule from '../contexts/AuthContext';
+import { APP_UPDATED_AT, APP_VERSION } from '../lib/appInfo';
 import Login from './Login';
 
 vi.mock('../firebase', () => ({
@@ -40,5 +41,12 @@ describe('Login Google link controls', () => {
 
     expect(markup).not.toContain('取消 Google 帳號連結');
     expect(markup).not.toMatch(/<button[^>]*disabled=""[^>]*>.*使用 Google 帳號登入/s);
+  });
+
+  it('shows the system version and last-updated date so support can confirm which build is running', () => {
+    const markup = renderLogin(baseAuthValue);
+
+    expect(markup).toContain(`v${APP_VERSION}`);
+    expect(markup).toContain(APP_UPDATED_AT);
   });
 });

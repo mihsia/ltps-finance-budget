@@ -127,6 +127,10 @@ function fileInput(renderer) {
   return renderer.root.findAll((node) => node.type === 'input' && node.props.type === 'file')[0];
 }
 
+function field(renderer, ariaLabel) {
+  return renderer.root.findAll((node) => node.props['aria-label'] === ariaLabel)[0];
+}
+
 function readyModule(data, save = vi.fn().mockResolvedValue(undefined), exists = true) {
   return {
     data,
@@ -403,10 +407,13 @@ describe('Library fixed-field module', () => {
     expect(pageText(mounted.renderer)).toContain('儲存成功。');
 
     await act(async () => control(mounted.renderer, '編輯數量').props.onClick());
+    // A denied/disabled account also fails canEditModule's own check, so the
+    // whole page swaps to the no-access view rather than leaving the edit
+    // form visible with the retained callback's rejection message inline.
     authMocks.decision = { allowed: false, code: 'profile-disabled', reason: '此帳號已停用。' };
     await act(async () => control(mounted.renderer, '取消').props.onClick());
-    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(2);
-    expect(pageText(mounted.renderer)).toContain('此帳號已停用。');
+    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(0);
+    expect(pageText(mounted.renderer)).toContain('無權限');
     mounted.unmount();
   });
 
@@ -455,6 +462,27 @@ describe('Library fixed-field module', () => {
     expect(pageText(mounted.renderer)).toContain('無法確認操作者身分');
     mounted.unmount();
   });
+
+  it('shows a deadline banner, hides 編輯數量, and blocks a retained save once past 填報截止日', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 9, 12));
+    const save = vi.fn().mockResolvedValue(undefined);
+    hookMocks.modules.library = readyModule({ generalBooks: 1, indigenousBooks: 2 }, save);
+    hookMocks.meta.meta = { locked: false, deadlines: { library: '2026-08-10' } };
+    const mounted = mount(Library);
+
+    expect(pageText(mounted.renderer)).toContain('填報截止日：2026-08-10');
+    expect(control(mounted.renderer, '編輯數量')).toBeTruthy();
+    const retainedBeginEditing = control(mounted.renderer, '編輯數量').props.onClick;
+
+    hookMocks.meta.meta = { locked: false, deadlines: { library: '2026-08-08' } };
+    await act(async () => retainedBeginEditing());
+
+    expect(pageText(mounted.renderer)).toContain('已超過填報期限');
+    expect(control(mounted.renderer, '編輯數量')).toBeUndefined();
+    expect(save).not.toHaveBeenCalled();
+    mounted.unmount();
+  });
 });
 
 describe('BudgetBook fixed-field module', () => {
@@ -491,11 +519,35 @@ describe('BudgetBook fixed-field module', () => {
     expect(save).toHaveBeenCalledWith({
       fundName: '新校務基金',
       reviewAuthority: '新審議機關',
+      description: '',
     }, {
       actor: { uid: 'admin-fixed', name: '校務管理員' },
-      fields: ['fundName', 'reviewAuthority'],
+      fields: ['fundName', 'reviewAuthority', 'description'],
     });
     expect(pageText(mounted.renderer)).toContain('儲存成功。');
+    mounted.unmount();
+  });
+
+  it('trims and validates 預算書說明, allowing it to be left blank', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    hookMocks.modules.budgetbook = readyModule({ fundName: '基金', reviewAuthority: '機關' }, save);
+    const mounted = mount(BudgetBook);
+
+    await act(async () => control(mounted.renderer, '編輯基金資料').props.onClick());
+    const textarea = mounted.renderer.root.findByType('textarea');
+    act(() => textarea.props.onChange({ target: { value: `${'說'.repeat(2001)}` } }));
+    await act(async () => control(mounted.renderer, '儲存').props.onClick());
+    expect(save).not.toHaveBeenCalled();
+    expect(pageText(mounted.renderer)).toContain('預算書說明不得超過 2000 個字');
+
+    act(() => textarea.props.onChange({ target: { value: '  本年度重點為充實圖書設備。  ' } }));
+    await act(async () => control(mounted.renderer, '儲存').props.onClick());
+    expect(save).toHaveBeenCalledWith({
+      fundName: '基金', reviewAuthority: '機關', description: '本年度重點為充實圖書設備。',
+    }, {
+      actor: { uid: 'admin-fixed', name: '校務管理員' },
+      fields: ['fundName', 'reviewAuthority', 'description'],
+    });
     mounted.unmount();
   });
 
@@ -577,6 +629,70 @@ describe('BudgetBook fixed-field module', () => {
     hookMocks.meta = { meta: { locked: false, deadlines: {} }, loading: false, exists: true, error: null };
     authMocks.decision = { allowed: false, code: 'module-denied', reason: '沒有此模組的編輯權限。' };
     mounted.rerender();
+    expect(fileInput(mounted.renderer)).toBeUndefined();
+    mounted.unmount();
+  });
+
+  it('edits a 業務計畫別 amount in place, writing straight to the shared budget expense record', async () => {
+    hookMocks.modules.budgetbook = readyModule({ fundName: '基金', reviewAuthority: '機關' });
+    const update = vi.fn().mockResolvedValue(undefined);
+    hookMocks.records.budget = {
+      data: [
+        {
+          id: 'expense-1', recordType: 'expense', label: '國民教育計畫', formula: '辦理校務', amount: 6157, actualAmount: null, varianceNote: null, deletedAt: null,
+        },
+      ],
+      loading: false,
+      error: null,
+      update,
+      authorizeWrite: () => ({ allowed: true, code: 'records-writable', reason: null }),
+    };
+    const mounted = mount(BudgetBook);
+
+    expect(pageText(mounted.renderer)).toContain('國民教育計畫 6,157 千元');
+    await act(async () => control(mounted.renderer, '編輯').props.onClick());
+    const amountInput = field(mounted.renderer, '國民教育計畫 金額');
+    act(() => amountInput.props.onChange({ target: { value: '7000' } }));
+    await act(async () => control(mounted.renderer, '儲存').props.onClick());
+
+    expect(update).toHaveBeenCalledWith('expense-1', {
+      label: '國民教育計畫', formula: '辦理校務', amount: 7000, actualAmount: null, varianceNote: null,
+    }, { uid: 'admin-fixed', name: '校務管理員' });
+    expect(pageText(mounted.renderer)).toContain('業務計畫別金額已更新。');
+    mounted.unmount();
+  });
+
+  it('hides the 編輯 control for 業務計畫別 amounts once the account lacks 歲入歲出 access', () => {
+    hookMocks.modules.budgetbook = readyModule({ fundName: '基金', reviewAuthority: '機關' });
+    hookMocks.records.budget = {
+      data: [
+        {
+          id: 'expense-1', recordType: 'expense', label: '國民教育計畫', formula: '辦理校務', amount: 6157, actualAmount: null, varianceNote: null, deletedAt: null,
+        },
+      ],
+      loading: false,
+      error: null,
+      update: vi.fn(),
+      authorizeWrite: () => ({ allowed: false, code: 'records-error', reason: '無法確認資料列狀態。' }),
+    };
+    authMocks.value.canEditModule = (moduleKey) => moduleKey === 'budgetbook';
+    const mounted = mount(BudgetBook);
+
+    expect(pageText(mounted.renderer)).toContain('國民教育計畫 6,157 千元');
+    expect(control(mounted.renderer, '編輯')).toBeUndefined();
+    mounted.unmount();
+  });
+
+  it('shows a deadline banner and hides 編輯基金資料／上傳 PDF once past 填報截止日', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 9, 12));
+    hookMocks.modules.budgetbook = readyModule({ fundName: '基金', reviewAuthority: '機關' });
+    hookMocks.meta.meta = { locked: false, deadlines: { budgetbook: '2026-08-08' } };
+    const mounted = mount(BudgetBook);
+
+    expect(pageText(mounted.renderer)).toContain('填報截止日：2026-08-08');
+    expect(pageText(mounted.renderer)).toContain('已超過填報期限');
+    expect(control(mounted.renderer, '編輯基金資料')).toBeUndefined();
     expect(fileInput(mounted.renderer)).toBeUndefined();
     mounted.unmount();
   });

@@ -17,6 +17,11 @@ const MODULE_OPTIONS = navGroups.flatMap((g) => g.items).filter((it) => it.key !
 const ROLE_OPTIONS = [['admin', '管理者'], ['editor', '填報人員']];
 const ROW_COLS = '0.9fr 1fr 1.8fr 0.6fr 0.6fr 1fr';
 
+// Past this many modules, the row grows taller than its neighbors every
+// time — capping it and folding the rest into a single "+N" badge keeps
+// every row the same height regardless of how many modules an account has.
+const MAX_VISIBLE_MODULES = 3;
+
 // New accounts sign in with Google only (see functions/index.js's
 // createAccount — no password is ever set), so the admin only needs to pick
 // which Google-capable domain the account's email belongs to; "自訂" covers
@@ -54,6 +59,22 @@ function ModuleDescriptions({ options, activeKey }) {
         <span style={{ font: "400 12px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>點選左側模組，查看功能說明</span>
       )}
     </div>
+  );
+}
+
+/** The 負責模組 cell in the account list: capped at MAX_VISIBLE_MODULES pills, with the rest folded into a hoverable "+N" badge so every row stays the same height. */
+function ModulePillList({ moduleKeys }) {
+  if (moduleKeys.length === 0) return <span style={{ color: '#8A9089' }}>—</span>;
+  const labels = moduleKeys.map((k) => MODULE_OPTIONS.find((m) => m.key === k)?.label || k);
+  const visible = labels.slice(0, MAX_VISIBLE_MODULES);
+  const overflow = labels.slice(MAX_VISIBLE_MODULES);
+  return (
+    <>
+      {visible.map((lbl) => <span key={lbl} style={badge(true, '#1F5F52', '#E9F1EE')}>{lbl}</span>)}
+      {overflow.length > 0 && (
+        <span style={badge(true, '#6B726A', '#EDEAE2')} title={overflow.join('、')}>+{overflow.length}</span>
+      )}
+    </>
   );
 }
 
@@ -328,15 +349,11 @@ export default function Settings() {
                 <div key={ac.uid} style={{ ...tableRow(ROW_COLS), alignItems: 'center' }}>
                   <span>{ac.name}</span>
                   <span style={{ color: '#8A9089' }}>{ac.email}</span>
-                  <span style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                  <span style={{ display: 'flex', flexWrap: 'wrap', gap: 5, alignItems: 'center' }}>
                     {ac.role === 'admin' ? (
                       <span style={{ font: '700 11px Inter, sans-serif', color: '#1F5F52' }}>全部（管理者）</span>
-                    ) : (ac.modules || []).length > 0 ? (
-                      (ac.modules || []).map((k) => (
-                        <span key={k} style={badge(true, '#1F5F52', '#E9F1EE')}>{MODULE_OPTIONS.find((m) => m.key === k)?.label || k}</span>
-                      ))
                     ) : (
-                      <span style={{ color: '#8A9089' }}>—</span>
+                      <ModulePillList moduleKeys={ac.modules || []} />
                     )}
                   </span>
                   <span style={{ font: '700 11px Inter, sans-serif', color: ac.role === 'admin' ? '#1F5F52' : '#8A9089' }}>{ac.role === 'admin' ? '管理者' : '填報人員'}</span>

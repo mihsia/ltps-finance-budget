@@ -1,6 +1,6 @@
 import TestRenderer, { act } from 'react-test-renderer';
 import * as XLSX from 'xlsx';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAuthorizationSource } from '../lib/accessPolicy';
 import { AWARD_IMPORT_HEADERS } from '../lib/awardImport';
 
@@ -379,7 +379,7 @@ describe('Language variant records CRUD page', () => {
 describe('schema-driven Generic records CRUD page', () => {
   it.each([
     ['awards', ['類別', '獲獎項目', '賽事類型', '學生姓名', '等級', '日期']],
-    ['club', ['社團名稱', '指導老師', '人數', '上課時間', '上課場地', '每生費用（元）']],
+    ['club', ['社團名稱', '指導老師', '人數', '上課星期', '開始時間', '結束時間', '上課場地', '每生費用（元）']],
     ['land', ['地號', '面積(㎡)', '公告現值(元/㎡)']],
     ['inquiry', ['日期', '議員/題目', '答詢狀態']],
   ])('preserves %s column semantics from its record schema', (moduleKey, labels) => {
@@ -462,9 +462,9 @@ describe('schema-driven Generic records CRUD page', () => {
 
   it.each([
     ['club', {
-      '社團名稱': '桌球社', '指導老師': '陳老師', '人數': '18', '上課時間': '週二 16:00', '上課場地': '活動中心', '每生費用（元）': '200',
+      '社團名稱': '桌球社', '指導老師': '陳老師', '人數': '18', '上課星期': '週二', '開始時間': '16:00', '結束時間': '17:00', '上課場地': '活動中心', '每生費用（元）': '200',
     }, {
-      recordType: 'club', name: '桌球社', instructor: '陳老師', participants: 18, schedule: '週二 16:00', venue: '活動中心', feePerStudent: 200,
+      recordType: 'club', name: '桌球社', instructor: '陳老師', participants: 18, weekday: '週二', startTime: '16:00', endTime: '17:00', venue: '活動中心', feePerStudent: 200,
     }],
     ['land', { '地號': '五結段123地號', '面積(㎡)': '8450.5', '公告現值(元/㎡)': '12800' }, { recordType: 'land', parcel: '五結段123地號', area: 8450.5, announcedValue: 12800 }],
     ['inquiry', { '日期': '2026-05-20', '議員/題目': '陳議員：課後社團經費', '答詢狀態': '待答詢' }, { recordType: 'inquiry', date: '2026-05-20', subject: '陳議員：課後社團經費', status: '待答詢' }],
@@ -479,7 +479,7 @@ describe('schema-driven Generic records CRUD page', () => {
     mounted.unmount();
   });
 
-  it('lets 上課時間 be picked from the dropdown or typed as a custom value', async () => {
+  it('requires the 課後社團 結束時間 to be after 開始時間', async () => {
     const records = readyRecords([]);
     installRecords('club', records);
     const mounted = mount(Generic, { moduleKey: 'club' });
@@ -487,13 +487,19 @@ describe('schema-driven Generic records CRUD page', () => {
     change(mounted.renderer, '社團名稱', '桌球社');
     change(mounted.renderer, '指導老師', '陳老師');
     change(mounted.renderer, '人數', '18');
-    change(mounted.renderer, '上課時間', '__custom__');
-    change(mounted.renderer, '上課時間（自訂）', '週五 17:30');
+    change(mounted.renderer, '上課星期', '週五');
+    change(mounted.renderer, '開始時間', '17:00');
+    change(mounted.renderer, '結束時間', '16:00');
     change(mounted.renderer, '上課場地', '活動中心');
     change(mounted.renderer, '每生費用（元）', '200');
     await act(async () => control(mounted.renderer, '新增').props.onClick());
+    expect(records.create).not.toHaveBeenCalled();
+    expect(pageText(mounted.renderer)).toContain('結束時間必須晚於開始時間');
+
+    change(mounted.renderer, '結束時間', '18:00');
+    await act(async () => control(mounted.renderer, '新增').props.onClick());
     expect(records.create).toHaveBeenCalledWith({
-      recordType: 'club', name: '桌球社', instructor: '陳老師', participants: 18, schedule: '週五 17:30', venue: '活動中心', feePerStudent: 200,
+      recordType: 'club', name: '桌球社', instructor: '陳老師', participants: 18, weekday: '週五', startTime: '17:00', endTime: '18:00', venue: '活動中心', feePerStudent: 200,
     }, authMocks.actor);
     mounted.unmount();
   });
@@ -560,9 +566,13 @@ describe('record page invocation guards', () => {
     const addLabel = _name === 'Budget' ? '＋ 新增歲出' : (_name === 'Language' ? '＋ 新增開班資料' : '＋ 新增一筆');
     const retainedAdd = control(mounted.renderer, addLabel).props.onClick;
 
+    // A denied/disabled account now also fails canEditModule's own check, so
+    // the whole page swaps to the no-access view rather than showing the
+    // retained callback's rejection message inline — still "no form, no
+    // write", just via a different (friendlier) screen.
     authMocks.decision = { allowed: false, code: 'profile-disabled', reason: '此帳號已停用。' };
     await act(async () => retainedAdd());
-    expect(pageText(mounted.renderer)).toContain('此帳號已停用');
+    expect(pageText(mounted.renderer)).toContain('無權限');
     expect(mounted.renderer.root.findAllByType('input')).toHaveLength(0);
 
     authMocks.decision = {
@@ -788,7 +798,8 @@ describe('record page invocation guards', () => {
     installRecords('awards', records);
     authMocks.decision = { allowed: false, code: 'module-denied', reason: '沒有權限。' };
     const readOnly = mount(Generic, { moduleKey: 'awards' });
-    expect(pageText(readOnly.renderer)).toContain('歷史獎項');
+    expect(pageText(readOnly.renderer)).not.toContain('歷史獎項');
+    expect(pageText(readOnly.renderer)).toContain('無權限');
     expect(control(readOnly.renderer, '顯示已停用資料')).toBeUndefined();
     readOnly.unmount();
   });
@@ -904,6 +915,36 @@ describe('Generic awards xlsx export/import', () => {
     options = field(mounted.renderer, '獲獎項目').findAllByType('option').map((o) => o.props.value);
     expect(options).toContain('宜蘭縣運動會');
     expect(options).not.toContain('宜蘭縣科學展覽會');
+    mounted.unmount();
+  });
+});
+
+describe('Module deadline', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it.each([
+    ['Budget', Budget, {}, 'budget', '＋ 新增歲出'],
+    ['Language', Language, {}, 'language', '＋ 新增開班資料'],
+    ['Generic', Generic, { moduleKey: 'awards' }, 'awards', '＋ 新增一筆'],
+  ])('%s shows a deadline banner, hides write controls, and blocks a retained save once past 填報截止日', async (_name, Page, extraProps, moduleKey, addLabel) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 9, 12));
+    hookMocks.meta.meta = { locked: false, deadlines: { [moduleKey]: '2026-08-10' } };
+    installRecords(moduleKey, readyRecords([]));
+    const mounted = mount(Page, extraProps);
+
+    expect(pageText(mounted.renderer)).toContain('填報截止日：2026-08-10');
+    expect(pageText(mounted.renderer)).toContain('截止當日 23:59 前可儲存');
+    expect(control(mounted.renderer, addLabel)).toBeTruthy();
+    const retainedAdd = control(mounted.renderer, addLabel).props.onClick;
+
+    hookMocks.meta.meta = { locked: false, deadlines: { [moduleKey]: '2026-08-08' } };
+    await act(async () => retainedAdd());
+
+    expect(pageText(mounted.renderer)).toContain('已超過填報期限');
+    expect(control(mounted.renderer, addLabel)).toBeUndefined();
     mounted.unmount();
   });
 });

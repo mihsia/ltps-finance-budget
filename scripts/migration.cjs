@@ -53,9 +53,15 @@ const PLACEHOLDER_AWARDS = [
   { category: '體育類', item: '全縣運動會 大隊接力', level: '第二名', date: '2025-05-15' },
 ];
 const PLACEHOLDER_CLUBS = [
-  { name: '桌球社', instructor: '陳老師', participants: 18, schedule: '週二 16:00' },
-  { name: '直笛隊', instructor: '林老師', participants: 24, schedule: '週三 16:00' },
-  { name: '科學實驗社', instructor: '黃老師', participants: 15, schedule: '週四 16:00' },
+  {
+    name: '桌球社', instructor: '陳老師', participants: 18, weekday: '週二', startTime: '16:00', endTime: '17:00', venue: '活動中心', feePerStudent: 200,
+  },
+  {
+    name: '直笛隊', instructor: '林老師', participants: 24, weekday: '週三', startTime: '16:00', endTime: '17:00', venue: '音樂教室', feePerStudent: 150,
+  },
+  {
+    name: '科學實驗社', instructor: '黃老師', participants: 15, weekday: '週四', startTime: '16:00', endTime: '17:00', venue: '自然教室', feePerStudent: 250,
+  },
 ];
 const PLACEHOLDER_LAND = [
   { parcel: '五結段123地號', area: 8450, announcedValue: 12800 },

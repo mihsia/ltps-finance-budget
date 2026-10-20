@@ -8,10 +8,12 @@ import {
   recordToForm,
   validateBudgetRecord,
 } from '../lib/recordSchemas';
+import { deadlineExtraCheck, getDeadlineState } from '../lib/fixedFieldEditing';
 import { fmtNum } from '../lib/format';
+import NoModuleAccess from '../components/NoModuleAccess';
 import {
   pageTitle, pageSubtitle, card, btnPrimary, btnSecondary, btnOutline, input,
-  tableHeadRow, tableRow, lockedBanner,
+  tableHeadRow, tableRow, lockedBanner, deadlineBanner,
 } from '../styles';
 
 function messageStyle(message) {
@@ -44,10 +46,16 @@ export default function Budget({
   const recentStates = [recentA, recentB, recentC];
   const yearState = useYearMeta(year);
   const { canEditModule, authorizeModuleActor } = useAuth();
+  const deadlineState = getDeadlineState(yearState.meta?.deadlines, 'budget');
+  const deadlineInvalid = deadlineState.invalid;
+  const pastDeadline = deadlineState.deadline !== null
+    && Date.now() > deadlineState.deadline.getTime();
   const recoveryAllowed = canEditModule('budget')
     && year === latestYear
     && yearState.exists
-    && yearState.meta?.locked === false;
+    && yearState.meta?.locked === false
+    && !pastDeadline
+    && !deadlineInvalid;
   const [showDeleted, setShowDeleted] = useState(false);
   const includeDeleted = showDeleted && recoveryAllowed;
   const recordState = useYearRecords(year, 'budget', { includeDeleted });
@@ -60,6 +68,7 @@ export default function Budget({
     yearState,
     recordState,
     authorizeModuleActor,
+    extraCheck: deadlineExtraCheck('budget', '歲入歲出'),
   });
 
   useEffect(() => {
@@ -137,6 +146,9 @@ export default function Budget({
     });
   };
 
+  if (!canEditModule('budget')) {
+    return <NoModuleAccess title="歲入歲出" />;
+  }
   if (recordState.error || yearState.error) {
     return <div><div style={pageTitle}>歲入歲出</div><div style={lockedBanner}>無法載入歲入歲出資料，請稍後再試。</div></div>;
   }
@@ -154,7 +166,12 @@ export default function Budget({
       {yearState.exists && yearState.meta?.locked !== false && (
         <div style={lockedBanner}>此年度未開放編輯，無法編輯或儲存。</div>
       )}
-      {!canEditModule('budget') && <div style={lockedBanner}>您沒有此模組的編輯權限。</div>}
+      {deadlineState.configured && (
+        <div style={(pastDeadline || deadlineInvalid) ? lockedBanner : deadlineBanner}>
+          <span>填報截止日：{deadlineInvalid ? '設定無效' : yearState.meta.deadlines.budget}</span>
+          <span>{deadlineInvalid ? '歲入歲出填報截止日格式錯誤，已停用編輯' : (pastDeadline ? '已超過填報期限' : '截止當日 23:59 前可儲存')}</span>
+        </div>
+      )}
       {actions.message && <div style={messageStyle(actions.message)}>{actions.message}</div>}
 
       <div style={{ display: 'flex', gap: 6, background: '#F5F3EE', borderRadius: 8, padding: 3, width: 'fit-content', marginBottom: 20 }}>

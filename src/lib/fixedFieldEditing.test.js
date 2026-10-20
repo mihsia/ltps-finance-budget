@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  deadlineExtraCheck,
   exactValueEqual,
   getDeadlineState,
   isNonNegativeIntegerString,
@@ -67,6 +68,34 @@ describe('local deadline parsing', () => {
       expect(parseLocalDeadlineEndOfDay(value)).toBeNull();
     },
   );
+});
+
+describe('deadlineExtraCheck', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('allows the write when the module has no configured deadline', () => {
+    const check = deadlineExtraCheck('club', '課後社團');
+    expect(check({ meta: { deadlines: {} } })).toEqual({ allowed: true });
+    expect(check({ meta: {} })).toEqual({ allowed: true });
+  });
+
+  it('blocks the write with a module-named reason once past the deadline', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 10, 0, 0, 1));
+    const check = deadlineExtraCheck('club', '課後社團');
+
+    expect(check({ meta: { deadlines: { club: '2026-08-09' } } }))
+      .toEqual({ allowed: false, reason: '已超過課後社團填報截止日，無法編輯或儲存。' });
+    expect(check({ meta: { deadlines: { club: '2026-08-10' } } })).toEqual({ allowed: true });
+  });
+
+  it('blocks the write with a module-named reason when the deadline value is invalid', () => {
+    const check = deadlineExtraCheck('club', '課後社團');
+    expect(check({ meta: { deadlines: { club: 'not-a-date' } } }))
+      .toEqual({ allowed: false, reason: '課後社團填報截止日格式錯誤，無法編輯。' });
+  });
 });
 
 describe('exact source comparisons', () => {

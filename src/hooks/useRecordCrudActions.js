@@ -10,6 +10,11 @@ export function useRecordCrudActions({
   yearState,
   recordState,
   authorizeModuleActor,
+  // Optional extra write-eligibility check run after year/records are both
+  // writable (e.g. a per-module 填報截止日 deadline) — receives the live
+  // year decision (which carries .meta) so the check always sees the
+  // invocation-current deadline, not a stale closed-over one.
+  extraCheck,
 }) {
   const scopeToken = useMemo(() => ({ scopeKey }), [scopeKey]);
   const activeScopeRef = useRef(scopeToken);
@@ -56,8 +61,14 @@ export function useRecordCrudActions({
     }
     const yearDecision = yearState.authorizeWrite();
     if (!yearDecision.allowed) return yearDecision;
-    return recordState.authorizeWrite();
-  }, [hasCurrentYear, recordState, scopeToken, yearState]);
+    const recordsDecision = recordState.authorizeWrite();
+    if (!recordsDecision.allowed) return recordsDecision;
+    if (extraCheck) {
+      const extra = extraCheck(yearDecision);
+      if (!extra.allowed) return extra;
+    }
+    return recordsDecision;
+  }, [extraCheck, hasCurrentYear, recordState, scopeToken, yearState]);
 
   const applyGuardResult = useCallback((result) => {
     if (!result.executed) {

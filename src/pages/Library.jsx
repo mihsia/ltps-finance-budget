@@ -2,10 +2,12 @@ import { useYearMeta, useYearModule } from '../hooks/useYearData';
 import { useFixedFieldEditor } from '../hooks/useFixedFieldEditor';
 import { useAuth } from '../contexts/AuthContext';
 import { runAuthorized } from '../lib/accessPolicy';
-import { validateFixedFields } from '../lib/fixedFieldEditing';
-import { pageTitle, pageSubtitle, card, input, label, btnPrimary, btnSecondary, lockedBanner } from '../styles';
+import { deadlineExtraCheck, getDeadlineState, validateFixedFields } from '../lib/fixedFieldEditing';
+import NoModuleAccess from '../components/NoModuleAccess';
+import { pageTitle, pageSubtitle, card, input, label, btnPrimary, btnSecondary, lockedBanner, deadlineBanner } from '../styles';
 
 const FIELDS = ['generalBooks', 'indigenousBooks'];
+const checkLibraryDeadline = deadlineExtraCheck('library', '圖書館藏書量');
 
 export default function Library({ year, hasCurrentYear = () => false }) {
   const moduleState = useYearModule(year, 'library');
@@ -17,11 +19,18 @@ export default function Library({ year, hasCurrentYear = () => false }) {
     fields: FIELDS,
   });
 
+  const deadlineState = getDeadlineState(yearState.meta?.deadlines, 'library');
+  const deadlineInvalid = deadlineState.invalid;
+  const pastDeadline = deadlineState.deadline !== null
+    && Date.now() > deadlineState.deadline.getTime();
+
   const checkInvocation = () => {
     if (!hasCurrentYear()) return { allowed: false, reason: '目前選擇的年度已變更，請重新操作。' };
     const yearDecision = yearState.authorizeWrite();
     if (!yearDecision.allowed) return yearDecision;
-    return moduleState.authorizeWrite();
+    const moduleDecision = moduleState.authorizeWrite();
+    if (!moduleDecision.allowed) return moduleDecision;
+    return checkLibraryDeadline(yearDecision);
   };
   const applyGuardResult = (result) => {
     if (!result.executed) editor.setMessage(result.reason);
@@ -67,6 +76,9 @@ export default function Library({ year, hasCurrentYear = () => false }) {
     applyGuardResult(result);
   };
 
+  if (!canEditModule('library')) {
+    return <NoModuleAccess title="圖書館藏書量" />;
+  }
   if (moduleState.error || yearState.error) {
     return <div><div style={pageTitle}>圖書館藏書量</div><div style={lockedBanner}>無法載入圖書館藏書資料，請稍後再試。</div></div>;
   }
@@ -76,7 +88,9 @@ export default function Library({ year, hasCurrentYear = () => false }) {
 
   const canStartEditing = canEditModule('library')
     && yearState.exists
-    && yearState.meta?.locked === false;
+    && yearState.meta?.locked === false
+    && !pastDeadline
+    && !deadlineInvalid;
 
   return (
     <div>
@@ -86,7 +100,12 @@ export default function Library({ year, hasCurrentYear = () => false }) {
       {yearState.exists && yearState.meta?.locked !== false && (
         <div style={lockedBanner}>此年度未開放編輯，無法編輯或儲存。</div>
       )}
-      {!canEditModule('library') && <div style={lockedBanner}>您沒有此模組的編輯權限。</div>}
+      {deadlineState.configured && (
+        <div style={(pastDeadline || deadlineInvalid) ? lockedBanner : deadlineBanner}>
+          <span>填報截止日：{deadlineInvalid ? '設定無效' : yearState.meta.deadlines.library}</span>
+          <span>{deadlineInvalid ? '圖書館藏書量填報截止日格式錯誤，已停用編輯' : (pastDeadline ? '已超過填報期限' : '截止當日 23:59 前可儲存')}</span>
+        </div>
+      )}
       {editor.message && <div style={{ color: editor.message === '儲存成功。' ? '#2F7D55' : '#B5533E', marginBottom: 14 }}>{editor.message}</div>}
 
       {!editor.editing ? (

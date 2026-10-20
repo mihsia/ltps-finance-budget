@@ -59,6 +59,13 @@ function dateValue(value, label) {
   return valid(normalized);
 }
 
+function timeValue(value, label) {
+  if (typeof value !== 'string') return invalid(`${label}必須是有效的時間（HH:MM）。`);
+  const normalized = value.trim();
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(normalized)) return invalid(`${label}必須是有效的時間（HH:MM）。`);
+  return valid(normalized);
+}
+
 function collect(fields, source) {
   const data = {};
   for (const field of fields) {
@@ -66,6 +73,7 @@ function collect(fields, source) {
     if (field.kind === 'integer') result = numericValue(source[field.key], field.label, true, field.optional);
     else if (field.kind === 'number') result = numericValue(source[field.key], field.label, false, field.optional);
     else if (field.kind === 'date') result = dateValue(source[field.key], field.label);
+    else if (field.kind === 'time') result = timeValue(source[field.key], field.label);
     else result = textValue(source[field.key], field.label, field.maxLength, field.optional);
     if (!result.valid) return result;
     data[field.key] = result.data;
@@ -185,11 +193,8 @@ export const AWARD_LEVELS = [
 
 export const AWARD_COMPETITION_TYPES = ['個人賽', '團體賽'];
 
-// 課後社團通常固定在放學後的某個時段上課；列出常見的平日放學後與週六上午時
-// 段供快速選取，其餘時段仍可透過「其他（自訂）」輸入。
-export const CLUB_SCHEDULE_OPTIONS = [
-  '週一 16:00', '週二 16:00', '週三 16:00', '週四 16:00', '週五 16:00', '週六 09:00', '週六 10:00',
-];
+// 課後社團只在平日放學後上課，週六不開課。
+export const CLUB_WEEKDAYS = ['週一', '週二', '週三', '週四', '週五'];
 
 export const genericRecordSchemas = {
   awards: {
@@ -226,8 +231,10 @@ export const genericRecordSchemas = {
       { key: 'instructor', label: '指導老師', kind: 'text', maxLength: 80 },
       { key: 'participants', label: '人數', kind: 'integer' },
       {
-        key: 'schedule', label: '上課時間', kind: 'select', options: CLUB_SCHEDULE_OPTIONS, allowCustom: true, maxLength: 100,
+        key: 'weekday', label: '上課星期', kind: 'select', options: CLUB_WEEKDAYS, maxLength: 10,
       },
+      { key: 'startTime', label: '開始時間', kind: 'time' },
+      { key: 'endTime', label: '結束時間', kind: 'time' },
       { key: 'venue', label: '上課場地', kind: 'text', maxLength: 60 },
       { key: 'feePerStudent', label: '每生費用（元）', kind: 'integer' },
     ],
@@ -273,6 +280,10 @@ export function validateGenericRecord(moduleKey, source) {
   // 團體賽沒有單一得獎人，姓名留空即可；個人賽則需要知道是哪位學生得獎。
   if (moduleKey === 'awards' && result.data.competitionType === '個人賽' && !result.data.studentName) {
     return invalid('個人賽請填寫得獎學生姓名。');
+  }
+  // HH:MM 字串可直接用字典序比較先後。
+  if (moduleKey === 'club' && result.data.endTime <= result.data.startTime) {
+    return invalid('結束時間必須晚於開始時間。');
   }
   return valid({ recordType: schema.recordType, ...result.data });
 }

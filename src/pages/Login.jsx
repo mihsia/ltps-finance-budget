@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { isFirebaseConfigured } from '../firebase';
+import { APP_UPDATED_AT, APP_VERSION } from '../lib/appInfo';
 import { card, input, label, btnPrimary } from '../styles';
 import BrandMark from '../components/BrandMark';
 
@@ -114,6 +115,14 @@ export default function Login() {
             </button>
           </form>
         )}
+
+        <div style={{
+          marginTop: 20, paddingTop: 14, borderTop: '1px solid #EEEBE2',
+          font: "400 11px 'Noto Sans TC', sans-serif", color: '#8A9089', textAlign: 'center',
+        }}
+        >
+          系統版本 v{APP_VERSION} · 更新日期 {APP_UPDATED_AT}
+        </div>
       </div>
     </div>
   );
