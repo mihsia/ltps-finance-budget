@@ -148,6 +148,14 @@ Storage：`budget-books/{year}/{fileName}`（公開讀取，僅能透過 `upload
 - **左方選單依功能分區**：原本「資料模組」一組塞了 10 個項目，隨族語開班／族語認證拆分後更長，現拆成「校務與學生」（基本資料、特生統計）、「教學與活動」（圖書藏書、族語開班、族語認證、課後社團、獲獎紀錄）、「財務與行政」（歲入歲出、土地現值、質詢答詢）三組，加上原有的「總覽」「報表與管理」，共五組，每組項目數都在可一眼掃完的範圍內。分組定義見 `src/lib/nav.js` 的 `navGroups`。
 - **右上角年度切換只顯示最近 3 個年度**：避免年度一多，切換列無限變長。超過 3 年的舊年度請從左方選單「歷史歸檔」進入——點選任一年度的「查看」或「匯出」即可切換到該年度並直接跳轉到對應頁面；若目前選取的正是歷史歸檔切過去的舊年度，右上角仍會額外顯示該年度，讓使用者看得出目前在哪個年度，不會因為不在最近 3 年清單裡而消失。邏輯見 `src/components/Header.jsx` 的 `RECENT_YEARS_SHOWN`。
 
+## 操作手冊
+
+- 左方選單「報表與管理」新增「操作手冊」頁面（`src/pages/Manual.jsx`），提供使用者操作說明與畫面截圖，涵蓋登入、介面導覽、新增／編輯資料的共用操作模式、議會報表匯出、帳號管理（標示「管理者專屬」）、PWA 安裝、版本與更新日誌。與「更新日誌」一樣不做模組權限檢查，所有已登入使用者皆可檢視。
+- **線上版與 PDF 共用同一份內容**：手冊文字、步驟與截圖集中定義在 `src/lib/manualContent.js` 的 `MANUAL_SECTIONS`，由 `Manual.jsx`（線上瀏覽）與 `src/lib/manualExport.js` 的 `buildManualPdf`（頁面上「下載 PDF 手冊」按鈕）共用，避免線上版與 PDF 內容兩邊分別維護而逐漸脫節。
+- **跟隨系統版本**：手冊頁首與 PDF 封面都會顯示目前系統版本（直接讀取 `src/lib/appInfo.js` 的 `APP_VERSION`，不用手動同步）。`manualContent.js` 另外記錄一個 `MANUAL_LAST_REVIEWED_VERSION`（手冊內容最後確認覆蓋到的版本），若與目前 `APP_VERSION` 不同，頁面與 PDF 都會顯示提示，說明手冊可能尚未收錄最新功能——之後異動畫面相關功能時，請一併檢查手冊內容是否需要更新，並同步調整這個常數。
+- 截圖為示範資料（非校內真實資料），放在 `public/manual/`，避免手冊曝露真實學生或財務資料。畫面有重大改版時（如本次議會報表匯出的分區與圖表改版），需要重新截圖替換。
+- PDF 內嵌文字需要 `src/assets/fonts/NotoSansTC-{Regular,Bold}-subset.js` 這個中文字型子集涵蓋手冊用到的所有字；新增手冊內容後，若 PDF 出現缺字（字變成空白），執行 `python3 scripts/build-pdf-font.py` 重新產生字型子集（需要 `pip install fonttools brotli`）。
+
 ## 測試
 
 - `npm test`：快速單元測試（`src/`、`functions/`、`scripts/`），全部使用 mock，不需要任何 Firebase 服務。

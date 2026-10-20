@@ -422,4 +422,15 @@ describe('Settings single account creation', () => {
     await act(async () => { control(renderer, '圖書藏書').props.onClick(); });
     expect(pageText(renderer)).toContain('圖書館藏書量統計');
   });
+
+  it('does not offer 更新日誌 or 操作手冊 as assignable 負責模組, since every signed-in user can already see them', async () => {
+    const renderer = await render();
+
+    await act(async () => { control(renderer, '＋ 新增帳號').props.onClick(); });
+    expect(control(renderer, '更新日誌')).toBeUndefined();
+    expect(control(renderer, '操作手冊')).toBeUndefined();
+    // A real assignable module is still offered, confirming the module list
+    // itself rendered rather than being empty for an unrelated reason.
+    expect(control(renderer, '歲入歲出')).toBeDefined();
+  });
 });

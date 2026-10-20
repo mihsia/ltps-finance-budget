@@ -14,7 +14,13 @@ import {
 } from '../styles';
 
 const DEPT_ORDER = ['校長室', '教務處', '學務處', '總務處', '人事室', '會計室'];
-const MODULE_OPTIONS = navGroups.flatMap((g) => g.items).filter((it) => it.key !== 'dashboard');
+// Reference-only nav items every signed-in user can already see regardless
+// of 負責模組 (like 更新日誌 and 操作手冊) are never assignable scopes —
+// the server's ACCOUNT_MODULE_KEYS whitelist (functions/accountAdmin.cjs)
+// already excludes them, so listing them here would let an admin pick a
+// module the save call then rejects as unknown.
+const UNASSIGNABLE_MODULE_KEYS = ['dashboard', 'changelog', 'manual'];
+const MODULE_OPTIONS = navGroups.flatMap((g) => g.items).filter((it) => !UNASSIGNABLE_MODULE_KEYS.includes(it.key));
 const ROLE_OPTIONS = [['admin', '管理者'], ['editor', '填報人員']];
 const ROW_COLS = '0.9fr 1fr 1.8fr 0.6fr 0.6fr 1fr';
 
