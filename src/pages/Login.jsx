@@ -16,10 +16,17 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
 
   useEffect(() => {
     if (pendingGoogleEmail) setEmail(pendingGoogleEmail);
   }, [pendingGoogleEmail]);
+
+  // A password-based account that doesn't yet exist as a Google credential
+  // forces this form open (via pendingGoogleEmail) so the user can prove
+  // ownership and link the two — the one case where the password form is
+  // still required, not just an optional fallback.
+  const passwordFormOpen = showPasswordForm || Boolean(pendingGoogleEmail);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -44,6 +51,11 @@ export default function Login() {
     }
   };
 
+  const closePasswordForm = () => {
+    setShowPasswordForm(false);
+    setPassword('');
+  };
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#F5F3EE', padding: 20 }}>
       <div style={{ ...card, width: 'min(400px, 100%)' }}>
@@ -58,62 +70,113 @@ export default function Login() {
             請將 <code>.env.example</code> 複製為 <code>.env</code>，填入 Firebase 專案設定（Auth／Firestore／Storage）後重新啟動，即可登入使用。
           </div>
         ) : (
-          <form onSubmit={submit}>
-            <div style={{ marginBottom: 14 }}>
-              <label style={label}>帳號（Email）</label>
-              <input
-                style={{ ...input, background: pendingGoogleEmail ? '#F5F3EE' : '#fff' }}
-                type="email"
-                required
-                readOnly={Boolean(pendingGoogleEmail)}
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div style={{ marginBottom: 18 }}>
-              <label style={label}>密碼</label>
-              <input style={input} type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
-            </div>
-            {error && <div style={{ font: "500 12px 'Noto Sans TC', sans-serif", color: '#B5533E', marginBottom: 14 }}>⚠ {error}</div>}
-            <button type="submit" style={{ ...btnPrimary, width: '100%', justifyContent: 'center', opacity: submitting ? .6 : 1 }} disabled={submitting}>
-              {submitting ? '處理中…' : pendingGoogleEmail ? '驗證密碼並連結 Google' : '登入'}
-            </button>
-            {pendingGoogleEmail && (
-              <button
-                type="button"
-                onClick={cancelGoogleLink}
-                disabled={submitting}
-                style={{
-                  width: '100%', marginTop: 10, border: 0, background: 'transparent',
-                  color: '#1F5F52', cursor: submitting ? 'default' : 'pointer',
-                  font: "700 12px 'Noto Sans TC', sans-serif",
-                }}
-              >
-                取消 Google 帳號連結
-              </button>
-            )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, margin: '18px 0', color: '#8A9089', fontSize: 12 }}>
-              <span style={{ height: 1, background: '#E3DFD3', flex: 1 }} />
-              或
-              <span style={{ height: 1, background: '#E3DFD3', flex: 1 }} />
-            </div>
+          <div>
             <button
               type="button"
               onClick={submitGoogle}
               disabled={submitting || Boolean(pendingGoogleEmail)}
               style={{
-                width: '100%', minHeight: 44, borderRadius: 8, border: '1px solid #D8D3C4',
-                background: '#fff', color: '#1E2420', display: 'flex', alignItems: 'center',
+                width: '100%', minHeight: 48, borderRadius: 8, border: 0,
+                background: '#1F5F52', color: '#fff', display: 'flex', alignItems: 'center',
                 justifyContent: 'center', gap: 10,
                 cursor: submitting || pendingGoogleEmail ? 'default' : 'pointer',
-                font: "700 13px 'Noto Sans TC', sans-serif",
+                font: "700 14px 'Noto Sans TC', sans-serif",
                 opacity: submitting || pendingGoogleEmail ? .6 : 1,
               }}
             >
-              <span style={{ font: '700 16px Inter, sans-serif', color: '#4285F4' }}>G</span>
+              <span style={{
+                font: '800 17px Inter, sans-serif', color: '#1F5F52', background: '#fff',
+                width: 22, height: 22, borderRadius: '50%', display: 'inline-flex',
+                alignItems: 'center', justifyContent: 'center',
+              }}
+              >
+                G
+              </span>
               使用 Google 帳號登入
             </button>
-          </form>
+            <div style={{ font: "400 11.5px/1.7 'Noto Sans TC', sans-serif", color: '#8A9089', textAlign: 'center', marginTop: 10 }}>
+              請使用學校指派的 Google 帳號登入，系統帳號已全面改用 Google 登入
+            </div>
+
+            {pendingGoogleEmail && (
+              <div style={{ marginTop: 20, paddingTop: 18, borderTop: '1px solid #EEEBE2' }}>
+                <div style={{ font: "600 12.5px/1.7 'Noto Sans TC', sans-serif", color: '#B5533E', marginBottom: 12 }}>
+                  這個 Google 帳號已對應一個現有的密碼帳號，請輸入原密碼以完成連結：
+                </div>
+                <form onSubmit={submit}>
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={label}>帳號（Email）</label>
+                    <input style={{ ...input, background: '#F5F3EE' }} type="email" required readOnly value={email} />
+                  </div>
+                  <div style={{ marginBottom: 18 }}>
+                    <label style={label}>密碼</label>
+                    <input style={input} type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+                  </div>
+                  {error && <div style={{ font: "500 12px 'Noto Sans TC', sans-serif", color: '#B5533E', marginBottom: 14 }}>⚠ {error}</div>}
+                  <button type="submit" style={{ ...btnPrimary, width: '100%', justifyContent: 'center', opacity: submitting ? .6 : 1 }} disabled={submitting}>
+                    {submitting ? '處理中…' : '驗證密碼並連結 Google'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelGoogleLink}
+                    disabled={submitting}
+                    style={{
+                      width: '100%', marginTop: 10, border: 0, background: 'transparent',
+                      color: '#1F5F52', cursor: submitting ? 'default' : 'pointer',
+                      font: "700 12px 'Noto Sans TC', sans-serif",
+                    }}
+                  >
+                    取消 Google 帳號連結
+                  </button>
+                </form>
+              </div>
+            )}
+
+            {!pendingGoogleEmail && !passwordFormOpen && (
+              <button
+                type="button"
+                onClick={() => setShowPasswordForm(true)}
+                style={{
+                  width: '100%', marginTop: 18, border: 0, background: 'transparent',
+                  color: '#8A9089', cursor: 'pointer', textDecoration: 'underline',
+                  font: "600 11.5px 'Noto Sans TC', sans-serif",
+                }}
+              >
+                仍使用舊版帳號密碼登入
+              </button>
+            )}
+
+            {!pendingGoogleEmail && passwordFormOpen && (
+              <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid #EEEBE2' }}>
+                <form onSubmit={submit}>
+                  <div style={{ marginBottom: 14 }}>
+                    <label style={label}>帳號（Email）</label>
+                    <input style={input} type="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+                  </div>
+                  <div style={{ marginBottom: 18 }}>
+                    <label style={label}>密碼</label>
+                    <input style={input} type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
+                  </div>
+                  {error && <div style={{ font: "500 12px 'Noto Sans TC', sans-serif", color: '#B5533E', marginBottom: 14 }}>⚠ {error}</div>}
+                  <button type="submit" style={{ ...btnPrimary, width: '100%', justifyContent: 'center', opacity: submitting ? .6 : 1 }} disabled={submitting}>
+                    {submitting ? '處理中…' : '登入'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closePasswordForm}
+                    disabled={submitting}
+                    style={{
+                      width: '100%', marginTop: 10, border: 0, background: 'transparent',
+                      color: '#1F5F52', cursor: submitting ? 'default' : 'pointer',
+                      font: "700 12px 'Noto Sans TC', sans-serif",
+                    }}
+                  >
+                    返回 Google 帳號登入
+                  </button>
+                </form>
+              </div>
+            )}
+          </div>
         )}
 
         <div style={{

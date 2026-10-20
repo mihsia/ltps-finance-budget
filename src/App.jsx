@@ -17,6 +17,7 @@ import BudgetBook from './pages/BudgetBook';
 import Report from './pages/Report';
 import Archive from './pages/Archive';
 import Settings from './pages/Settings';
+import Changelog from './pages/Changelog';
 
 function Shell() {
   const years = useAvailableYears();
@@ -41,6 +42,7 @@ function Shell() {
     if (nav === 'report') return <Report {...pageProps} />;
     if (nav === 'archive') return <Archive {...pageProps} />;
     if (nav === 'settings') return <Settings {...pageProps} />;
+    if (nav === 'changelog') return <Changelog {...pageProps} />;
     return null;
   };
 
