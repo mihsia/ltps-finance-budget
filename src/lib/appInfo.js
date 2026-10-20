@@ -59,6 +59,11 @@ export const CHANGELOG = [
     date: '2026-10-20',
     notes: '修正帳號管理頁指派「族語認證」模組時顯示「負責模組不存在」的錯誤（伺服器端模組白名單未同步更新）；左方選單「版本更新說明」改名為「更新日誌」（四字），與其他模組標籤長度對齊。',
   },
+  {
+    version: '1.11',
+    date: '2026-10-20',
+    notes: 'Cloud Functions 執行環境由即將於 2026-10-30 停用的 Node.js 20 升級為 Node.js 22，避免屆時無法部署；帳號白名單登入限制（Google 登入 Blocking Functions）正式部署並生效。',
+  },
 ];
 
 export const APP_VERSION = CHANGELOG[CHANGELOG.length - 1].version;
