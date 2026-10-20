@@ -379,7 +379,7 @@ describe('Language variant records CRUD page', () => {
 describe('schema-driven Generic records CRUD page', () => {
   it.each([
     ['awards', ['類別', '獲獎項目', '賽事類型', '學生姓名', '等級', '日期']],
-    ['club', ['社團名稱', '指導老師', '人數', '上課時間']],
+    ['club', ['社團名稱', '指導老師', '人數', '上課時間', '上課場地', '每生費用（元）']],
     ['land', ['地號', '面積(㎡)', '公告現值(元/㎡)']],
     ['inquiry', ['日期', '議員/題目', '答詢狀態']],
   ])('preserves %s column semantics from its record schema', (moduleKey, labels) => {
@@ -461,7 +461,11 @@ describe('schema-driven Generic records CRUD page', () => {
   });
 
   it.each([
-    ['club', { '社團名稱': '桌球社', '指導老師': '陳老師', '人數': '18', '上課時間': '週二 16:00' }, { recordType: 'club', name: '桌球社', instructor: '陳老師', participants: 18, schedule: '週二 16:00' }],
+    ['club', {
+      '社團名稱': '桌球社', '指導老師': '陳老師', '人數': '18', '上課時間': '週二 16:00', '上課場地': '活動中心', '每生費用（元）': '200',
+    }, {
+      recordType: 'club', name: '桌球社', instructor: '陳老師', participants: 18, schedule: '週二 16:00', venue: '活動中心', feePerStudent: 200,
+    }],
     ['land', { '地號': '五結段123地號', '面積(㎡)': '8450.5', '公告現值(元/㎡)': '12800' }, { recordType: 'land', parcel: '五結段123地號', area: 8450.5, announcedValue: 12800 }],
     ['inquiry', { '日期': '2026-05-20', '議員/題目': '陳議員：課後社團經費', '答詢狀態': '待答詢' }, { recordType: 'inquiry', date: '2026-05-20', subject: '陳議員：課後社團經費', status: '待答詢' }],
   ])('creates stable %s record fields instead of cells arrays', async (moduleKey, values, expected) => {
@@ -472,6 +476,25 @@ describe('schema-driven Generic records CRUD page', () => {
     for (const [label, value] of Object.entries(values)) change(mounted.renderer, label, value);
     await act(async () => control(mounted.renderer, '新增').props.onClick());
     expect(records.create).toHaveBeenCalledWith(expected, authMocks.actor);
+    mounted.unmount();
+  });
+
+  it('lets 上課時間 be picked from the dropdown or typed as a custom value', async () => {
+    const records = readyRecords([]);
+    installRecords('club', records);
+    const mounted = mount(Generic, { moduleKey: 'club' });
+    await act(async () => control(mounted.renderer, '＋ 新增一筆').props.onClick());
+    change(mounted.renderer, '社團名稱', '桌球社');
+    change(mounted.renderer, '指導老師', '陳老師');
+    change(mounted.renderer, '人數', '18');
+    change(mounted.renderer, '上課時間', '__custom__');
+    change(mounted.renderer, '上課時間（自訂）', '週五 17:30');
+    change(mounted.renderer, '上課場地', '活動中心');
+    change(mounted.renderer, '每生費用（元）', '200');
+    await act(async () => control(mounted.renderer, '新增').props.onClick());
+    expect(records.create).toHaveBeenCalledWith({
+      recordType: 'club', name: '桌球社', instructor: '陳老師', participants: 18, schedule: '週五 17:30', venue: '活動中心', feePerStudent: 200,
+    }, authMocks.actor);
     mounted.unmount();
   });
 

@@ -34,6 +34,8 @@ export const OPTIONAL_MODULE_DETAIL_FIELDS = {
   awards: [
     { key: 'category', label: '類別' },
     { key: 'item', label: '獲獎項目' },
+    { key: 'competitionType', label: '賽事類型' },
+    { key: 'studentName', label: '學生姓名' },
     { key: 'level', label: '等級' },
     { key: 'date', label: '日期' },
   ],
@@ -42,6 +44,8 @@ export const OPTIONAL_MODULE_DETAIL_FIELDS = {
     { key: 'instructor', label: '指導老師' },
     { key: 'participants', label: '人數' },
     { key: 'schedule', label: '上課時間' },
+    { key: 'venue', label: '上課場地' },
+    { key: 'feePerStudent', label: '每生費用（元）' },
   ],
   land: [
     { key: 'parcel', label: '地號' },

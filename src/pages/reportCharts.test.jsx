@@ -6,7 +6,7 @@ vi.mock('../firebase', () => ({
   isFirebaseConfigured: true,
 }));
 
-const { AwardCategoryDonut, AwardLevelBars, SpecialNeedsDonut } = await import('./Report.jsx');
+const { AwardCategoryDonut, AwardLevelBars, SpecialNeedsDonut, ClubParticipationMeter } = await import('./Report.jsx');
 
 function textOf(node) {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
@@ -130,5 +130,30 @@ describe('SpecialNeedsDonut', () => {
       expect(visible).toBeGreaterThanOrEqual(0);
       expect(Number.isFinite(visible)).toBe(true);
     }
+  });
+});
+
+describe('ClubParticipationMeter', () => {
+  it('shows a placeholder instead of a divide-by-zero meter when total students is unavailable', () => {
+    const renderer = render(<ClubParticipationMeter stats={{ totalParticipants: 57, totalStudents: 0, pct: null }} />);
+    expect(textOf(renderer.root)).toContain('尚未填寫學生人數');
+  });
+
+  it('renders the participant count, student count, and percentage, with the bar fill width matching pct', () => {
+    const renderer = render(<ClubParticipationMeter stats={{ totalParticipants: 57, totalStudents: 262, pct: 21.8 }} />);
+    const text = textOf(renderer.root);
+    expect(text).toContain('57 人次');
+    expect(text).toContain('262 人');
+    expect(text).toContain('21.8%');
+
+    const fill = renderer.root.findAll((node) => node.props.style?.background === '#4F8C3E')[0];
+    expect(fill.props.style.width).toBe('21.8%');
+  });
+
+  it('clamps the bar fill at 100% when participation exceeds the student count, without clamping the displayed percentage', () => {
+    const renderer = render(<ClubParticipationMeter stats={{ totalParticipants: 120, totalStudents: 100, pct: 120 }} />);
+    expect(textOf(renderer.root)).toContain('120%');
+    const fill = renderer.root.findAll((node) => node.props.style?.background === '#4F8C3E')[0];
+    expect(fill.props.style.width).toBe('100%');
   });
 });

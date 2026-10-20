@@ -185,6 +185,12 @@ export const AWARD_LEVELS = [
 
 export const AWARD_COMPETITION_TYPES = ['個人賽', '團體賽'];
 
+// 課後社團通常固定在放學後的某個時段上課；列出常見的平日放學後與週六上午時
+// 段供快速選取，其餘時段仍可透過「其他（自訂）」輸入。
+export const CLUB_SCHEDULE_OPTIONS = [
+  '週一 16:00', '週二 16:00', '週三 16:00', '週四 16:00', '週五 16:00', '週六 09:00', '週六 10:00',
+];
+
 export const genericRecordSchemas = {
   awards: {
     recordType: 'award',
@@ -219,7 +225,11 @@ export const genericRecordSchemas = {
       { key: 'name', label: '社團名稱', kind: 'text', maxLength: 100 },
       { key: 'instructor', label: '指導老師', kind: 'text', maxLength: 80 },
       { key: 'participants', label: '人數', kind: 'integer' },
-      { key: 'schedule', label: '上課時間', kind: 'text', maxLength: 100 },
+      {
+        key: 'schedule', label: '上課時間', kind: 'select', options: CLUB_SCHEDULE_OPTIONS, allowCustom: true, maxLength: 100,
+      },
+      { key: 'venue', label: '上課場地', kind: 'text', maxLength: 60 },
+      { key: 'feePerStudent', label: '每生費用（元）', kind: 'integer' },
     ],
   },
   land: {

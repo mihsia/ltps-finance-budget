@@ -11,9 +11,10 @@ import { buildOverviewReport, OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_COL
 import { languageRecordSummary } from '../lib/recordDerivations';
 import { summarizeByCategory, summarizeByLevel } from '../lib/awardStats';
 import { summarizeSpecialNeeds } from '../lib/specialNeedsStats';
+import { summarizeClubParticipation } from '../lib/clubStats';
 import { runAuthorized } from '../lib/accessPolicy';
 import {
-  pageTitle, sectionLabel, card, statTile, btnOutline, btnPrimary, btnSecondary, chip,
+  pageTitle, sectionLabel, card, statTile, btnOutline, btnPrimary, btnSecondary, chip, progressBar,
 } from '../styles';
 
 // Validated against the dataviz skill's CVD-safety checks for an all-pairs
@@ -188,6 +189,33 @@ export function SpecialNeedsDonut({ data, totalStudents }) {
   );
 }
 
+/**
+ * A single ratio against a limit (社團參與人次 ÷ 全體學生) reads as a
+ * meter, not a pie — per the dataviz skill's own guidance table, a pie of
+ * 2 slices is the wrong form for this job.
+ */
+export function ClubParticipationMeter({ stats }) {
+  const { totalParticipants, totalStudents, pct } = stats;
+  if (!totalStudents) {
+    return <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>尚未填寫學生人數（基本資料），無法計算比例。</div>;
+  }
+  const { track, fill } = progressBar(Math.min(pct, 100), '#4F8C3E');
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+        <span style={{ font: "600 12.5px 'Noto Sans TC', sans-serif", color: '#454B45' }}>
+          社團參與人次 {totalParticipants} 人次／全校學生 {totalStudents} 人
+        </span>
+        <span style={{ font: '800 20px Inter, sans-serif', color: '#1E2420' }}>{pct}%</span>
+      </div>
+      <div style={track}><div style={fill} /></div>
+      <div style={{ font: "400 11px 'Noto Sans TC', sans-serif", color: '#8A9089', marginTop: 6 }}>
+        以社團參與人次計算；同一學生參加多個社團會重複計入，並非不重複學生人數。
+      </div>
+    </div>
+  );
+}
+
 const OPTIONAL_MODULE_CHOICES = [
   { key: 'library', label: '圖書藏書量' },
   { key: 'language', label: '族語開班' },
@@ -299,6 +327,8 @@ export default function Report({ year, years }) {
   const activeSpecialNeeds = (specialNeedsState.data || []).filter((r) => !r.deletedAt);
   const totalStudents = Number(basicState.data?.students) || 0;
   const specialNeedsStats = summarizeSpecialNeeds(activeSpecialNeeds, totalStudents);
+  const activeClubs = (clubState.data || []).filter((r) => !r.deletedAt);
+  const clubParticipationStats = summarizeClubParticipation(activeClubs, totalStudents);
   const trend = trendStates.map(({ year: y, state }) => ({
     year: y,
     expenseTotal: (state.data || [])
@@ -317,7 +347,7 @@ export default function Report({ year, years }) {
     language: languageRecordSummary(languageState.data),
     specialNeedsRows: activeSpecialNeeds,
     awardsRows: activeAwards,
-    clubRows: (clubState.data || []).filter((r) => !r.deletedAt),
+    clubRows: activeClubs,
     landRows: (landState.data || []).filter((r) => !r.deletedAt),
     inquiryRows: (inquiryState.data || []).filter((r) => !r.deletedAt),
   });
@@ -503,6 +533,11 @@ export default function Report({ year, years }) {
       <div style={sectionLabel}>特生統計分析</div>
       <div style={{ ...card, marginBottom: 24, maxWidth: 900 }}>
         <SpecialNeedsDonut data={specialNeedsStats} totalStudents={totalStudents} />
+      </div>
+
+      <div style={sectionLabel}>社團參與比例</div>
+      <div style={{ ...card, marginBottom: 24, maxWidth: 900 }}>
+        <ClubParticipationMeter stats={clubParticipationStats} />
       </div>
 
       <div style={sectionLabel}>匯出格式</div>
