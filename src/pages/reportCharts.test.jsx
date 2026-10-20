@@ -6,7 +6,10 @@ vi.mock('../firebase', () => ({
   isFirebaseConfigured: true,
 }));
 
-const { AwardCategoryDonut, AwardLevelBars, SpecialNeedsDonut, ClubParticipationMeter } = await import('./Report.jsx');
+const {
+  AwardCategoryDonut, AwardLevelBars, SpecialNeedsDonut, ClubParticipationMeter,
+  ExpenseTrendBars, RevenueSourceDonut,
+} = await import('./Report.jsx');
 
 function textOf(node) {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
@@ -155,5 +158,76 @@ describe('ClubParticipationMeter', () => {
     expect(textOf(renderer.root)).toContain('120%');
     const fill = renderer.root.findAll((node) => node.props.style?.background === '#4F8C3E')[0];
     expect(fill.props.style.width).toBe('100%');
+  });
+});
+
+describe('ExpenseTrendBars', () => {
+  it('shows a placeholder message instead of an empty chart when there is no data', () => {
+    const renderer = render(<ExpenseTrendBars data={[]} />);
+    expect(textOf(renderer.root)).toContain('尚無歲出資料可供統計');
+  });
+
+  it('renders one bar per year in chronological order, scaled against the largest total, with amount and YoY change', () => {
+    const data = [
+      { year: '113', expenseTotal: 56463, deltaPct: null },
+      { year: '114', expenseTotal: 55101, deltaPct: -2.41 },
+      { year: '115', expenseTotal: 54358, deltaPct: -1.35 },
+    ];
+    const renderer = render(<ExpenseTrendBars data={data} />);
+    const text = textOf(renderer.root);
+    expect(text).toContain('113年度');
+    expect(text).toContain('56,463');
+    expect(text).toContain('▼ 1.4%');
+
+    const fills = renderer.root.findAll((node) => node.props.style?.background === '#1F5F52');
+    expect(fills.map((f) => f.props.style.width)).toEqual(['100%', expect.any(String), expect.any(String)]);
+  });
+
+  it('shows a dash instead of a change arrow for the first (earliest) year, which has no prior year to compare', () => {
+    const renderer = render(<ExpenseTrendBars data={[{ year: '113', expenseTotal: 100, deltaPct: null }]} />);
+    const text = textOf(renderer.root);
+    expect(text).toContain('—');
+    expect(text).not.toContain('▲');
+    expect(text).not.toContain('▼');
+  });
+});
+
+describe('RevenueSourceDonut', () => {
+  it('shows a placeholder message instead of an empty chart when there is no data', () => {
+    const renderer = render(<RevenueSourceDonut data={[]} />);
+    expect(textOf(renderer.root)).toContain('尚無歲入資料可供統計');
+    expect(renderer.root.findAllByType('svg')).toHaveLength(0);
+  });
+
+  it('renders one ring segment plus a direct-labeled legend row per source, with no NaN leaking into SVG attributes', () => {
+    const data = [
+      { label: '政府撥入收入', amount: 53599, pct: 99.9 },
+      { label: '租金收入', amount: 40, pct: 0.1 },
+    ];
+    const renderer = render(<RevenueSourceDonut data={data} />);
+    const text = textOf(renderer.root);
+    expect(text).toContain('政府撥入收入');
+    expect(text).toContain('53,599');
+    expect(text).toContain('（99.9%）');
+    expect(text).toContain('53,639'); // total shown in the donut's center
+
+    const circles = renderer.root.findAllByType('circle');
+    expect(circles).toHaveLength(data.length + 1);
+    for (const circle of circles.slice(1)) {
+      expect(circle.props.strokeDasharray).not.toMatch(/NaN/);
+      expect(circle.props.strokeDashoffset).not.toBeNaN();
+    }
+  });
+
+  it('always colors a 其他 bucket neutral gray regardless of its rank', () => {
+    const data = [
+      { label: '其他', amount: 90, pct: 90 },
+      { label: '利息收入', amount: 10, pct: 10 },
+    ];
+    const renderer = render(<RevenueSourceDonut data={data} />);
+    const legendSwatches = renderer.root.findAll(
+      (node) => node.props.style?.borderRadius === 3 && node.props.style?.background,
+    );
+    expect(legendSwatches[0].props.style.background).toBe('#8A9089');
   });
 });

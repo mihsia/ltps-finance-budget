@@ -12,6 +12,7 @@ import { languageRecordSummary } from '../lib/recordDerivations';
 import { summarizeByCategory, summarizeByLevel } from '../lib/awardStats';
 import { summarizeSpecialNeeds } from '../lib/specialNeedsStats';
 import { summarizeClubParticipation } from '../lib/clubStats';
+import { summarizeRevenueSources } from '../lib/revenueStats';
 import { runAuthorized } from '../lib/accessPolicy';
 import {
   pageTitle, sectionLabel, card, statTile, btnOutline, btnPrimary, btnSecondary, chip, progressBar,
@@ -216,6 +217,100 @@ export function ClubParticipationMeter({ stats }) {
   );
 }
 
+/** A horizontal bar chart of 歲出三年比較 — one teal bar per year, kept in chronological (not ranked) order since the point is the trend, not which year is biggest; amount and YoY change are read directly off each bar. */
+export function ExpenseTrendBars({ data }) {
+  if (data.length === 0) {
+    return <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>尚無歲出資料可供統計。</div>;
+  }
+  const max = Math.max(...data.map((d) => d.expenseTotal));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {data.map((d) => (
+        <div key={d.year} style={{ display: 'grid', gridTemplateColumns: '64px 1fr auto', alignItems: 'center', gap: 10 }}>
+          <span style={{ font: "600 12px 'Noto Sans TC', sans-serif", color: '#454B45' }}>{d.year}年度</span>
+          <div style={{ height: 14, background: '#F0EEE6', borderRadius: 7, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: max ? `${(d.expenseTotal / max) * 100}%` : '0%', background: '#1F5F52', borderRadius: 7 }} />
+          </div>
+          <span style={{ display: 'flex', alignItems: 'baseline', gap: 6, justifyContent: 'flex-end' }}>
+            <span style={{ font: '700 12px Inter, sans-serif', color: '#1E2420' }}>{fmtNum(d.expenseTotal)}</span>
+            <span style={{
+              font: '700 11px Inter, sans-serif',
+              color: d.deltaPct == null ? '#8A9089' : (d.deltaPct < 0 ? '#B5533E' : '#2F8F5B'),
+              minWidth: 52, textAlign: 'right',
+            }}
+            >
+              {d.deltaPct == null ? '—' : `${d.deltaPct < 0 ? '▼' : '▲'} ${Math.abs(d.deltaPct).toFixed(1)}%`}
+            </span>
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Colors assigned by rank (summarizeRevenueSources already sorts by amount
+// descending and folds overflow into 其他), following the dataviz skill's
+// fixed categorical order — the same first-5-slot arrangement already
+// validated ring-adjacent by SpecialNeedsDonut above. 其他 always takes the
+// neutral gray regardless of which rank it lands on.
+const REVENUE_SOURCE_PALETTE = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4'];
+const REVENUE_OTHER_COLOR = '#8A9089';
+
+/** A donut chart of 歲入來源 composition by amount share. */
+export function RevenueSourceDonut({ data }) {
+  if (data.length === 0) {
+    return <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>尚無歲入資料可供統計。</div>;
+  }
+  const total = data.reduce((sum, d) => sum + d.amount, 0);
+  const size = 160;
+  const radius = 54;
+  const ringWidth = 20;
+  const circumference = 2 * Math.PI * radius;
+  let drawn = 0;
+  const colorFor = (d, i) => (d.label === '其他' ? REVENUE_OTHER_COLOR : (REVENUE_SOURCE_PALETTE[i] || REVENUE_OTHER_COLOR));
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="歲入來源依比例分布圓環圖">
+        <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#EEEBE2" strokeWidth={ringWidth} />
+          {data.map((d, i) => {
+            const length = (d.amount / total) * circumference;
+            const visibleLength = Math.max(length - 2, 0);
+            const dashoffset = -drawn;
+            drawn += length;
+            return (
+              <circle
+                key={d.label}
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="none"
+                stroke={colorFor(d, i)}
+                strokeWidth={ringWidth}
+                strokeDasharray={`${visibleLength} ${circumference - visibleLength}`}
+                strokeDashoffset={dashoffset}
+              />
+            );
+          })}
+        </g>
+        <text x={size / 2} y={size / 2 - 4} textAnchor="middle" style={{ font: '800 16px Inter, sans-serif', fill: '#1E2420' }}>{fmtNum(total)}</text>
+        <text x={size / 2} y={size / 2 + 14} textAnchor="middle" style={{ font: "500 10.5px 'Noto Sans TC', sans-serif", fill: '#8A9089' }}>千元</text>
+      </svg>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {data.map((d, i) => (
+          <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 3, flex: 'none', background: colorFor(d, i) }} />
+            <span style={{ font: "600 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>{d.label}</span>
+            <span style={{ font: '700 12px Inter, sans-serif', color: '#454B45' }}>{fmtNum(d.amount)}</span>
+            <span style={{ font: "500 11.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>（{d.pct}%）</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /**
  * A bigger, divided header for a top-level zone of the report (財務概況／
  * 各模組現況／統計分析／匯出與紀錄) — one step up from `sectionLabel`, which
@@ -354,6 +449,25 @@ export default function Report({ year, years }) {
   const specialNeedsStats = summarizeSpecialNeeds(activeSpecialNeeds, totalStudents);
   const activeClubs = (clubState.data || []).filter((r) => !r.deletedAt);
   const clubParticipationStats = summarizeClubParticipation(activeClubs, totalStudents);
+  const revenueSourceStats = summarizeRevenueSources(activeRevenue);
+
+  // Each module's own chart(s), rendered inline inside its card in 各模組現況
+  // rather than a separate 統計分析 zone — so a module's number and its
+  // chart read together, not several scrolls apart. Modules without chart
+  // logic (library/language/land/inquiry) simply have no entry here and
+  // stay plain stat + detail-table cards.
+  const MODULE_CHARTS = {
+    awards: [
+      { heading: '依類別分布', node: <AwardCategoryDonut data={awardCategoryStats} /> },
+      { heading: '依等級分布', node: <AwardLevelBars data={awardLevelStats} /> },
+    ],
+    specialNeeds: [
+      { heading: '佔全體學生比例', node: <SpecialNeedsDonut data={specialNeedsStats} totalStudents={totalStudents} /> },
+    ],
+    club: [
+      { heading: '參與比例', node: <ClubParticipationMeter stats={clubParticipationStats} /> },
+    ],
+  };
   const trend = trendStates.map(({ year: y, state }) => ({
     year: y,
     expenseTotal: (state.data || [])
@@ -466,6 +580,9 @@ export default function Report({ year, years }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20, alignItems: 'start', marginBottom: 8, maxWidth: 960 }}>
         <div>
           <div style={sectionLabel}>歲出三年比較（千元）</div>
+          <div style={{ ...card, marginBottom: 12 }}>
+            <ExpenseTrendBars data={report.trend} />
+          </div>
           <div style={{ ...card, padding: 0, overflow: 'hidden' }} className="table-scroll">
             <div style={{ minWidth: 380 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '10px 18px', background: '#F5F3EE', font: "700 12px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
@@ -508,6 +625,30 @@ export default function Report({ year, years }) {
             </div>
           )}
         </div>
+
+        <div>
+          <div style={sectionLabel}>歲入來源（千元）</div>
+          <div style={{ ...card, marginBottom: 12 }}>
+            <RevenueSourceDonut data={revenueSourceStats} />
+          </div>
+          <div style={{ ...card, padding: 0, overflow: 'hidden' }} className="table-scroll">
+            <div style={{ minWidth: 280 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '10px 18px', background: '#F5F3EE', font: "700 12px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
+                <span>來源</span><span>金額</span>
+              </div>
+              {report.revenue.rows.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無歲入資料</div>}
+              {report.revenue.rows.map((row, i) => (
+                <div key={i} style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '10px 18px', borderTop: '1px solid #EEEBE2', font: "500 13px 'Noto Sans TC', sans-serif" }}>
+                  <span>{row.label}</span>
+                  <span style={{ font: '700 13px Inter, sans-serif' }}>{fmtNum(row.amount)}</span>
+                </div>
+              ))}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '10px 18px', borderTop: '1px solid #EEEBE2', font: "700 13px 'Noto Sans TC', sans-serif" }}>
+                <span>合計</span><span style={{ font: '800 13px Inter, sans-serif' }}>{fmtNum(report.revenue.total)}</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
 
       <ZoneHeader>各模組現況</ZoneHeader>
@@ -523,18 +664,29 @@ export default function Report({ year, years }) {
           </div>
         ))}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 12, marginBottom: 24, maxWidth: 960 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginBottom: 24, maxWidth: 1100 }}>
         {OPTIONAL_MODULE_CHOICES.filter((m) => selected[m.key] && report.modules[m.key]).map((m) => {
           const color = OPTIONAL_MODULE_COLORS[m.key] || '#1F5F52';
           const fields = OPTIONAL_MODULE_DETAIL_FIELDS[m.key] || [];
           const detailRows = report.modules[m.key].rows || [];
           const columns = fields.map(() => '1fr').join(' ');
+          const charts = MODULE_CHARTS[m.key];
           return (
             <div key={m.key} style={{ border: '1px solid #E3DFD3', borderLeft: `4px solid ${color}`, borderRadius: 9, overflow: 'hidden' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px' }}>
                 <div style={{ font: "600 11.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>{m.label}</div>
                 <div style={{ font: '800 17px Inter, sans-serif' }}>{moduleValueText(m.key)}</div>
               </div>
+              {charts && (
+                <div style={{ padding: '4px 14px 14px', borderTop: '1px solid #EEEBE2', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {charts.map(({ heading, node }) => (
+                    <div key={heading}>
+                      <div style={{ ...analysisCardHeading, marginBottom: 8 }}>{heading}</div>
+                      {node}
+                    </div>
+                  ))}
+                </div>
+              )}
               {detailRows.length > 0 && (
                 <div style={{ borderTop: '1px solid #EEEBE2' }} className="table-scroll">
                   <div style={{ minWidth: fields.length * 110 }}>
@@ -552,26 +704,6 @@ export default function Report({ year, years }) {
             </div>
           );
         })}
-      </div>
-
-      <ZoneHeader>統計分析</ZoneHeader>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16, marginBottom: 24, maxWidth: 960 }}>
-        <div style={card}>
-          <div style={analysisCardHeading}>獲獎紀錄・依類別分布</div>
-          <AwardCategoryDonut data={awardCategoryStats} />
-        </div>
-        <div style={card}>
-          <div style={analysisCardHeading}>獲獎紀錄・依等級分布</div>
-          <AwardLevelBars data={awardLevelStats} />
-        </div>
-        <div style={card}>
-          <div style={analysisCardHeading}>特生統計分析</div>
-          <SpecialNeedsDonut data={specialNeedsStats} totalStudents={totalStudents} />
-        </div>
-        <div style={card}>
-          <div style={analysisCardHeading}>社團參與比例</div>
-          <ClubParticipationMeter stats={clubParticipationStats} />
-        </div>
       </div>
 
       <ZoneHeader>匯出與紀錄</ZoneHeader>
