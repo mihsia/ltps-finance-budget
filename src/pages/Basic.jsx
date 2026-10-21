@@ -54,7 +54,7 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
     fields: AUDIT_FIELDS,
   });
 
-  const deadlineState = getDeadlineState(yearState.meta?.deadlines, 'basic');
+  const deadlineState = getDeadlineState(yearState.meta?.deadline);
   const deadlineInvalid = deadlineState.invalid;
   const pastDeadline = deadlineState.deadline !== null
     && Date.now() > deadlineState.deadline.getTime();
@@ -75,13 +75,13 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
     const moduleDecision = moduleState.authorizeWrite();
     if (!moduleDecision.allowed) return moduleDecision;
 
-    const currentDeadlineState = getDeadlineState(yearDecision.meta?.deadlines, 'basic');
+    const currentDeadlineState = getDeadlineState(yearDecision.meta?.deadline);
     if (!currentDeadlineState.configured) return { allowed: true };
     if (currentDeadlineState.invalid) {
-      return { allowed: false, reason: '基本資料填報截止日格式錯誤，無法編輯。' };
+      return { allowed: false, reason: '填報截止日格式錯誤，無法編輯。' };
     }
     if (Date.now() > currentDeadlineState.deadline.getTime()) {
-      return { allowed: false, reason: '已超過基本資料填報截止日，無法編輯或儲存。' };
+      return { allowed: false, reason: '已超過填報截止日，無法編輯或儲存。' };
     }
     return { allowed: true };
   };
@@ -174,8 +174,8 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
       )}
       {deadlineState.configured && (
         <div style={(pastDeadline || deadlineInvalid) ? lockedBanner : deadlineBanner}>
-          <span>填報截止日：{deadlineInvalid ? '設定無效' : yearState.meta.deadlines.basic}</span>
-          <span>{deadlineInvalid ? '基本資料填報截止日格式錯誤，已停用編輯' : (pastDeadline ? '已超過填報期限' : '截止當日 23:59 前可儲存')}</span>
+          <span>填報截止日：{deadlineInvalid ? '設定無效' : yearState.meta.deadline}</span>
+          <span>{deadlineInvalid ? '填報截止日格式錯誤，已停用編輯' : (pastDeadline ? '已超過填報期限' : '截止當日 23:59 前可儲存')}</span>
         </div>
       )}
       {editor.message && <div style={messageStyle(editor.message)}>{editor.message}</div>}

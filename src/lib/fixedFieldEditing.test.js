@@ -41,18 +41,16 @@ describe('fixed-field validation', () => {
 });
 
 describe('local deadline parsing', () => {
-  it('treats only an absent own deadline property as no deadline', () => {
-    const inheritedDeadline = Object.create({ basic: '2026-08-10' });
-
-    expect(getDeadlineState({}, 'basic')).toMatchObject({ configured: false, invalid: false, deadline: null });
-    expect(getDeadlineState(inheritedDeadline, 'basic')).toMatchObject({ configured: false, invalid: false, deadline: null });
-    expect(getDeadlineState({ basic: '2026-08-10' }, 'basic')).toMatchObject({ configured: true, invalid: false });
+  it('treats a missing deadline (null/undefined) as not configured', () => {
+    expect(getDeadlineState(null)).toEqual({ configured: false, invalid: false, deadline: null });
+    expect(getDeadlineState(undefined)).toEqual({ configured: false, invalid: false, deadline: null });
+    expect(getDeadlineState('2026-08-10')).toMatchObject({ configured: true, invalid: false });
   });
 
-  it.each(['', null, 0, false, Number.NaN, undefined, '2026-02-30', 'not-a-date'])(
-    'fails closed when the own deadline property has invalid value %s',
+  it.each(['', 0, false, Number.NaN, '2026-02-30', 'not-a-date'])(
+    'fails closed when the deadline value %s is present but invalid',
     (value) => {
-      expect(getDeadlineState({ basic: value }, 'basic')).toEqual({
+      expect(getDeadlineState(value)).toEqual({
         configured: true,
         invalid: true,
         deadline: null,
@@ -103,26 +101,23 @@ describe('deadlineExtraCheck', () => {
     vi.useRealTimers();
   });
 
-  it('allows the write when the module has no configured deadline', () => {
-    const check = deadlineExtraCheck('club', '課後社團');
-    expect(check({ meta: { deadlines: {} } })).toEqual({ allowed: true });
-    expect(check({ meta: {} })).toEqual({ allowed: true });
+  it('allows the write when there is no configured system-wide deadline', () => {
+    expect(deadlineExtraCheck({ meta: { deadline: null } })).toEqual({ allowed: true });
+    expect(deadlineExtraCheck({ meta: {} })).toEqual({ allowed: true });
   });
 
-  it('blocks the write with a module-named reason once past the deadline', () => {
+  it('blocks the write once past the one system-wide deadline', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 7, 10, 0, 0, 1));
-    const check = deadlineExtraCheck('club', '課後社團');
 
-    expect(check({ meta: { deadlines: { club: '2026-08-09' } } }))
-      .toEqual({ allowed: false, reason: '已超過課後社團填報截止日，無法編輯或儲存。' });
-    expect(check({ meta: { deadlines: { club: '2026-08-10' } } })).toEqual({ allowed: true });
+    expect(deadlineExtraCheck({ meta: { deadline: '2026-08-09' } }))
+      .toEqual({ allowed: false, reason: '已超過填報截止日，無法編輯或儲存。' });
+    expect(deadlineExtraCheck({ meta: { deadline: '2026-08-10' } })).toEqual({ allowed: true });
   });
 
-  it('blocks the write with a module-named reason when the deadline value is invalid', () => {
-    const check = deadlineExtraCheck('club', '課後社團');
-    expect(check({ meta: { deadlines: { club: 'not-a-date' } } }))
-      .toEqual({ allowed: false, reason: '課後社團填報截止日格式錯誤，無法編輯。' });
+  it('blocks the write when the deadline value is invalid', () => {
+    expect(deadlineExtraCheck({ meta: { deadline: 'not-a-date' } }))
+      .toEqual({ allowed: false, reason: '填報截止日格式錯誤，無法編輯。' });
   });
 });
 

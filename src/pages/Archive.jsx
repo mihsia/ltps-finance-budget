@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react';
 import {
-  createNextYear, deleteLatestYear, ensureNextYearCreated, updateModuleDeadline, useYearMeta, useYearRecords,
+  createNextYear, deleteLatestYear, ensureNextYearCreated, updateYearDeadline, useYearMeta, useYearRecords,
 } from '../hooks/useYearData';
 import { useAuth } from '../contexts/AuthContext';
 import { runAuthorized } from '../lib/accessPolicy';
@@ -8,7 +8,6 @@ import { parseImportFile, IMPORT_FIELDS } from '../lib/importParser';
 import { validateBudgetRecord } from '../lib/recordSchemas';
 import { yearDataRepository } from '../lib/yearDataRepository';
 import { fmtNum } from '../lib/format';
-import { DEADLINE_MODULE_KEYS, moduleMetaByKey } from '../lib/nav';
 import NoModuleAccess from '../components/NoModuleAccess';
 import {
   pageTitle, pageSubtitle, sectionLabel, card, btnPrimary, btnSecondary, btnDanger, badge, input,
@@ -86,9 +85,9 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
   const [review, setReview] = useState(null);
   const [missingCount, setMissingCount] = useState(0);
   const [error, setError] = useState(null);
-  const [deadlineDraft, setDeadlineDraft] = useState({});
-  const [deadlineSavingKey, setDeadlineSavingKey] = useState(null);
-  const [deadlineErrorByKey, setDeadlineErrorByKey] = useState({});
+  const [deadlineDraft, setDeadlineDraft] = useState(null);
+  const [deadlineSaving, setDeadlineSaving] = useState(false);
+  const [deadlineError, setDeadlineError] = useState(null);
   const [deleteYear, setDeleteYear] = useState(null);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
   const [deleteError, setDeleteError] = useState(null);
@@ -130,35 +129,27 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
     });
   };
 
-  const setDeadlineDraftValue = (key, value) => {
-    setDeadlineDraft((d) => ({ ...d, [key]: value }));
-  };
-
   // Shared by both "儲存" (whatever date is currently in the box) and
   // "清除" (an empty string clears the deadline back to "no limit") — the
-  // underlying write is the same updateModuleDeadline() call either way, so
-  // moving a deadline earlier, later, or removing it entirely are all just
-  // this one call with a different value, exactly as asked for.
-  const saveDeadline = async (key, dateString) => {
+  // underlying write is the same updateYearDeadline() call either way, so
+  // moving the deadline earlier, later, or removing it entirely are all
+  // just this one call with a different value.
+  const saveDeadline = async (dateString) => {
     const result = await runAuthorized(() => authorizeAdmin(), async () => {
-      setDeadlineSavingKey(key);
-      setDeadlineErrorByKey((e) => ({ ...e, [key]: null }));
+      setDeadlineSaving(true);
+      setDeadlineError(null);
       try {
-        await updateModuleDeadline(latestYear, key, dateString);
+        await updateYearDeadline(latestYear, dateString);
         // Once saved, fall back to the live Firestore value (via
         // yearMetaState below) instead of keeping a stale local override.
-        setDeadlineDraft((d) => {
-          const next = { ...d };
-          delete next[key];
-          return next;
-        });
+        setDeadlineDraft(null);
       } catch (err) {
-        setDeadlineErrorByKey((e) => ({ ...e, [key]: err.message }));
+        setDeadlineError(err.message);
       } finally {
-        setDeadlineSavingKey(null);
+        setDeadlineSaving(false);
       }
     });
-    if (!result.executed) setDeadlineErrorByKey((e) => ({ ...e, [key]: result.reason }));
+    if (!result.executed) setDeadlineError(result.reason);
   };
 
   const pickFile = () => fileRef.current?.click();
@@ -258,71 +249,55 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
         <>
           <div style={sectionLabel}>填報截止日管理（{latestYear} 年度）</div>
           <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 14, maxWidth: 640 }}>
-            可針對每個模組個別設定填報截止日；超過期限後填報人員將無法新增、編輯或刪除該模組資料（僅能檢視）。期限可隨時調整，提前結束、延長或完全清除都可以，填報人員登入後會在「總覽」頁看到提醒。
+            全系統統一的填報截止日，不分模組；超過期限後所有模組都將無法新增、編輯或刪除資料（僅能檢視）。期限可隨時調整，提前結束、延長或完全清除都可以，填報人員登入後會在頁首看到提醒。
           </div>
 
           {yearMetaState.loading && <div style={{ ...card, maxWidth: 640, marginBottom: 32 }}>正在載入年度設定…</div>}
           {yearMetaState.error && <div style={{ color: '#B5533E', marginBottom: 32 }}>無法載入年度設定，請稍後再試。</div>}
 
-          {!yearMetaState.loading && !yearMetaState.error && (
-            <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 640, marginBottom: 32 }}>
-              {DEADLINE_MODULE_KEYS.map((key, i) => {
-                const meta = moduleMetaByKey[key];
-                const committed = yearMetaState.meta?.deadlines?.[key] || '';
-                const draftValue = Object.hasOwn(deadlineDraft, key) ? deadlineDraft[key] : committed;
-                const dirty = draftValue !== committed;
-                const saving = deadlineSavingKey === key;
-                return (
-                  <div
-                    key={key}
+          {!yearMetaState.loading && !yearMetaState.error && (() => {
+            const committed = yearMetaState.meta?.deadline || '';
+            const draftValue = deadlineDraft ?? committed;
+            const dirty = draftValue !== committed;
+            return (
+              <div style={{ ...card, maxWidth: 640, marginBottom: 32 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <input
+                    type="date"
+                    value={draftValue}
+                    disabled={deadlineSaving}
+                    onChange={(e) => setDeadlineDraft(e.target.value)}
+                    style={{ ...input, padding: '6px 10px', font: "500 12.5px 'Noto Sans TC', sans-serif", width: 160 }}
+                  />
+                  <span
+                    onClick={() => { if (!deadlineSaving && dirty) saveDeadline(draftValue); }}
                     style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
-                      flexWrap: 'wrap', padding: '12px 18px', borderTop: i === 0 ? 'none' : '1px solid #EEEBE2',
+                      font: "600 12px 'Noto Sans TC', sans-serif", color: '#1F5F52',
+                      cursor: (deadlineSaving || !dirty) ? 'default' : 'pointer', opacity: (deadlineSaving || !dirty) ? .4 : 1,
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 130 }}>
-                      <span style={{ width: 8, height: 8, borderRadius: 4, background: meta.color, flex: 'none' }} />
-                      <span style={{ font: "600 13px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>{meta.label}</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <input
-                        type="date"
-                        value={draftValue}
-                        disabled={saving}
-                        onChange={(e) => setDeadlineDraftValue(key, e.target.value)}
-                        style={{ ...input, padding: '6px 10px', font: "500 12.5px 'Noto Sans TC', sans-serif", width: 150 }}
-                      />
-                      <span
-                        onClick={() => { if (!saving && dirty) saveDeadline(key, draftValue); }}
-                        style={{
-                          font: "600 12px 'Noto Sans TC', sans-serif", color: '#1F5F52',
-                          cursor: (saving || !dirty) ? 'default' : 'pointer', opacity: (saving || !dirty) ? .4 : 1,
-                        }}
-                      >
-                        {saving ? '儲存中…' : '儲存'}
-                      </span>
-                      {committed && (
-                        <span
-                          onClick={() => { if (!saving) saveDeadline(key, ''); }}
-                          style={{
-                            font: "600 12px 'Noto Sans TC', sans-serif", color: '#B5533E',
-                            cursor: saving ? 'default' : 'pointer', opacity: saving ? .4 : 1,
-                          }}
-                        >
-                          清除
-                        </span>
-                      )}
-                    </div>
-                    {deadlineErrorByKey[key] && (
-                      <div style={{ flexBasis: '100%', font: "500 11.5px 'Noto Sans TC', sans-serif", color: '#B5533E' }}>
-                        ⚠ {deadlineErrorByKey[key]}
-                      </div>
-                    )}
+                    {deadlineSaving ? '儲存中…' : '儲存'}
+                  </span>
+                  {committed && (
+                    <span
+                      onClick={() => { if (!deadlineSaving) saveDeadline(''); }}
+                      style={{
+                        font: "600 12px 'Noto Sans TC', sans-serif", color: '#B5533E',
+                        cursor: deadlineSaving ? 'default' : 'pointer', opacity: deadlineSaving ? .4 : 1,
+                      }}
+                    >
+                      清除
+                    </span>
+                  )}
+                </div>
+                {deadlineError && (
+                  <div style={{ font: "500 11.5px 'Noto Sans TC', sans-serif", color: '#B5533E', marginTop: 10 }}>
+                    ⚠ {deadlineError}
                   </div>
-                );
-              })}
-            </div>
-          )}
+                )}
+              </div>
+            );
+          })()}
         </>
       )}
 

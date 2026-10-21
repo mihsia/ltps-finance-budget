@@ -55,7 +55,7 @@ function Shell() {
 
   return (
     <div className="app-shell">
-      <Header year={effectiveYear} setYear={setYear} years={years} onMenuClick={() => setSidebarOpen(true)} />
+      <Header year={effectiveYear} setYear={setYear} years={years} latestYear={latestYear} onMenuClick={() => setSidebarOpen(true)} />
       <div className="app-body">
         <div
           className={`app-sidebar-backdrop${sidebarOpen ? ' is-open' : ''}`}

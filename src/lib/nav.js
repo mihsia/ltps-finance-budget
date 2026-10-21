@@ -52,29 +52,7 @@ export const navGroups = [
   ] },
 ];
 
-// Flat key -> {key, label, icon, color, desc} lookup, for any screen that
-// needs a module's display label/color without walking navGroups itself
-// (e.g. the 填報截止日 management UI and reminder card, which list modules
-// by key rather than by sidebar position).
-export const moduleMetaByKey = Object.fromEntries(
-  navGroups.flatMap((g) => g.items).map((it) => [it.key, it]),
-);
-
 export const genericModuleKeys = ['awards', 'club', 'careSupport', 'land', 'inquiry', 'specialNeeds'];
-
-// Every module with its own 填報截止日 (a save/edit/delete it can block once
-// passed) — i.e. all data-entry modules, minus the report/management pages
-// (report／archive／settings aren't themselves subject to a filing
-// deadline) and the always-open dashboard／changelog／manual pages.
-// Derived from navGroups rather than hand-duplicated, so a newly added data
-// module picks up deadline support automatically instead of silently being
-// left out (the same drift this app has hit before with other per-module
-// lists — see functions/accountAdmin.cjs's own whitelist history).
-const NON_DEADLINE_MODULE_KEYS = ['dashboard', 'report', 'archive', 'settings', 'manual', 'changelog'];
-export const DEADLINE_MODULE_KEYS = navGroups
-  .flatMap((g) => g.items)
-  .filter((it) => !NON_DEADLINE_MODULE_KEYS.includes(it.key))
-  .map((it) => it.key);
 
 export const genericModuleMeta = {
   awards: { title: '獲獎紀錄', desc: '記錄學生與學校各項競賽獲獎資訊', columns: ['類別', '獲獎項目', '等級', '日期'] },

@@ -8,7 +8,6 @@ import { pageTitle, pageSubtitle, card, input, label, btnPrimary, btnSecondary, 
 
 const FIELDS = ['generalBooks', 'indigenousBooks'];
 const FIELD_LABELS = { generalBooks: '一般書籍', indigenousBooks: '族語書籍' };
-const checkLibraryDeadline = deadlineExtraCheck('library', '圖書館藏書量');
 
 export default function Library({ year, hasCurrentYear = () => false }) {
   const moduleState = useYearModule(year, 'library');
@@ -20,7 +19,7 @@ export default function Library({ year, hasCurrentYear = () => false }) {
     fields: FIELDS,
   });
 
-  const deadlineState = getDeadlineState(yearState.meta?.deadlines, 'library');
+  const deadlineState = getDeadlineState(yearState.meta?.deadline);
   const deadlineInvalid = deadlineState.invalid;
   const pastDeadline = deadlineState.deadline !== null
     && Date.now() > deadlineState.deadline.getTime();
@@ -31,7 +30,7 @@ export default function Library({ year, hasCurrentYear = () => false }) {
     if (!yearDecision.allowed) return yearDecision;
     const moduleDecision = moduleState.authorizeWrite();
     if (!moduleDecision.allowed) return moduleDecision;
-    return checkLibraryDeadline(yearDecision);
+    return deadlineExtraCheck(yearDecision);
   };
   const applyGuardResult = (result) => {
     if (!result.executed) editor.setMessage(result.reason);
@@ -105,8 +104,8 @@ export default function Library({ year, hasCurrentYear = () => false }) {
       )}
       {deadlineState.configured && (
         <div style={(pastDeadline || deadlineInvalid) ? lockedBanner : deadlineBanner}>
-          <span>填報截止日：{deadlineInvalid ? '設定無效' : yearState.meta.deadlines.library}</span>
-          <span>{deadlineInvalid ? '圖書館藏書量填報截止日格式錯誤，已停用編輯' : (pastDeadline ? '已超過填報期限' : '截止當日 23:59 前可儲存')}</span>
+          <span>填報截止日：{deadlineInvalid ? '設定無效' : yearState.meta.deadline}</span>
+          <span>{deadlineInvalid ? '填報截止日格式錯誤，已停用編輯' : (pastDeadline ? '已超過填報期限' : '截止當日 23:59 前可儲存')}</span>
         </div>
       )}
       {editor.message && <div style={{ color: editor.message === '儲存成功。' ? '#2F7D55' : '#B5533E', marginBottom: 14 }}>{editor.message}</div>}

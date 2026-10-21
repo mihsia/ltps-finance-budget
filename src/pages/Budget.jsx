@@ -47,7 +47,7 @@ export default function Budget({
   const recentStates = [recentA, recentB, recentC];
   const yearState = useYearMeta(year);
   const { canEditModule, authorizeModuleActor } = useAuth();
-  const deadlineState = getDeadlineState(yearState.meta?.deadlines, 'budget');
+  const deadlineState = getDeadlineState(yearState.meta?.deadline);
   const deadlineInvalid = deadlineState.invalid;
   const pastDeadline = deadlineState.deadline !== null
     && Date.now() > deadlineState.deadline.getTime();
@@ -69,7 +69,7 @@ export default function Budget({
     yearState,
     recordState,
     authorizeModuleActor,
-    extraCheck: deadlineExtraCheck('budget', '歲入歲出'),
+    extraCheck: deadlineExtraCheck,
   });
 
   useEffect(() => {
@@ -169,8 +169,8 @@ export default function Budget({
       )}
       {deadlineState.configured && (
         <div style={(pastDeadline || deadlineInvalid) ? lockedBanner : deadlineBanner}>
-          <span>填報截止日：{deadlineInvalid ? '設定無效' : yearState.meta.deadlines.budget}</span>
-          <span>{deadlineInvalid ? '歲入歲出填報截止日格式錯誤，已停用編輯' : (pastDeadline ? '已超過填報期限' : '截止當日 23:59 前可儲存')}</span>
+          <span>填報截止日：{deadlineInvalid ? '設定無效' : yearState.meta.deadline}</span>
+          <span>{deadlineInvalid ? '填報截止日格式錯誤，已停用編輯' : (pastDeadline ? '已超過填報期限' : '截止當日 23:59 前可儲存')}</span>
         </div>
       )}
       {actions.message && <div style={messageStyle(actions.message)}>{actions.message}</div>}

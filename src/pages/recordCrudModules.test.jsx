@@ -148,7 +148,7 @@ beforeEach(() => {
   hookMocks.recordStates = new Map();
   hookMocks.moduleStates = new Map();
   hookMocks.meta = {
-    meta: { locked: false, deadlines: {} },
+    meta: { locked: false, deadline: null },
     loading: false,
     exists: true,
     error: null,
@@ -903,7 +903,7 @@ describe('Generic awards xlsx export/import', () => {
     installRecords('awards', readyRecords([]));
     hookMocks.yearDecision = { allowed: false, code: 'year-locked', reason: '此年度已鎖定，無法編輯或儲存。' };
     hookMocks.meta = {
-      meta: { locked: true, deadlines: {} }, loading: false, exists: true, error: null,
+      meta: { locked: true, deadline: null }, loading: false, exists: true, error: null,
     };
     const mounted = mount(Generic, { moduleKey: 'awards' });
     expect(control(mounted.renderer, '⬇ 匯出 Excel')).toBeTruthy();
@@ -981,7 +981,7 @@ describe('Module deadline', () => {
   ])('%s shows a deadline banner, hides write controls, and blocks a retained save once past 填報截止日', async (_name, Page, extraProps, moduleKey, addLabel) => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 7, 9, 12));
-    hookMocks.meta.meta = { locked: false, deadlines: { [moduleKey]: '2026-08-10' } };
+    hookMocks.meta.meta = { locked: false, deadline: '2026-08-10' };
     installRecords(moduleKey, readyRecords([]));
     const mounted = mount(Page, extraProps);
 
@@ -990,7 +990,7 @@ describe('Module deadline', () => {
     expect(control(mounted.renderer, addLabel)).toBeTruthy();
     const retainedAdd = control(mounted.renderer, addLabel).props.onClick;
 
-    hookMocks.meta.meta = { locked: false, deadlines: { [moduleKey]: '2026-08-08' } };
+    hookMocks.meta.meta = { locked: false, deadline: '2026-08-08' };
     await act(async () => retainedAdd());
 
     expect(pageText(mounted.renderer)).toContain('已超過填報期限');

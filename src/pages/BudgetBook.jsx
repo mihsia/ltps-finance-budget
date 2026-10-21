@@ -13,9 +13,6 @@ import { fileToBase64, validatePdfFile } from '../lib/pdfUpload';
 import NoModuleAccess from '../components/NoModuleAccess';
 import { pageTitle, pageSubtitle, card, btnOutline, btnPrimary, btnSecondary, input, label, lockedBanner, deadlineBanner, progressBar } from '../styles';
 
-const checkBudgetbookDeadline = deadlineExtraCheck('budgetbook', '預算書表');
-const checkBudgetDeadline = deadlineExtraCheck('budget', '歲入歲出');
-
 const FIELDS = ['fundName', 'reviewAuthority', 'description'];
 
 export default function BudgetBook({ year, hasCurrentYear = () => false }) {
@@ -35,20 +32,18 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
   const [expensePending, setExpensePending] = useState(false);
   const [expenseStatus, setExpenseStatus] = useState(null);
 
-  const deadlineState = getDeadlineState(yearState.meta?.deadlines, 'budgetbook');
+  const deadlineState = getDeadlineState(yearState.meta?.deadline);
   const deadlineInvalid = deadlineState.invalid;
   const pastDeadline = deadlineState.deadline !== null
     && Date.now() > deadlineState.deadline.getTime();
   // 業務計畫別金額其實是歲入歲出模組的 expense 紀錄，直接在這裡編輯會立即
-  // 反映在該模組，所以沿用歲入歲出自己的權限與填報期限，而不是預算書表的。
-  const budgetDeadlineState = getDeadlineState(yearState.meta?.deadlines, 'budget');
-  const budgetPastDeadline = budgetDeadlineState.deadline !== null
-    && Date.now() > budgetDeadlineState.deadline.getTime();
+  // 反映在該模組；現在系統只有一個全系統統一的填報截止日，所以沿用上面
+  // 同一份 deadlineState 即可，不需要再分開算一次。
   const canEditExpenseAmounts = canEditModule('budget')
     && yearState.exists
     && yearState.meta?.locked === false
-    && !budgetPastDeadline
-    && !budgetDeadlineState.invalid;
+    && !pastDeadline
+    && !deadlineInvalid;
 
   const checkInvocation = () => {
     if (!hasCurrentYear()) return { allowed: false, reason: '目前選擇的年度已變更，請重新操作。' };
@@ -56,7 +51,7 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
     if (!yearDecision.allowed) return yearDecision;
     const moduleDecision = moduleState.authorizeWrite();
     if (!moduleDecision.allowed) return moduleDecision;
-    return checkBudgetbookDeadline(yearDecision);
+    return deadlineExtraCheck(yearDecision);
   };
   const applyGuardResult = (result) => {
     if (!result.executed) editor.setMessage(result.reason);
@@ -155,7 +150,7 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
     if (!yearDecision.allowed) return yearDecision;
     const budgetDecision = budgetState.authorizeWrite();
     if (!budgetDecision.allowed) return budgetDecision;
-    return checkBudgetDeadline(yearDecision);
+    return deadlineExtraCheck(yearDecision);
   };
   const startEditExpense = (row) => {
     setExpenseStatus(null);
@@ -219,8 +214,8 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
       )}
       {deadlineState.configured && (
         <div style={(pastDeadline || deadlineInvalid) ? lockedBanner : deadlineBanner}>
-          <span>填報截止日：{deadlineInvalid ? '設定無效' : yearState.meta.deadlines.budgetbook}</span>
-          <span>{deadlineInvalid ? '預算書表填報截止日格式錯誤，已停用編輯' : (pastDeadline ? '已超過填報期限' : '截止當日 23:59 前可儲存')}</span>
+          <span>填報截止日：{deadlineInvalid ? '設定無效' : yearState.meta.deadline}</span>
+          <span>{deadlineInvalid ? '填報截止日格式錯誤，已停用編輯' : (pastDeadline ? '已超過填報期限' : '截止當日 23:59 前可儲存')}</span>
         </div>
       )}
       {editor.message && <div style={{ color: editor.message === '儲存成功。' ? '#2F7D55' : '#B5533E', marginBottom: 14 }}>{editor.message}</div>}

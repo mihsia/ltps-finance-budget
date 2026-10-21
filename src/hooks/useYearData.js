@@ -330,7 +330,7 @@ async function copyActiveRecords(fromYear, nextYear) {
 export async function createNextYear(fromYear) {
   const nextYear = String(Number(fromYear) + 1);
   const yearBatch = writeBatch(db);
-  yearBatch.set(doc(db, 'years', nextYear), { locked: false, deadlines: {}, createdAt: serverTimestamp() });
+  yearBatch.set(doc(db, 'years', nextYear), { locked: false, createdAt: serverTimestamp() });
   yearBatch.set(doc(db, 'years', fromYear), { locked: true }, { merge: true });
   await yearBatch.commit();
 
@@ -431,18 +431,19 @@ export async function deleteLatestYear(year) {
 }
 
 /**
- * Sets or clears one module's 填報截止日 on /years/{year}.deadlines — a
- * plain field update, not gated by yearWritable() the way module/record
- * writes are (firestore.rules only requires isActiveAdmin() on the year
- * document itself), so an admin can freely move a deadline earlier or later,
- * or clear it back to "no deadline", at any time. `dateString` is the
+ * Sets or clears the one system-wide 填報截止日 on /years/{year}.deadline
+ * (a single "YYYY-MM-DD" string, not per-module) — a plain field update,
+ * not gated by yearWritable() the way module/record writes are
+ * (firestore.rules only requires isActiveAdmin() on the year document
+ * itself), so an admin can freely move the deadline earlier or later, or
+ * clear it back to "no deadline", at any time. `dateString` is the
  * YYYY-MM-DD an <input type="date"> already produces; a falsy value clears
  * the deadline instead of writing an empty string.
  */
-export async function updateModuleDeadline(year, moduleKey, dateString) {
+export async function updateYearDeadline(year, dateString) {
   const yearRef = doc(db, 'years', year);
   await updateDoc(yearRef, {
-    [`deadlines.${moduleKey}`]: dateString || deleteField(),
+    deadline: dateString || deleteField(),
   });
 }
 

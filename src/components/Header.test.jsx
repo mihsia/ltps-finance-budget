@@ -1,18 +1,33 @@
 import TestRenderer, { act } from 'react-test-renderer';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as authModule from '../contexts/AuthContext';
-import Header from './Header';
+
+const hookMocks = vi.hoisted(() => ({
+  yearMeta: { meta: null, loading: false, exists: false, error: null },
+}));
+vi.mock('../hooks/useYearData', () => ({
+  useYearMeta: () => hookMocks.yearMeta,
+}));
+
+const { default: Header } = await import('./Header');
 
 function renderHeader(authValue, props = {}) {
   let renderer;
   act(() => {
     renderer = TestRenderer.create(
       <authModule.AuthContext.Provider value={authValue}>
-        <Header year="115" setYear={() => {}} years={['115']} {...props} />
+        <Header year="115" setYear={() => {}} years={['115']} latestYear="115" {...props} />
       </authModule.AuthContext.Provider>,
     );
   });
   return renderer;
+}
+
+function textOf(renderer) {
+  return renderer.root
+    .findAll((node) => typeof node.type === 'string')
+    .map((n) => (n.children || []).join(''))
+    .join('');
 }
 
 const baseAuthValue = {
@@ -62,5 +77,47 @@ describe('Header avatar', () => {
     act(() => { renderer.root.findAllByType('img')[0].props.onError(); });
 
     expect(renderer.root.findAllByType('img')).toHaveLength(0);
+  });
+});
+
+describe('Header 填報截止日提醒', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    hookMocks.yearMeta = { meta: null, loading: false, exists: false, error: null };
+  });
+
+  it('shows nothing when no system-wide deadline is configured', () => {
+    const renderer = renderHeader(baseAuthValue);
+    expect(textOf(renderer)).not.toContain('填報截止');
+  });
+
+  it('shows the deadline and a 剩 N 天 status for an upcoming deadline', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 21));
+    hookMocks.yearMeta = { meta: { deadline: '2026-10-24' }, loading: false, exists: true, error: null };
+
+    const renderer = renderHeader(baseAuthValue);
+
+    const text = textOf(renderer);
+    expect(text).toContain('填報截止：2026-10-24');
+    expect(text).toContain('剩 3 天');
+  });
+
+  it('shows 已截止 once the deadline has passed', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 9, 21));
+    hookMocks.yearMeta = { meta: { deadline: '2026-10-15' }, loading: false, exists: true, error: null };
+
+    const renderer = renderHeader(baseAuthValue);
+
+    expect(textOf(renderer)).toContain('已截止 6 天');
+  });
+
+  it('shows nothing for an invalid deadline value instead of crashing', () => {
+    hookMocks.yearMeta = { meta: { deadline: 'not-a-date' }, loading: false, exists: true, error: null };
+
+    const renderer = renderHeader(baseAuthValue);
+
+    expect(textOf(renderer)).not.toContain('填報截止');
   });
 });

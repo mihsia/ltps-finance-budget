@@ -47,7 +47,7 @@ export default function LanguageCert({
 }) {
   const yearState = useYearMeta(year);
   const { canEditModule, authorizeModuleActor } = useAuth();
-  const deadlineState = getDeadlineState(yearState.meta?.deadlines, 'languageCert');
+  const deadlineState = getDeadlineState(yearState.meta?.deadline);
   const deadlineInvalid = deadlineState.invalid;
   const pastDeadline = deadlineState.deadline !== null
     && Date.now() > deadlineState.deadline.getTime();
@@ -68,7 +68,7 @@ export default function LanguageCert({
     yearState,
     recordState,
     authorizeModuleActor,
-    extraCheck: deadlineExtraCheck('languageCert', '族語認證'),
+    extraCheck: deadlineExtraCheck,
   });
 
   useEffect(() => {
@@ -160,8 +160,8 @@ export default function LanguageCert({
       )}
       {deadlineState.configured && (
         <div style={(pastDeadline || deadlineInvalid) ? lockedBanner : deadlineBanner}>
-          <span>填報截止日：{deadlineInvalid ? '設定無效' : yearState.meta.deadlines.languageCert}</span>
-          <span>{deadlineInvalid ? '族語認證填報截止日格式錯誤，已停用編輯' : (pastDeadline ? '已超過填報期限' : '截止當日 23:59 前可儲存')}</span>
+          <span>填報截止日：{deadlineInvalid ? '設定無效' : yearState.meta.deadline}</span>
+          <span>{deadlineInvalid ? '填報截止日格式錯誤，已停用編輯' : (pastDeadline ? '已超過填報期限' : '截止當日 23:59 前可儲存')}</span>
         </div>
       )}
       {actions.message && <div style={messageStyle(actions.message)}>{actions.message}</div>}

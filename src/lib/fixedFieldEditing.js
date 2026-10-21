@@ -36,37 +36,36 @@ export function parseLocalDeadlineEndOfDay(value) {
   return parsed;
 }
 
-export function getDeadlineState(deadlines, moduleKey) {
-  if (
-    deadlines === null
-    || deadlines === undefined
-    || !Object.hasOwn(deadlines, moduleKey)
-  ) {
+// One system-wide 填報截止日 (not per-module) — `deadline` is a single
+// "YYYY-MM-DD" string (or absent) directly on /years/{year}, set via the
+// 歷史歸檔 admin UI's updateYearDeadline(). Every data-entry module checks
+// this same value, so moving it earlier or later, or clearing it, changes
+// the deadline for the whole system at once rather than module by module.
+export function getDeadlineState(deadline) {
+  if (deadline === null || deadline === undefined) {
     return { configured: false, invalid: false, deadline: null };
   }
 
-  const deadline = parseLocalDeadlineEndOfDay(deadlines[moduleKey]);
-  if (deadline === null) return { configured: true, invalid: true, deadline: null };
-  return { configured: true, invalid: false, deadline };
+  const parsed = parseLocalDeadlineEndOfDay(deadline);
+  if (parsed === null) return { configured: true, invalid: true, deadline: null };
+  return { configured: true, invalid: false, deadline: parsed };
 }
 
 /**
- * Builds the `extraCheck(yearDecision)` callback `useRecordCrudActions`
- * accepts, enforcing a module's 填報截止日 the same way Basic.jsx's own
+ * The `extraCheck(yearDecision)` callback `useRecordCrudActions` accepts,
+ * enforcing the system-wide 填報截止日 the same way Basic.jsx's own
  * hand-written checkInvocation already does — shared here so every module
- * page reports the deadline the same way instead of re-deriving the wording.
- * A module with no configured deadline is always allowed.
+ * page reports the deadline the same way instead of re-deriving the
+ * wording. No deadline configured means always allowed.
  */
-export function deadlineExtraCheck(moduleKey, moduleTitle) {
-  return (yearDecision) => {
-    const state = getDeadlineState(yearDecision.meta?.deadlines, moduleKey);
-    if (!state.configured) return { allowed: true };
-    if (state.invalid) return { allowed: false, reason: `${moduleTitle}填報截止日格式錯誤，無法編輯。` };
-    if (Date.now() > state.deadline.getTime()) {
-      return { allowed: false, reason: `已超過${moduleTitle}填報截止日，無法編輯或儲存。` };
-    }
-    return { allowed: true };
-  };
+export function deadlineExtraCheck(yearDecision) {
+  const state = getDeadlineState(yearDecision.meta?.deadline);
+  if (!state.configured) return { allowed: true };
+  if (state.invalid) return { allowed: false, reason: '填報截止日格式錯誤，無法編輯。' };
+  if (Date.now() > state.deadline.getTime()) {
+    return { allowed: false, reason: '已超過填報截止日，無法編輯或儲存。' };
+  }
+  return { allowed: true };
 }
 
 /**

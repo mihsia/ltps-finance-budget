@@ -147,7 +147,7 @@ beforeEach(() => {
   callableMocks.calls = [];
   callableMocks.impl = vi.fn(async () => ({ data: {} }));
   hookMocks.moduleDecision = { allowed: true, code: 'module-writable', reason: null };
-  hookMocks.meta = { meta: { locked: false, deadlines: {} }, loading: false, exists: true, error: null };
+  hookMocks.meta = { meta: { locked: false, deadline: null }, loading: false, exists: true, error: null };
   hookMocks.yearDecision = { allowed: true, code: 'year-writable', reason: null };
   hookMocks.audit = { entries: [], loading: false, error: null };
   hookMocks.modules = {
@@ -342,32 +342,30 @@ describe('Basic fixed-field module', () => {
     mounted.unmount();
   });
 
-  it('fails closed for own-property falsy deadlines in the UI and retained callbacks', async () => {
+  it('fails closed for a falsy-but-present deadline value, and recovers once the deadline is cleared', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 7, 9, 12));
-    hookMocks.meta.meta = { locked: false, deadlines: { basic: '2026-08-10' } };
+    hookMocks.meta.meta = { locked: false, deadline: '2026-08-10' };
     const save = vi.fn();
     hookMocks.modules.basic = { ...hookMocks.modules.basic, save };
     const mounted = mount(Basic);
     await act(async () => control(mounted.renderer, '編輯資料').props.onClick());
     const retainedCancel = control(mounted.renderer, '取消').props.onClick;
 
-    hookMocks.meta.meta = { locked: false, deadlines: { basic: false } };
+    hookMocks.meta.meta = { locked: false, deadline: false };
     await act(async () => retainedCancel());
 
     expect(mounted.renderer.root.findAllByType('input')).toHaveLength(9);
-    expect(pageText(mounted.renderer)).toContain('基本資料填報截止日格式錯誤');
+    expect(pageText(mounted.renderer)).toContain('填報截止日格式錯誤');
     expect(control(mounted.renderer, '編輯資料')).toBeUndefined();
-
-    hookMocks.meta.meta = { locked: false, deadlines: {} };
-    mounted.rerender();
-    const retainedSave = control(mounted.renderer, '儲存草稿').props.onClick;
-    hookMocks.meta.meta = { locked: false, deadlines: { basic: undefined } };
-    await act(async () => retainedSave());
-
     expect(save).not.toHaveBeenCalled();
-    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(9);
-    expect(pageText(mounted.renderer)).toContain('基本資料填報截止日格式錯誤');
+
+    hookMocks.meta.meta = { locked: false, deadline: null };
+    mounted.rerender();
+    const retainedCancelAgain = control(mounted.renderer, '取消').props.onClick;
+    await act(async () => retainedCancelAgain());
+
+    expect(control(mounted.renderer, '編輯資料')).toBeTruthy();
     mounted.unmount();
   });
 });
@@ -468,14 +466,14 @@ describe('Library fixed-field module', () => {
     vi.setSystemTime(new Date(2026, 7, 9, 12));
     const save = vi.fn().mockResolvedValue(undefined);
     hookMocks.modules.library = readyModule({ generalBooks: 1, indigenousBooks: 2 }, save);
-    hookMocks.meta.meta = { locked: false, deadlines: { library: '2026-08-10' } };
+    hookMocks.meta.meta = { locked: false, deadline: '2026-08-10' };
     const mounted = mount(Library);
 
     expect(pageText(mounted.renderer)).toContain('填報截止日：2026-08-10');
     expect(control(mounted.renderer, '編輯數量')).toBeTruthy();
     const retainedBeginEditing = control(mounted.renderer, '編輯數量').props.onClick;
 
-    hookMocks.meta.meta = { locked: false, deadlines: { library: '2026-08-08' } };
+    hookMocks.meta.meta = { locked: false, deadline: '2026-08-08' };
     await act(async () => retainedBeginEditing());
 
     expect(pageText(mounted.renderer)).toContain('已超過填報期限');
@@ -622,11 +620,11 @@ describe('BudgetBook fixed-field module', () => {
 
   it('hides the upload control once the year is locked or the module is not editable', async () => {
     hookMocks.modules.budgetbook = readyModule({ fundName: '基金', reviewAuthority: '機關' });
-    hookMocks.meta = { meta: { locked: true, deadlines: {} }, loading: false, exists: true, error: null };
+    hookMocks.meta = { meta: { locked: true, deadline: null }, loading: false, exists: true, error: null };
     const mounted = mount(BudgetBook);
     expect(fileInput(mounted.renderer)).toBeUndefined();
 
-    hookMocks.meta = { meta: { locked: false, deadlines: {} }, loading: false, exists: true, error: null };
+    hookMocks.meta = { meta: { locked: false, deadline: null }, loading: false, exists: true, error: null };
     authMocks.decision = { allowed: false, code: 'module-denied', reason: '沒有此模組的編輯權限。' };
     mounted.rerender();
     expect(fileInput(mounted.renderer)).toBeUndefined();
@@ -687,7 +685,7 @@ describe('BudgetBook fixed-field module', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date(2026, 7, 9, 12));
     hookMocks.modules.budgetbook = readyModule({ fundName: '基金', reviewAuthority: '機關' });
-    hookMocks.meta.meta = { locked: false, deadlines: { budgetbook: '2026-08-08' } };
+    hookMocks.meta.meta = { locked: false, deadline: '2026-08-08' };
     const mounted = mount(BudgetBook);
 
     expect(pageText(mounted.renderer)).toContain('填報截止日：2026-08-08');
@@ -710,7 +708,7 @@ describe('fixed-field year readiness and error priority', () => {
 
     for (const locked of [undefined, null, 0, 'false', true]) {
       hookMocks.meta = {
-        meta: locked === undefined ? { deadlines: {} } : { locked, deadlines: {} },
+        meta: locked === undefined ? { deadline: null } : { locked, deadline: null },
         loading: false,
         exists: true,
         error: null,
