@@ -211,6 +211,24 @@ describe('years/{year}/modules/{moduleKey}/records/{recordId}', () => {
     await assertFails(asAdmin().doc(lockedRecordPath).delete());
   });
 
+  it('lets an admin hard-delete many records from the same unlocked year in a single batch — src/hooks/useYearData.js\'s deleteLatestYear deletes up to 450 per batch, each independently re-evaluating yearWritable()\'s get()', async () => {
+    const recordCount = 30;
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const seedBatch = ctx.firestore().batch();
+      for (let i = 0; i < recordCount; i += 1) {
+        seedBatch.set(ctx.firestore().doc(`years/115/modules/budget/records/rec-${i}`), { recordType: 'expense', amount: i });
+      }
+      await seedBatch.commit();
+    });
+
+    const db = asAdmin();
+    const batch = writeBatch(db);
+    for (let i = 0; i < recordCount; i += 1) {
+      batch.delete(doc(db, 'years', '115', 'modules', 'budget', 'records', `rec-${i}`));
+    }
+    await assertSucceeds(batch.commit());
+  });
+
   it('still allows a soft-delete update (deletedAt/deletedBy) as an ordinary write', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx.firestore().doc(recordPath).set({ recordType: 'expense', amount: 100 });
