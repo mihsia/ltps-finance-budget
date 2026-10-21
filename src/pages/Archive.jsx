@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { createNextYear, deleteLatestYear, useYearRecords } from '../hooks/useYearData';
+import { createNextYear, deleteLatestYear, ensureNextYearCreated, useYearRecords } from '../hooks/useYearData';
 import { useAuth } from '../contexts/AuthContext';
 import { runAuthorized } from '../lib/accessPolicy';
 import { parseImportFile, IMPORT_FIELDS } from '../lib/importParser';
@@ -159,12 +159,12 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
           setError(invalid.error);
           return;
         }
+        await ensureNextYearCreated(latestYear);
         await yearDataRepository.importRecords({
           year: nextYear,
           moduleKey: 'budget',
           records,
           actor,
-          yearData: { locked: false, deadlines: {} },
         });
 
         cancelImport();

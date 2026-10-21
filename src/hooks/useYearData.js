@@ -302,6 +302,25 @@ export async function createNextYear(fromYear) {
   return nextYear;
 }
 
+/**
+ * Like createNextYear, but a no-op if the next year already exists — safe to
+ * call from src/pages/Archive.jsx's "匯入新年度預算書" flow regardless of
+ * whether the admin already clicked "建立下一年度" first. Without this
+ * guard, importing a budget-book PDF directly (skipping that button) would
+ * only ever create the year doc + the budget records parsed from the PDF —
+ * leaving every other module (基本資料／圖書藏書／預算書表 etc.) blank
+ * instead of carried over from the previous year, and leaving the previous
+ * year still unlocked — because yearDataRepository.importRecords only ever
+ * touches the one module it's importing into, it was never meant to stand
+ * in for a full year rollover on its own.
+ */
+export async function ensureNextYearCreated(fromYear) {
+  const nextYear = String(Number(fromYear) + 1);
+  const nextYearSnap = await getDoc(doc(db, 'years', nextYear));
+  if (nextYearSnap.exists()) return nextYear;
+  return createNextYear(fromYear);
+}
+
 // Firestore caps a single WriteBatch at 500 operations; stay comfortably
 // under that so a year with an unusually large number of records still
 // deletes cleanly across several batches instead of erroring partway.

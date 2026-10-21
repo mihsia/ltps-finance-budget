@@ -214,6 +214,39 @@ describe('createNextYear', () => {
   });
 });
 
+describe('ensureNextYearCreated', () => {
+  it('is a no-op that just returns the next year id when it already exists', async () => {
+    const { batches } = installMountedFirestoreHarness();
+    firestoreMocks.getDoc.mockResolvedValue(moduleSnapshot({ locked: false }));
+
+    const nextYear = await hookModule.ensureNextYearCreated('115');
+
+    expect(nextYear).toBe('116');
+    expect(batches).toHaveLength(0);
+  });
+
+  it('falls back to the full createNextYear copy+lock when the next year does not exist yet', async () => {
+    const { batches } = installMountedFirestoreHarness();
+    firestoreMocks.getDoc.mockResolvedValue(moduleSnapshot(null));
+
+    const nextYear = await hookModule.ensureNextYearCreated('115');
+
+    expect(nextYear).toBe('116');
+    // Same two-batch shape as createNextYear itself (year batch + module copy batch).
+    expect(batches).toHaveLength(2);
+    const [yearBatch] = batches;
+    expect(yearBatch.set).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '116' }),
+      expect.objectContaining({ locked: false }),
+    );
+    expect(yearBatch.set).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '115' }),
+      expect.objectContaining({ locked: true }),
+      { merge: true },
+    );
+  });
+});
+
 describe('deleteLatestYear', () => {
   it('hard-deletes every record and module doc for the year, deletes the year doc, and unlocks the previous year', async () => {
     const { batches } = installMountedFirestoreHarness();

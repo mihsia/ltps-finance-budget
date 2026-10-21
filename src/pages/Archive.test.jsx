@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   actor: null,
   isAdmin: true,
   importRecords: vi.fn().mockResolvedValue([]),
+  ensureNextYearCreated: vi.fn().mockResolvedValue('116'),
   deleteLatestYear: vi.fn().mockResolvedValue(null),
   setYear: vi.fn(),
   parseImportFile: vi.fn().mockResolvedValue({
@@ -40,6 +41,7 @@ vi.mock('firebase/firestore', () => ({
 }));
 vi.mock('../hooks/useYearData', () => ({
   createNextYear: vi.fn().mockResolvedValue('116'),
+  ensureNextYearCreated: mocks.ensureNextYearCreated,
   deleteLatestYear: mocks.deleteLatestYear,
   useYearRecords: () => mocks.budgetRecords,
 }));
@@ -93,6 +95,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.actor = null;
   mocks.isAdmin = true;
+  mocks.ensureNextYearCreated.mockResolvedValue('116');
   mocks.deleteLatestYear.mockResolvedValue(null);
   mocks.budgetRecords.loading = false;
   mocks.budgetRecords.error = null;
@@ -139,16 +142,17 @@ describe('Archive budget import', () => {
     mocks.actor = { uid: 'admin-current', name: '即時管理員' };
     await act(async () => control(renderer, '確認匯入 116 年度').props.onClick());
 
+    expect(mocks.ensureNextYearCreated).toHaveBeenCalledWith('115');
     expect(mocks.importRecords).toHaveBeenCalledWith(expect.objectContaining({
       year: '116',
       moduleKey: 'budget',
       actor: { uid: 'admin-current', name: '即時管理員' },
-      yearData: { locked: false, deadlines: {} },
       records: expect.arrayContaining([
         expect.objectContaining({ recordType: 'expense', label: '國民教育計畫', amount: 50 }),
         expect.objectContaining({ recordType: 'revenue', label: '政府撥入收入（公庫撥款）', amount: 120 }),
       ]),
     }));
+    expect(mocks.importRecords.mock.calls[0][0]).not.toHaveProperty('yearData');
     expect(mocks.setYear).toHaveBeenCalledWith('116');
     act(() => renderer.unmount());
   });
