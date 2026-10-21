@@ -14,6 +14,7 @@ import { summarizeSpecialNeeds } from '../lib/specialNeedsStats';
 import { summarizeClubParticipation } from '../lib/clubStats';
 import { summarizeRevenueSources } from '../lib/revenueStats';
 import { runAuthorized } from '../lib/accessPolicy';
+import NoModuleAccess from '../components/NoModuleAccess';
 import {
   pageTitle, sectionLabel, card, statTile, btnOutline, btnPrimary, btnSecondary, chip, progressBar,
 } from '../styles';
@@ -400,7 +401,7 @@ export default function Report({ year, years }) {
   const landState = useYearRecords(year, 'land');
   const inquiryState = useYearRecords(year, 'inquiry');
   const { entries, logExport } = useExportHistory(year);
-  const { profile, user, authorizeModule } = useAuth();
+  const { profile, user, canEditModule, authorizeModule } = useAuth();
   const who = profile?.name || user?.email || '未知使用者';
 
   // Recent 3 fiscal years for the 歲出三年比較 trend and the 基金用途明細表
@@ -432,6 +433,9 @@ export default function Report({ year, years }) {
     basicState, libraryState, budgetState, languageState, languageCertState, specialNeedsState,
     awardsState, clubState, landState, inquiryState, yA, yB, yC,
   ];
+  if (!canEditModule('report')) {
+    return <NoModuleAccess title="議會報表匯出" />;
+  }
   if (sourceStates.some((state) => state.error)) {
     return <div><div style={pageTitle}>議會報表匯出</div><div style={card}>無法載入議會報表資料，請稍後再試。</div></div>;
   }

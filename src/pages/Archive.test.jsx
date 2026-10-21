@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   actor: null,
   isAdmin: true,
+  canEditArchive: true,
   importRecords: vi.fn().mockResolvedValue([]),
   ensureNextYearCreated: vi.fn().mockResolvedValue('116'),
   deleteLatestYear: vi.fn().mockResolvedValue(null),
@@ -63,6 +64,7 @@ vi.mock('../lib/importParser', () => ({
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({
     isAdmin: mocks.isAdmin,
+    canEditModule: (moduleKey) => moduleKey === 'archive' && mocks.canEditArchive,
     authorizeAdmin: () => ({ allowed: true }),
     authorizeAdminActor: () => mocks.actor
       ? { allowed: true, actor: { ...mocks.actor } }
@@ -95,6 +97,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.actor = null;
   mocks.isAdmin = true;
+  mocks.canEditArchive = true;
   mocks.ensureNextYearCreated.mockResolvedValue('116');
   mocks.deleteLatestYear.mockResolvedValue(null);
   mocks.budgetRecords.loading = false;
@@ -242,6 +245,23 @@ describe('Archive year deletion', () => {
 
     act(() => control(renderer, '取消').props.onClick());
     expect(() => renderer.root.findByProps({ placeholder: '115' })).toThrow();
+    act(() => renderer.unmount());
+  });
+});
+
+describe('Archive module permission', () => {
+  it('shows 無權限 instead of the year list for an account without the archive module (even a non-admin editor)', () => {
+    mocks.isAdmin = false;
+    mocks.canEditArchive = false;
+    let renderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <Archive years={['114', '115']} latestYear="115" setYear={mocks.setYear} setNav={vi.fn()} />,
+      );
+    });
+
+    expect(textOf(renderer.root)).toContain('無權限');
+    expect(renderer.root.findAllByType('input')).toHaveLength(0);
     act(() => renderer.unmount());
   });
 });

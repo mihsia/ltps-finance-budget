@@ -6,6 +6,7 @@ import { parseImportFile, IMPORT_FIELDS } from '../lib/importParser';
 import { validateBudgetRecord } from '../lib/recordSchemas';
 import { yearDataRepository } from '../lib/yearDataRepository';
 import { fmtNum } from '../lib/format';
+import NoModuleAccess from '../components/NoModuleAccess';
 import { pageTitle, pageSubtitle, card, btnPrimary, btnSecondary, btnDanger, badge, input } from '../styles';
 
 const EXPENSE_DEFAULTS = {
@@ -69,7 +70,7 @@ export function buildBudgetImportRecords(review, previousRecords) {
 }
 
 export default function Archive({ years, latestYear, setYear, setNav }) {
-  const { isAdmin, authorizeAdmin, authorizeAdminActor } = useAuth();
+  const { isAdmin, canEditModule, authorizeAdmin, authorizeAdminActor } = useAuth();
   const nextYear = String(Number(latestYear) + 1);
   const fileRef = useRef(null);
   const budgetState = useYearRecords(latestYear, 'budget');
@@ -176,6 +177,10 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
     if (!result.executed) setError(result.reason);
     return result;
   };
+
+  if (!canEditModule('archive')) {
+    return <NoModuleAccess title="歷史歸檔" />;
+  }
 
   return (
     <div>
