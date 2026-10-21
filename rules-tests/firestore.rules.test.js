@@ -189,11 +189,26 @@ describe('years/{year}/modules/{moduleKey}/records/{recordId}', () => {
     await assertFails(asEditor().doc(recordPath).set({ recordType: 'revenue' }, { merge: true }));
   });
 
-  it('never allows a hard delete, even for an admin', async () => {
+  it('lets an admin hard-delete a record in an unlocked year — the one deliberate exception, for src/pages/Archive.jsx\'s 刪除年度 flow', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx.firestore().doc(recordPath).set({ recordType: 'expense', amount: 100 });
     });
-    await assertFails(asAdmin().doc(recordPath).delete());
+    await assertSucceeds(asAdmin().doc(recordPath).delete());
+  });
+
+  it('denies a hard delete from a non-admin editor, even in an unlocked year', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(recordPath).set({ recordType: 'expense', amount: 100 });
+    });
+    await assertFails(asEditor().doc(recordPath).delete());
+  });
+
+  it('denies a hard delete once the year is locked, even for an admin', async () => {
+    const lockedRecordPath = 'years/114/modules/budget/records/rec-2';
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await ctx.firestore().doc(lockedRecordPath).set({ recordType: 'expense', amount: 100 });
+    });
+    await assertFails(asAdmin().doc(lockedRecordPath).delete());
   });
 
   it('still allows a soft-delete update (deletedAt/deletedBy) as an ordinary write', async () => {

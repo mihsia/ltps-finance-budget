@@ -12,6 +12,7 @@ const firestoreMocks = vi.hoisted(() => ({
   doc: vi.fn(),
   documentId: vi.fn(),
   getDoc: vi.fn(),
+  getDocs: vi.fn(),
   getDocFromServer: vi.fn(),
   limit: vi.fn(),
   onSnapshot: vi.fn(),
@@ -113,6 +114,7 @@ function installMountedFirestoreHarness() {
   firestoreMocks.writeBatch.mockImplementation(() => {
     const batch = {
       set: vi.fn(),
+      delete: vi.fn(),
       commit: vi.fn().mockResolvedValue(undefined),
     };
     batches.push(batch);
@@ -209,6 +211,68 @@ describe('createNextYear', () => {
       expect.objectContaining({ fundName: 'x' }),
     );
     expect(moduleBatch.commit).toHaveBeenCalledOnce();
+  });
+});
+
+describe('deleteLatestYear', () => {
+  it('hard-deletes every record and module doc for the year, deletes the year doc, and unlocks the previous year', async () => {
+    const { batches } = installMountedFirestoreHarness();
+
+    firestoreMocks.getDoc.mockImplementation((ref) => Promise.resolve(
+      ref.id === '115' ? moduleSnapshot({ locked: false }) : moduleSnapshot({ locked: true }),
+    ));
+    firestoreMocks.getDocs.mockImplementation((collRef) => Promise.resolve(
+      collRef.path.at(-2) === 'budget'
+        ? recordSnapshot([{ id: 'rec-1' }, { id: 'rec-2' }])
+        : recordSnapshot([]),
+    ));
+
+    const previousYear = await hookModule.deleteLatestYear('115');
+
+    expect(previousYear).toBe('114');
+    expect(batches).toHaveLength(3);
+
+    const [recordsBatch, modulesBatch, finalBatch] = batches;
+    expect(recordsBatch.delete).toHaveBeenCalledTimes(2);
+    expect(modulesBatch.delete).toHaveBeenCalledTimes(11);
+    expect(finalBatch.delete).toHaveBeenCalledWith(expect.objectContaining({ id: '115' }));
+    expect(finalBatch.set).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '114' }),
+      { locked: false },
+      { merge: true },
+    );
+    expect(finalBatch.commit).toHaveBeenCalledOnce();
+  });
+
+  it('throws when the year does not exist', async () => {
+    installMountedFirestoreHarness();
+    firestoreMocks.getDoc.mockResolvedValue(moduleSnapshot(null));
+
+    await expect(hookModule.deleteLatestYear('115')).rejects.toThrow('Year not found: 115');
+  });
+
+  it('refuses to delete a year that is already locked (archived)', async () => {
+    installMountedFirestoreHarness();
+    firestoreMocks.getDoc.mockResolvedValue(moduleSnapshot({ locked: true }));
+
+    await expect(hookModule.deleteLatestYear('115')).rejects.toThrow(
+      '只能刪除目前「編輯中」（尚未封存）的年度，已封存的年度無法刪除。',
+    );
+  });
+
+  it('leaves the year doc deleted without unlocking anything when there is no previous year', async () => {
+    const { batches } = installMountedFirestoreHarness();
+    firestoreMocks.getDoc.mockImplementation((ref) => Promise.resolve(
+      ref.id === '1' ? moduleSnapshot({ locked: false }) : moduleSnapshot(null),
+    ));
+    firestoreMocks.getDocs.mockResolvedValue(recordSnapshot([]));
+
+    const previousYear = await hookModule.deleteLatestYear('1');
+
+    expect(previousYear).toBeNull();
+    const finalBatch = batches.at(-1);
+    expect(finalBatch.set).not.toHaveBeenCalled();
+    expect(finalBatch.commit).toHaveBeenCalledOnce();
   });
 });
 

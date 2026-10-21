@@ -1,12 +1,12 @@
 import { useRef, useState } from 'react';
-import { createNextYear, useYearRecords } from '../hooks/useYearData';
+import { createNextYear, deleteLatestYear, useYearRecords } from '../hooks/useYearData';
 import { useAuth } from '../contexts/AuthContext';
 import { runAuthorized } from '../lib/accessPolicy';
 import { parseImportFile, IMPORT_FIELDS } from '../lib/importParser';
 import { validateBudgetRecord } from '../lib/recordSchemas';
 import { yearDataRepository } from '../lib/yearDataRepository';
 import { fmtNum } from '../lib/format';
-import { pageTitle, pageSubtitle, card, btnPrimary, btnSecondary, badge, input } from '../styles';
+import { pageTitle, pageSubtitle, card, btnPrimary, btnSecondary, btnDanger, badge, input } from '../styles';
 
 const EXPENSE_DEFAULTS = {
   eduPlan: { label: '國民教育計畫', formula: '辦理校務行政、教學活動及各項專案計畫等' },
@@ -79,9 +79,34 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
   const [review, setReview] = useState(null);
   const [missingCount, setMissingCount] = useState(0);
   const [error, setError] = useState(null);
+  const [deleteYear, setDeleteYear] = useState(null);
+  const [deleteConfirmText, setDeleteConfirmText] = useState('');
+  const [deleteError, setDeleteError] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const view = (y) => { setYear(y); setNav('dashboard'); };
   const exportYear = (y) => { setYear(y); setNav('report'); };
+
+  const openDeleteConfirm = (y) => { setDeleteYear(y); setDeleteConfirmText(''); setDeleteError(null); };
+  const closeDeleteConfirm = () => { setDeleteYear(null); setDeleteConfirmText(''); setDeleteError(null); };
+
+  const confirmDeleteYear = async () => {
+    if (deleteConfirmText !== deleteYear) return;
+    const result = await runAuthorized(() => authorizeAdmin(), async () => {
+      setDeleting(true);
+      setDeleteError(null);
+      try {
+        const previousYear = await deleteLatestYear(deleteYear);
+        if (previousYear) setYear(previousYear);
+        closeDeleteConfirm();
+      } catch (err) {
+        setDeleteError(err.message);
+      } finally {
+        setDeleting(false);
+      }
+    });
+    if (!result.executed) setDeleteError(result.reason);
+  };
 
   const createYear = async () => {
     return runAuthorized(() => authorizeAdmin(), async () => {
@@ -169,6 +194,9 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <span onClick={() => view(y)} style={{ font: "600 12px 'Noto Sans TC', sans-serif", color: '#1F5F52', cursor: 'pointer' }}>檢視</span>
                 <span onClick={() => exportYear(y)} style={{ font: "600 12px 'Noto Sans TC', sans-serif", color: '#1F5F52', cursor: 'pointer' }}>匯出</span>
+                {isAdmin && !archived && (
+                  <span onClick={() => openDeleteConfirm(y)} style={{ font: "600 12px 'Noto Sans TC', sans-serif", color: '#B5533E', cursor: 'pointer' }}>刪除</span>
+                )}
               </div>
             </div>
           );
@@ -247,6 +275,44 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
             )}
           </div>
         </>
+      )}
+
+      {deleteYear && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(20,20,16,.45)', zIndex: 100,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+        }}
+        >
+          <div style={{ background: '#fff', borderRadius: 12, width: 'min(440px, 100%)', padding: 22 }}>
+            <div style={{ font: "700 15px 'Noto Sans TC', sans-serif", color: '#B5533E', marginBottom: 10 }}>⚠ 刪除 {deleteYear} 年度資料</div>
+            <div style={{ font: "500 12.5px 'Noto Sans TC', sans-serif", color: '#454B45', lineHeight: 1.7, marginBottom: 14 }}>
+              此操作將把 {deleteYear} 年度所有模組資料從資料庫中<strong>永久移除</strong>，無法復原，也不是一般的「停用」。請確認這是因操作錯誤需要整年度重建，而不是要修改少數幾筆資料（若只是個別資料有誤，請直接到該模組編輯或停用即可，不需要刪除整個年度）。
+            </div>
+            <div style={{ font: "600 12.5px 'Noto Sans TC', sans-serif", color: '#454B45', marginBottom: 8 }}>
+              請輸入「{deleteYear}」以確認刪除：
+            </div>
+            <input
+              style={{ ...input, marginBottom: 14 }}
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder={deleteYear}
+            />
+            {deleteError && <div style={{ font: "500 12.5px 'Noto Sans TC', sans-serif", color: '#B5533E', marginBottom: 14 }}>⚠ {deleteError}</div>}
+            <div style={{ display: 'flex', gap: 10 }}>
+              <div
+                style={{
+                  ...btnDanger,
+                  opacity: (deleting || deleteConfirmText !== deleteYear) ? .5 : 1,
+                  pointerEvents: (deleting || deleteConfirmText !== deleteYear) ? 'none' : 'auto',
+                }}
+                onClick={confirmDeleteYear}
+              >
+                確實刪除
+              </div>
+              <div style={btnSecondary} onClick={closeDeleteConfirm}>取消</div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

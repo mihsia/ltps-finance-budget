@@ -168,6 +168,17 @@ Storage：`budget-books/{year}/{fileName}`（公開讀取，僅能透過 `upload
 - 截圖為示範資料（非校內真實資料），放在 `public/manual/`，避免手冊曝露真實學生或財務資料。畫面有重大改版時（如本次議會報表匯出的分區與圖表改版），需要重新截圖替換。
 - PDF 內嵌文字需要 `src/assets/fonts/NotoSansTC-{Regular,Bold}-subset.js` 這個中文字型子集涵蓋手冊用到的所有字；新增手冊內容後，若 PDF 出現缺字（字變成空白），執行 `python3 scripts/build-pdf-font.py` 重新產生字型子集（需要 `pip install fonttools brotli`）。
 
+## 歷史歸檔：刪除年度資料
+
+- **僅能刪除目前「編輯中」（尚未封存）的最新年度**：左方選單「歷史歸檔」頁的年度列表中，只有標示「編輯中」的那一列（也就是 `latestYear`）會顯示管理者專屬的「刪除」連結；已標示「已封存」的歷史年度沒有這個連結，無法從畫面上刪除。即使繞過畫面直接呼叫，`src/hooks/useYearData.js` 的 `deleteLatestYear(year)` 本身也會先檢查該年度 `locked === false` 才會動作，而 `firestore.rules` 的 `records/{recordId}` 刪除規則同樣要求 `yearWritable(year)`（年度未封存）——三層都擋在同一條件上，封存後的年度資料庫層級就無法再被刪除。
+- **這是真正從資料庫移除，不是本系統其他地方慣用的停用／軟刪除**：系統內其他所有刪除操作（歲入歲出、圖書、獎項等各模組紀錄的「停用」）都只是設定 `deletedAt`／`deletedBy` 欄位，原始資料仍保留在資料庫中可供查核；這個「刪除年度」功能則會把該年度所有模組的全部紀錄、各模組文件與年度文件本身，從 Firestore 中整批永久刪除，**無法復原**。設計這項例外是因為操作錄入年度資料時發生整年度性的錯誤（例如誤用「建立下一年度」複製出一個不該存在的年度），需要能整年度重建，而不是要取代掉既有模組頁面上針對個別紀錄的「停用」操作；若只是少數幾筆資料有誤，請直接到該模組編輯或停用即可。
+- **操作方式**：在該年度列點選「刪除」後會跳出確認視窗，說明此操作的影響；需要在輸入框中打出與年度數字完全相符的文字，「確實刪除」按鈕才會生效，避免手滑誤刪。刪除完成後，系統會自動解除前一個年度的封存（`locked: false`），讓使用者可以接著在那個年度繼續編輯；若刪除的已是最早的年度（沒有更早的年度可解除封存），則單純移除該年度。稽核紀錄（`auditLogs`）與匯出紀錄（`exports`）不受影響，仍永久保留，只是在該年度文件被刪除後，需另外透過 Firebase Console 存取，不再能從系統畫面瀏覽到。
+- **這項功能需要額外手動部署 `firestore.rules`**：為了讓管理者能在未封存年度執行這個刪除動作，`records/{recordId}` 的刪除規則從原本的 `allow delete: if false;` 放寬為 `allow delete: if isActiveAdmin() && yearWritable(year);`（僅此一處例外，其餘規則維持原樣）。GitHub Actions 的自動部署只會建置並部署網站本身，**不會**部署 Firestore 安全規則，因此這項規則異動需要有權限的人手動執行一次：
+  ```bash
+  firebase deploy --only firestore:rules
+  ```
+  部署前可先執行 `npm run test:rules`（本機 Firestore emulator 測試）確認規則行為符合預期。在手動部署完成前，畫面上的「刪除」功能即使點了也會因資料庫規則拒絕而失敗。
+
 ## 測試
 
 - `npm test`：快速單元測試（`src/`、`functions/`、`scripts/`），全部使用 mock，不需要任何 Firebase 服務。

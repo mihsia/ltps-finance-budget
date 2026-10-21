@@ -58,9 +58,15 @@ service cloud.firestore {
         match /records/{recordId} {
           allow read: if true;
           allow create, update: if canEditModule(moduleKey) && yearWritable(year) && recordTypeUnchanged();
-          // Soft-delete only: deletedAt/deletedBy on update above, never a
-          // real delete.
-          allow delete: if false;
+          // Soft-delete via deletedAt/deletedBy on update above is the norm
+          // everywhere in this app. This is the one deliberate exception: it
+          // lets an admin truly remove a whole mistaken year's data (see
+          // src/pages/Archive.jsx's "刪除年度" flow, the only caller) while
+          // that year is still unlocked. Once a year is locked (archived),
+          // yearWritable() is false and even an admin can no longer delete
+          // anything here — archived data stays permanently immutable,
+          // matching every other rule in this file.
+          allow delete: if isActiveAdmin() && yearWritable(year);
         }
       }
 

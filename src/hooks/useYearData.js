@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   doc, documentId, onSnapshot, collection, serverTimestamp,
-  query, where, orderBy, limit as fsLimit, getDoc, writeBatch,
+  query, where, orderBy, limit as fsLimit, getDoc, getDocs, writeBatch,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase';
 import { yearDataRepository } from '../lib/yearDataRepository';
@@ -300,6 +300,68 @@ export async function createNextYear(fromYear) {
   }
   await moduleBatch.commit();
   return nextYear;
+}
+
+// Firestore caps a single WriteBatch at 500 operations; stay comfortably
+// under that so a year with an unusually large number of records still
+// deletes cleanly across several batches instead of erroring partway.
+const DELETE_BATCH_SIZE = 450;
+
+async function deleteRefsInBatches(refs) {
+  for (let i = 0; i < refs.length; i += DELETE_BATCH_SIZE) {
+    const batch = writeBatch(db);
+    for (const ref of refs.slice(i, i + DELETE_BATCH_SIZE)) batch.delete(ref);
+    await batch.commit();
+  }
+}
+
+/**
+ * Permanently removes a whole year's data: every record in every module's
+ * records subcollection, every module's fixed-field doc, and the year doc
+ * itself — then unlocks the year before it (the one createNextYear locked
+ * when this year was created from it) so editing can continue there.
+ *
+ * Unlike every other delete in this app (soft-delete via deletedAt/
+ * deletedBy), this is a REAL, irreversible removal from Firestore. It only
+ * works at all on the current, unlocked (not yet archived) year — the
+ * `records` delete rule it relies on requires yearWritable(year), so once a
+ * year is locked, this function's own guard below refuses it outright, and
+ * even if that guard were bypassed, the security rule would still reject
+ * every delete. src/pages/Archive.jsx's "刪除年度" flow is the only caller;
+ * its own confirmation (typing the year number) is the only thing standing
+ * between a click and permanent data loss, so keep that UI's warnings
+ * intact if this function ever moves.
+ *
+ * auditLogs/exports/files subcollections are deliberately left alone (their
+ * delete rules stay `if false` even here — this never erases the audit
+ * trail); once the year doc is gone they become unreachable through the
+ * app, but still physically exist in Firestore until cleaned up by hand
+ * (e.g. via the Firebase console) if that's ever needed.
+ */
+export async function deleteLatestYear(year) {
+  const yearRef = doc(db, 'years', year);
+  const yearSnap = await getDoc(yearRef);
+  if (!yearSnap.exists()) throw new Error(`Year not found: ${year}`);
+  if (yearSnap.data()?.locked !== false) {
+    throw new Error('只能刪除目前「編輯中」（尚未封存）的年度，已封存的年度無法刪除。');
+  }
+
+  for (const key of MODULE_KEYS) {
+    const recordsSnap = await getDocs(collection(db, 'years', year, 'modules', key, 'records'));
+    await deleteRefsInBatches(recordsSnap.docs.map((d) => d.ref));
+  }
+  await deleteRefsInBatches(MODULE_KEYS.map((key) => doc(db, 'years', year, 'modules', key)));
+
+  const previousYear = String(Number(year) - 1);
+  const previousRef = doc(db, 'years', previousYear);
+  const previousSnap = await getDoc(previousRef);
+
+  const finalBatch = writeBatch(db);
+  finalBatch.delete(yearRef);
+  if (previousSnap.exists()) finalBatch.set(previousRef, { locked: false }, { merge: true });
+  await finalBatch.commit();
+
+  return previousSnap.exists() ? previousYear : null;
 }
 
 /** Live-subscribes to /years/{year}, giving lock state + per-module deadlines. */

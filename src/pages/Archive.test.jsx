@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   actor: null,
+  isAdmin: true,
   importRecords: vi.fn().mockResolvedValue([]),
+  deleteLatestYear: vi.fn().mockResolvedValue(null),
   setYear: vi.fn(),
   parseImportFile: vi.fn().mockResolvedValue({
     fields: {
@@ -38,6 +40,7 @@ vi.mock('firebase/firestore', () => ({
 }));
 vi.mock('../hooks/useYearData', () => ({
   createNextYear: vi.fn().mockResolvedValue('116'),
+  deleteLatestYear: mocks.deleteLatestYear,
   useYearRecords: () => mocks.budgetRecords,
 }));
 vi.mock('../lib/yearDataRepository', () => ({
@@ -57,7 +60,7 @@ vi.mock('../lib/importParser', () => ({
 }));
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({
-    isAdmin: true,
+    isAdmin: mocks.isAdmin,
     authorizeAdmin: () => ({ allowed: true }),
     authorizeAdminActor: () => mocks.actor
       ? { allowed: true, actor: { ...mocks.actor } }
@@ -89,6 +92,8 @@ async function prepareReview(renderer) {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.actor = null;
+  mocks.isAdmin = true;
+  mocks.deleteLatestYear.mockResolvedValue(null);
   mocks.budgetRecords.loading = false;
   mocks.budgetRecords.error = null;
 });
@@ -145,6 +150,94 @@ describe('Archive budget import', () => {
       ]),
     }));
     expect(mocks.setYear).toHaveBeenCalledWith('116');
+    act(() => renderer.unmount());
+  });
+});
+
+describe('Archive year deletion', () => {
+  it('only shows 刪除 next to the current (unlocked) year, not an archived one, and only for an admin', () => {
+    let renderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <Archive years={['114', '115']} latestYear="115" setYear={mocks.setYear} setNav={vi.fn()} />,
+      );
+    });
+    const deleteControls = () => renderer.root.findAll(
+      (node) => typeof node.props.onClick === 'function' && textOf(node).trim() === '刪除',
+    );
+    expect(deleteControls()).toHaveLength(1);
+    act(() => renderer.unmount());
+
+    mocks.isAdmin = false;
+    act(() => {
+      renderer = TestRenderer.create(
+        <Archive years={['114', '115']} latestYear="115" setYear={mocks.setYear} setNav={vi.fn()} />,
+      );
+    });
+    expect(deleteControls()).toHaveLength(0);
+    act(() => renderer.unmount());
+  });
+
+  it('ignores 確實刪除 until the typed text matches the year exactly, then deletes and moves to the returned previous year', async () => {
+    mocks.deleteLatestYear.mockResolvedValue('114');
+    let renderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <Archive years={['114', '115']} latestYear="115" setYear={mocks.setYear} setNav={vi.fn()} />,
+      );
+    });
+
+    act(() => control(renderer, '刪除').props.onClick());
+    const confirmInput = renderer.root.findByProps({ placeholder: '115' });
+
+    await act(async () => control(renderer, '確實刪除').props.onClick());
+    expect(mocks.deleteLatestYear).not.toHaveBeenCalled();
+
+    act(() => confirmInput.props.onChange({ target: { value: '11' } }));
+    await act(async () => control(renderer, '確實刪除').props.onClick());
+    expect(mocks.deleteLatestYear).not.toHaveBeenCalled();
+
+    act(() => confirmInput.props.onChange({ target: { value: '115' } }));
+    await act(async () => control(renderer, '確實刪除').props.onClick());
+
+    expect(mocks.deleteLatestYear).toHaveBeenCalledWith('115');
+    expect(mocks.setYear).toHaveBeenCalledWith('114');
+    act(() => renderer.unmount());
+  });
+
+  it('shows the thrown error message and keeps the dialog open when deletion fails', async () => {
+    mocks.deleteLatestYear.mockRejectedValue(new Error('只能刪除目前「編輯中」（尚未封存）的年度，已封存的年度無法刪除。'));
+    let renderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <Archive years={['114', '115']} latestYear="115" setYear={mocks.setYear} setNav={vi.fn()} />,
+      );
+    });
+
+    act(() => control(renderer, '刪除').props.onClick());
+    const confirmInput = renderer.root.findByProps({ placeholder: '115' });
+    act(() => confirmInput.props.onChange({ target: { value: '115' } }));
+    await act(async () => control(renderer, '確實刪除').props.onClick());
+
+    expect(textOf(renderer.root)).toContain('只能刪除目前「編輯中」（尚未封存）的年度，已封存的年度無法刪除。');
+    expect(mocks.setYear).not.toHaveBeenCalled();
+    expect(renderer.root.findByProps({ placeholder: '115' })).toBeTruthy();
+    act(() => renderer.unmount());
+  });
+
+  it('closes the dialog and clears the typed text on 取消', () => {
+    let renderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <Archive years={['114', '115']} latestYear="115" setYear={mocks.setYear} setNav={vi.fn()} />,
+      );
+    });
+
+    act(() => control(renderer, '刪除').props.onClick());
+    expect(renderer.root.findByProps({ placeholder: '115' })).toBeTruthy();
+
+    act(() => control(renderer, '取消').props.onClick());
+    expect(() => renderer.root.findByProps({ placeholder: '115' })).toThrow();
     act(() => renderer.unmount());
   });
 });

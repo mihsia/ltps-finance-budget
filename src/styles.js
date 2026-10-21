@@ -69,6 +69,18 @@ export const btnSecondary = {
   border: '1px solid transparent',
 };
 
+export const btnDanger = {
+  background: '#B5533E',
+  color: '#fff',
+  font: "700 13px 'Noto Sans TC', sans-serif",
+  padding: '10px 18px',
+  borderRadius: 8,
+  cursor: 'pointer',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 6,
+};
+
 export const btnOutline = {
   background: '#F5F3EE',
   color: '#1F5F52',
