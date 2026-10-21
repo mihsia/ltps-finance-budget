@@ -1,8 +1,46 @@
-import { useYearModule, useYearRecords } from '../hooks/useYearData';
+import { useYearMeta, useYearModule, useYearRecords } from '../hooks/useYearData';
+import { useAuth } from '../contexts/AuthContext';
 import { fmtNum } from '../lib/format';
 import { moduleCompletionPct, completionColor } from '../lib/completion';
 import { budgetRecordSummary, languageRecordSummary } from '../lib/recordDerivations';
+import { daysUntilDeadline, getDeadlineState } from '../lib/fixedFieldEditing';
+import { DEADLINE_MODULE_KEYS, moduleMetaByKey } from '../lib/nav';
 import { pageTitle, pageSubtitle, statTile, card, sectionLabel, progressBar } from '../styles';
+
+// Overdue/due-today reads as urgent (red); within a week as a heads-up
+// (amber, same hue as the per-module deadlineBanner); anything further out
+// as "still plenty of time" (green) rather than demanding attention yet.
+function deadlineStatus(days) {
+  if (days <= 0) return { text: days === 0 ? '今天截止' : `已截止 ${-days} 天`, color: '#B5533E', bg: '#FBEAE6' };
+  if (days <= 7) return { text: `剩 ${days} 天`, color: '#8A5A1E', bg: '#FDF3E7' };
+  return { text: `剩 ${days} 天`, color: '#2F8F5B', bg: '#EAF6EE' };
+}
+
+/**
+ * Every configured, valid 填報截止日 for a module the current account can
+ * edit, soonest first — so a 填報者 sees their own upcoming/overdue
+ * deadlines the moment they land on 總覽, instead of only discovering one
+ * by opening that module's own page. An admin managing deadlines for a
+ * module nobody else can see still won't see it reminded here either,
+ * since canEditModule is true for admins across every module.
+ */
+export function upcomingDeadlines(deadlines, canEditModule, now = new Date()) {
+  return DEADLINE_MODULE_KEYS
+    .filter((key) => canEditModule(key))
+    .map((key) => {
+      const state = getDeadlineState(deadlines, key);
+      if (!state.configured || state.invalid) return null;
+      return {
+        key,
+        label: moduleMetaByKey[key].label,
+        color: moduleMetaByKey[key].color,
+        dateText: deadlines[key],
+        days: daysUntilDeadline(state.deadline, now),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.days - b.days);
+}
 
 const COMPLETION_MODULES = [
   { key: 'basic', label: '學校基本資料' },
@@ -19,6 +57,10 @@ const COMPLETION_MODULES = [
 ];
 
 export default function Dashboard({ years, latestYear }) {
+  const { canEditModule } = useAuth();
+  const yearMetaState = useYearMeta(latestYear);
+  const deadlineRows = upcomingDeadlines(yearMetaState.meta?.deadlines, canEditModule);
+
   const trendYears = years.length >= 3 ? years.slice(-3) : [...Array(3 - years.length).fill(years[0]), ...years];
   const budgetA = useYearRecords(trendYears[0], 'budget');
   const budgetB = useYearRecords(trendYears[1], 'budget');
@@ -65,6 +107,33 @@ export default function Dashboard({ years, latestYear }) {
     <div>
       <div style={pageTitle}>總覽 Dashboard</div>
       <div style={pageSubtitle}>跨年度總覽，不受上方年度切換影響</div>
+
+      {deadlineRows.length > 0 && (
+        <div style={{ ...card, borderLeft: '4px solid #C9832F', marginBottom: 20, maxWidth: 640 }}>
+          <div style={{ font: "700 13.5px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 12 }}>
+            填報截止日提醒（{latestYear}年度）
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {deadlineRows.map((row) => {
+              const status = deadlineStatus(row.days);
+              return (
+                <div key={row.key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ width: 8, height: 8, borderRadius: 4, background: row.color, flex: 'none' }} />
+                    <span style={{ font: "600 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>{row.label}</span>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ font: "500 12px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>{row.dateText} 截止</span>
+                    <span style={{ font: "700 10.5px Inter, sans-serif", padding: '3px 8px', borderRadius: 5, color: status.color, background: status.bg }}>
+                      {status.text}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 16, marginBottom: 24 }}>
         <div style={statTile}>

@@ -69,6 +69,22 @@ export function deadlineExtraCheck(moduleKey, moduleTitle) {
   };
 }
 
+/**
+ * Calendar-day distance from `now` to a parsed deadline (as returned by
+ * parseLocalDeadlineEndOfDay), ignoring time-of-day on both sides — 0 means
+ * "today is the deadline", positive means days remaining, negative means
+ * days overdue. Used by the Dashboard reminder card to phrase "剩 N 天" /
+ * "已截止 N 天" without off-by-one surprises from the deadline's own
+ * 23:59:59.999 time component.
+ */
+export function daysUntilDeadline(deadline, now = new Date()) {
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const startOfDeadlineDay = new Date(deadline);
+  startOfDeadlineDay.setHours(0, 0, 0, 0);
+  return Math.round((startOfDeadlineDay.getTime() - startOfToday.getTime()) / 86400000);
+}
+
 export function exactValueEqual(left, right) {
   if (Object.is(left, right)) return true;
   if (typeof left !== typeof right || left === null || right === null) return false;

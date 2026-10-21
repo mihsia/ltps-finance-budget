@@ -7,7 +7,7 @@
 // APP_VERSION and shows a notice when they've drifted apart, so a stale
 // manual is visible rather than silently out of date. Bump this constant
 // whenever the content below is reviewed/updated for a new release.
-export const MANUAL_LAST_REVIEWED_VERSION = '1.33';
+export const MANUAL_LAST_REVIEWED_VERSION = '1.34';
 
 // A block is one of:
 //   { type: 'p', text }                              — a paragraph
@@ -64,7 +64,7 @@ export const MANUAL_SECTIONS = [
           '清單式資料（如歲入歲出、獲獎紀錄、課後社團等）：畫面顯示多筆紀錄列表，可點選「新增」新增一筆，或在列表中對既有紀錄點選「編輯」「停用」。',
         ],
       },
-      { type: 'note', text: '若該模組設有「填報截止日」，頁面上方會顯示提示；超過截止日後將無法再新增、編輯或刪除該模組資料，僅能檢視。' },
+      { type: 'note', text: '若該模組設有「填報截止日」，頁面上方會顯示提示；超過截止日後將無法再新增、編輯或刪除該模組資料，僅能檢視。登入後「總覽」頁最上方也會列出你有權限的模組中，目前設有截止日的每一項與剩餘天數，不必逐一點進各模組頁面才看得到。' },
       { type: 'note', text: '若你的帳號未被指派某模組的權限，開啟該頁面時會顯示「無權限，請洽系統管理員」，不會顯示任何資料內容。' },
       { type: 'image', src: '/manual/manual-budget.png', alt: '歲入歲出頁面，顯示年度金額列表與新增、編輯、停用按鈕', caption: '清單式資料頁面（以「歲入歲出」為例）' },
     ],

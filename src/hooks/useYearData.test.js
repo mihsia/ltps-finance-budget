@@ -20,6 +20,8 @@ const firestoreMocks = vi.hoisted(() => ({
   query: vi.fn(),
   serverTimestamp: vi.fn(),
   setDoc: vi.fn(),
+  updateDoc: vi.fn(),
+  deleteField: vi.fn(),
   writeBatch: vi.fn(),
 }));
 
@@ -345,6 +347,33 @@ describe('deleteLatestYear', () => {
     const finalBatch = batches.at(-1);
     expect(finalBatch.set).not.toHaveBeenCalled();
     expect(finalBatch.commit).toHaveBeenCalledOnce();
+  });
+});
+
+describe('updateModuleDeadline', () => {
+  it('writes the given YYYY-MM-DD date string to deadlines.<moduleKey> on the year doc', async () => {
+    installMountedFirestoreHarness();
+    firestoreMocks.updateDoc.mockResolvedValue(undefined);
+
+    await hookModule.updateModuleDeadline('116', 'basic', '2026-11-30');
+
+    expect(firestoreMocks.updateDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '116' }),
+      { 'deadlines.basic': '2026-11-30' },
+    );
+  });
+
+  it('clears the deadline with deleteField() when given a falsy date, instead of writing an empty string', async () => {
+    installMountedFirestoreHarness();
+    firestoreMocks.updateDoc.mockResolvedValue(undefined);
+    firestoreMocks.deleteField.mockReturnValue({ type: 'delete-field' });
+
+    await hookModule.updateModuleDeadline('116', 'basic', '');
+
+    expect(firestoreMocks.updateDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '116' }),
+      { 'deadlines.basic': { type: 'delete-field' } },
+    );
   });
 });
 

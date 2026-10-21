@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   doc, documentId, onSnapshot, collection, serverTimestamp,
-  query, where, orderBy, limit as fsLimit, getDoc, getDocs, writeBatch,
+  query, where, orderBy, limit as fsLimit, getDoc, getDocs, writeBatch, updateDoc, deleteField,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase';
 import { yearDataRepository } from '../lib/yearDataRepository';
@@ -428,6 +428,22 @@ export async function deleteLatestYear(year) {
   await finalBatch.commit();
 
   return previousSnap.exists() ? previousYear : null;
+}
+
+/**
+ * Sets or clears one module's 填報截止日 on /years/{year}.deadlines — a
+ * plain field update, not gated by yearWritable() the way module/record
+ * writes are (firestore.rules only requires isActiveAdmin() on the year
+ * document itself), so an admin can freely move a deadline earlier or later,
+ * or clear it back to "no deadline", at any time. `dateString` is the
+ * YYYY-MM-DD an <input type="date"> already produces; a falsy value clears
+ * the deadline instead of writing an empty string.
+ */
+export async function updateModuleDeadline(year, moduleKey, dateString) {
+  const yearRef = doc(db, 'years', year);
+  await updateDoc(yearRef, {
+    [`deadlines.${moduleKey}`]: dateString || deleteField(),
+  });
 }
 
 /** Live-subscribes to /years/{year}, giving lock state + per-module deadlines. */

@@ -1,5 +1,6 @@
 import TestRenderer, { act } from 'react-test-renderer';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEADLINE_MODULE_KEYS } from '../lib/nav';
 
 const mocks = vi.hoisted(() => ({
   actor: null,
@@ -31,6 +32,8 @@ const mocks = vi.hoisted(() => ({
     loading: false,
     error: null,
   },
+  updateModuleDeadline: vi.fn().mockResolvedValue(undefined),
+  yearMeta: { meta: { deadlines: {} }, loading: false, exists: true, error: null },
 }));
 
 vi.mock('../firebase', () => ({ db: { name: 'test-db' } }));
@@ -44,6 +47,8 @@ vi.mock('../hooks/useYearData', () => ({
   createNextYear: vi.fn().mockResolvedValue('116'),
   ensureNextYearCreated: mocks.ensureNextYearCreated,
   deleteLatestYear: mocks.deleteLatestYear,
+  updateModuleDeadline: mocks.updateModuleDeadline,
+  useYearMeta: () => mocks.yearMeta,
   useYearRecords: () => mocks.budgetRecords,
 }));
 vi.mock('../lib/yearDataRepository', () => ({
@@ -102,6 +107,8 @@ beforeEach(() => {
   mocks.deleteLatestYear.mockResolvedValue(null);
   mocks.budgetRecords.loading = false;
   mocks.budgetRecords.error = null;
+  mocks.updateModuleDeadline.mockResolvedValue(undefined);
+  mocks.yearMeta = { meta: { deadlines: {} }, loading: false, exists: true, error: null };
 });
 
 describe('Archive budget import', () => {
@@ -245,6 +252,102 @@ describe('Archive year deletion', () => {
 
     act(() => control(renderer, '取消').props.onClick());
     expect(() => renderer.root.findByProps({ placeholder: '115' })).toThrow();
+    act(() => renderer.unmount());
+  });
+});
+
+describe('Archive 填報截止日管理', () => {
+  function saveLinksInOrder(renderer) {
+    return renderer.root.findAll(
+      (node) => typeof node.props.onClick === 'function' && textOf(node).trim() === '儲存',
+    );
+  }
+
+  it('renders one date input per DEADLINE_MODULE_KEYS module, pre-filled with the committed deadline', () => {
+    mocks.yearMeta = {
+      meta: { deadlines: { basic: '2026-11-30' } }, loading: false, exists: true, error: null,
+    };
+    let renderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <Archive years={['114', '115']} latestYear="115" setYear={mocks.setYear} setNav={vi.fn()} />,
+      );
+    });
+
+    const dateInputs = renderer.root.findAllByProps({ type: 'date' });
+    expect(dateInputs).toHaveLength(DEADLINE_MODULE_KEYS.length);
+    expect(dateInputs[DEADLINE_MODULE_KEYS.indexOf('basic')].props.value).toBe('2026-11-30');
+    expect(dateInputs[DEADLINE_MODULE_KEYS.indexOf('budget')].props.value).toBe('');
+    act(() => renderer.unmount());
+  });
+
+  it('saves a typed-in date for the right module, against the current (latest) year', async () => {
+    let renderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <Archive years={['114', '115']} latestYear="115" setYear={mocks.setYear} setNav={vi.fn()} />,
+      );
+    });
+
+    const basicIndex = DEADLINE_MODULE_KEYS.indexOf('basic');
+    const dateInput = renderer.root.findAllByProps({ type: 'date' })[basicIndex];
+    act(() => dateInput.props.onChange({ target: { value: '2026-11-30' } }));
+    await act(async () => saveLinksInOrder(renderer)[basicIndex].props.onClick());
+
+    expect(mocks.updateModuleDeadline).toHaveBeenCalledWith('115', 'basic', '2026-11-30');
+    act(() => renderer.unmount());
+  });
+
+  it('clears an already-set deadline via 清除, which only appears once a deadline is committed', async () => {
+    mocks.yearMeta = {
+      meta: { deadlines: { budget: '2026-10-31' } }, loading: false, exists: true, error: null,
+    };
+    let renderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <Archive years={['114', '115']} latestYear="115" setYear={mocks.setYear} setNav={vi.fn()} />,
+      );
+    });
+
+    const clearLinks = renderer.root.findAll(
+      (node) => typeof node.props.onClick === 'function' && textOf(node).trim() === '清除',
+    );
+    expect(clearLinks).toHaveLength(1);
+    await act(async () => clearLinks[0].props.onClick());
+
+    expect(mocks.updateModuleDeadline).toHaveBeenCalledWith('115', 'budget', '');
+    act(() => renderer.unmount());
+  });
+
+  it('shows the thrown error message inline under the module row instead of silently failing', async () => {
+    mocks.updateModuleDeadline.mockRejectedValue(new Error('無法更新填報截止日，請稍後再試。'));
+    let renderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <Archive years={['114', '115']} latestYear="115" setYear={mocks.setYear} setNav={vi.fn()} />,
+      );
+    });
+
+    const basicIndex = DEADLINE_MODULE_KEYS.indexOf('basic');
+    const dateInput = renderer.root.findAllByProps({ type: 'date' })[basicIndex];
+    act(() => dateInput.props.onChange({ target: { value: '2026-11-30' } }));
+    await act(async () => saveLinksInOrder(renderer)[basicIndex].props.onClick());
+
+    expect(textOf(renderer.root)).toContain('無法更新填報截止日，請稍後再試。');
+    act(() => renderer.unmount());
+  });
+
+  it('is not shown at all to a non-admin, even one with the archive module assigned', () => {
+    mocks.isAdmin = false;
+    let renderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <Archive years={['114', '115']} latestYear="115" setYear={mocks.setYear} setNav={vi.fn()} />,
+      );
+    });
+
+    expect(renderer.root.findAllByProps({ type: 'date' })).toHaveLength(0);
+    expect(textOf(renderer.root)).not.toContain('填報截止日管理');
     act(() => renderer.unmount());
   });
 });

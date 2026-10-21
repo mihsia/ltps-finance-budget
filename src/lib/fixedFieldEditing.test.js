@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  daysUntilDeadline,
   deadlineExtraCheck,
   exactValueEqual,
   getDeadlineState,
@@ -77,6 +78,24 @@ describe('local deadline parsing', () => {
       expect(parseLocalDeadlineEndOfDay(value)).toBeNull();
     },
   );
+});
+
+describe('daysUntilDeadline', () => {
+  it('returns 0 when the deadline falls today, regardless of the current time of day', () => {
+    const deadline = parseLocalDeadlineEndOfDay('2026-08-10');
+    expect(daysUntilDeadline(deadline, new Date(2026, 7, 10, 0, 0, 1))).toBe(0);
+    expect(daysUntilDeadline(deadline, new Date(2026, 7, 10, 23, 0, 0))).toBe(0);
+  });
+
+  it('counts whole calendar days remaining for a future deadline', () => {
+    const deadline = parseLocalDeadlineEndOfDay('2026-08-13');
+    expect(daysUntilDeadline(deadline, new Date(2026, 7, 10, 9, 0, 0))).toBe(3);
+  });
+
+  it('returns a negative count for an overdue deadline', () => {
+    const deadline = parseLocalDeadlineEndOfDay('2026-08-10');
+    expect(daysUntilDeadline(deadline, new Date(2026, 7, 13, 9, 0, 0))).toBe(-3);
+  });
 });
 
 describe('deadlineExtraCheck', () => {
