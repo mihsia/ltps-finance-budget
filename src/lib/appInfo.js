@@ -109,6 +109,11 @@ export const CHANGELOG = [
     date: '2026-10-20',
     notes: '議會質詢／答詢紀錄：原本擠在同一欄的「議員/題目」拆成「議員」「題目」兩個獨立欄位，新增「答案」欄位可填寫實際答覆內容，「答詢狀態」改為下拉選單；新增獨立匯出／匯入 Excel（比照獲獎紀錄）。既有資料需執行一次搬移腳本（`npm run migrate:inquiry-fields`）才能把舊的合併欄位拆開。',
   },
+  {
+    version: '1.21',
+    date: '2026-10-21',
+    notes: '基本資料頁「兼任／支援教師人數」欄位更名為「代課老師」，議會報表 PDF／Excel 的對應欄位標籤同步更新，數字與原本相同未變動。',
+  },
 ];
 
 export const APP_VERSION = CHANGELOG[CHANGELOG.length - 1].version;

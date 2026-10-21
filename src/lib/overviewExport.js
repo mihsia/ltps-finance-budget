@@ -106,7 +106,7 @@ export function buildOverviewWorkbook(report, { selectedModules } = {}) {
       ['班級數', report.basicProfile.classes, '學生人數', report.basicProfile.students],
       ['教師員額', report.basicProfile.staff, '正式教師', report.basicProfile.regularTeachers],
       ['代理教師（懸缺代理）', report.basicProfile.substituteVacancy, '代理教師（增置員額）', report.basicProfile.substituteAdditional],
-      ['兼任教師', report.basicProfile.partTimeTeachers, '代理教師合計', report.basicProfile.substituteTotal],
+      ['代課老師', report.basicProfile.partTimeTeachers, '代理教師合計', report.basicProfile.substituteTotal],
       ['生師比', report.basicProfile.studentTeacherRatio == null ? '—' : `${report.basicProfile.studentTeacherRatio} : 1`, '代理教師占比', report.basicProfile.substituteRatio == null ? '—' : `${report.basicProfile.substituteRatio}%`],
       ['學雜費（各年級平均，元）', report.basicProfile.tuitionFeeAvg ?? '—', '午餐補助（全年度，千元）', report.basicProfile.lunchSubsidyTotal ?? '—'],
     );
@@ -234,7 +234,7 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
       body: [
         ['班級數', report.basicProfile.classes],
         ['學生人數', report.basicProfile.students],
-        ['教師員額（正式／兼任）', `${report.basicProfile.regularTeachers} / ${report.basicProfile.partTimeTeachers}`],
+        ['教師員額（正式／代課）', `${report.basicProfile.regularTeachers} / ${report.basicProfile.partTimeTeachers}`],
         ['代理教師（懸缺代理／增置員額）', `${report.basicProfile.substituteVacancy} / ${report.basicProfile.substituteAdditional}`],
         ['生師比', report.basicProfile.studentTeacherRatio == null ? '—' : `${report.basicProfile.studentTeacherRatio} : 1`],
         ['學雜費（各年級平均，元）', report.basicProfile.tuitionFeeAvg ?? '—'],
