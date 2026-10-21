@@ -147,6 +147,22 @@ export const tableRow = (cols) => ({
   color: '#1E2420',
 });
 
+// Pins a wide table's last (操作/action) cell to the right edge of its
+// horizontally-scrolling container, so the edit/停用/復原 buttons stay
+// reachable without the user having to notice and scroll a table that's
+// wider than its card — a module with many columns (e.g. 課後社團's 8)
+// otherwise scrolls those buttons out of view with no visible hint that
+// there's more to the right. The left-edge shadow is the usual "there's
+// scrollable content under me" affordance for a sticky column; `background`
+// must be passed explicitly (not inherited) since a sticky cell paints over
+// whatever scrolls underneath it.
+export const stickyActionCell = (background = '#FFFFFF') => ({
+  position: 'sticky',
+  right: 0,
+  background,
+  boxShadow: '-6px 0 6px -6px rgba(30, 36, 32, 0.15)',
+});
+
 export function badge(active, activeColor = '#1F5F52', activeBg = '#E9F1EE', inactiveColor = '#8A9089', inactiveBg = '#EDEAE2') {
   return {
     font: "700 10.5px Inter, sans-serif",

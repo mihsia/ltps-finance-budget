@@ -419,7 +419,7 @@ export default function Settings() {
       )}
 
       {isAdmin && importState?.status === 'done' && (
-        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 820, marginBottom: 18 }} className="table-scroll">
+        <div style={{ ...card, padding: 0, overflowY: 'hidden', maxWidth: 820, marginBottom: 18 }} className="table-scroll">
           <div style={{ minWidth: 640 }}>
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',

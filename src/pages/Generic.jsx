@@ -17,7 +17,7 @@ import { buildInquiryExportWorkbook, buildInquiryImportTemplateWorkbook, parseIn
 import NoModuleAccess from '../components/NoModuleAccess';
 import {
   pageTitle, pageSubtitle, card, input, btnPrimary, btnOutline, btnSecondary,
-  tableHeadRow, tableRow, lockedBanner, deadlineBanner, badge,
+  tableHeadRow, tableRow, stickyActionCell, lockedBanner, deadlineBanner, badge,
 } from '../styles';
 
 function messageStyle(message) {
@@ -312,7 +312,7 @@ export default function Generic({
       )}
 
       {importExport && importState?.status === 'done' && (
-        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 820, marginBottom: 18 }} className="table-scroll">
+        <div style={{ ...card, padding: 0, overflowY: 'hidden', maxWidth: 820, marginBottom: 18 }} className="table-scroll">
           <div style={{ minWidth: 560 }}>
             <div style={{
               display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -339,11 +339,11 @@ export default function Generic({
       )}
 
       {!includeDeleted && (
-        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 860 }} className="table-scroll">
+        <div style={{ ...card, padding: 0, overflowY: 'hidden', maxWidth: 860 }} className="table-scroll">
           <div style={{ minWidth: tableMinWidth }}>
             <div style={tableHeadRow(columns)}>
               {schema.fields.map((field) => <span key={field.key}>{field.label}</span>)}
-              {writeVisible && <span>操作</span>}
+              {writeVisible && <span style={stickyActionCell('#F5F3EE')}>操作</span>}
             </div>
             {activeRecords.length === 0 && (
               <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無資料</div>
@@ -352,7 +352,7 @@ export default function Generic({
               <div key={record.id} style={{ ...tableRow(columns), alignItems: 'center' }}>
                 {schema.fields.map((field) => <span key={field.key}>{record[field.key]}</span>)}
                 {writeVisible && (
-                  <span style={{ display: 'flex', gap: 8 }}>
+                  <span style={{ ...stickyActionCell(), display: 'flex', gap: 8, alignItems: 'center' }}>
                     <button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯</button>
                     <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? `${softDeleteVerb(record)}中…` : softDeleteVerb(record)}</button>
                   </span>
@@ -364,17 +364,19 @@ export default function Generic({
       )}
 
       {includeDeleted && (
-        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 860 }} className="table-scroll">
+        <div style={{ ...card, padding: 0, overflowY: 'hidden', maxWidth: 860 }} className="table-scroll">
           <div style={{ minWidth: tableMinWidth }}>
             <div style={tableHeadRow(columns)}>
               {schema.fields.map((field) => <span key={field.key}>{field.label}</span>)}
-              <span>操作</span>
+              <span style={stickyActionCell('#F5F3EE')}>操作</span>
             </div>
             {deletedRecords.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無已停用資料</div>}
             {deletedRecords.map((record) => (
               <div key={record.id} style={{ ...tableRow(columns), opacity: 0.72 }}>
                 {schema.fields.map((field) => <span key={field.key}>{record[field.key]}</span>)}
-                <button type="button" disabled={actions.pending} onClick={() => restore(record.id)}>{actions.isRowPending(record.id) ? '復原中…' : '復原'}</button>
+                <span style={stickyActionCell()}>
+                  <button type="button" disabled={actions.pending} onClick={() => restore(record.id)}>{actions.isRowPending(record.id) ? '復原中…' : '復原'}</button>
+                </span>
               </div>
             ))}
           </div>

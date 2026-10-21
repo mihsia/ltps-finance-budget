@@ -619,7 +619,7 @@ export default function Report({ year, years }) {
           <div style={{ ...card, marginBottom: 12 }}>
             <ExpenseTrendBars data={report.trend} />
           </div>
-          <div style={{ ...card, padding: 0, overflow: 'hidden' }} className="table-scroll">
+          <div style={{ ...card, padding: 0, overflowY: 'hidden' }} className="table-scroll">
             <div style={{ minWidth: 380 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', padding: '10px 18px', background: '#F5F3EE', font: "700 12px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
                 <span>年度</span><span>金額</span><span>較上年增減</span>
@@ -639,7 +639,7 @@ export default function Report({ year, years }) {
 
         <div>
           <div style={sectionLabel}>業務計畫別預算與決算（千元）</div>
-          <div style={{ ...card, padding: 0, overflow: 'hidden' }} className="table-scroll">
+          <div style={{ ...card, padding: 0, overflowY: 'hidden' }} className="table-scroll">
             <div style={{ minWidth: 500 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1.6fr', padding: '10px 18px', background: '#F5F3EE', font: "700 12px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
                 <span>項目</span><span>預算金額</span><span>決算金額</span><span>差異原因說明</span>
@@ -667,7 +667,7 @@ export default function Report({ year, years }) {
           <div style={{ ...card, marginBottom: 12 }}>
             <RevenueSourceDonut data={revenueSourceStats} />
           </div>
-          <div style={{ ...card, padding: 0, overflow: 'hidden' }} className="table-scroll">
+          <div style={{ ...card, padding: 0, overflowY: 'hidden' }} className="table-scroll">
             <div style={{ minWidth: 280 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', padding: '10px 18px', background: '#F5F3EE', font: "700 12px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
                 <span>來源</span><span>金額</span>
