@@ -1,4 +1,5 @@
 import { budgetVarianceSummary } from './recordDerivations';
+import { summarizeInquiryResolution } from './inquiryStats';
 
 // One accent color per optional module, taken from the sidebar nav's own
 // per-module colors (src/lib/nav.js) — reused by the Report.jsx preview and
@@ -135,7 +136,7 @@ export function buildOverviewReport({
   }));
 
   const specialNeedsTotal = specialNeedsRows.reduce((sum, row) => sum + num(row.count), 0);
-  const inquiryResolved = inquiryRows.filter((row) => (row.status || '').includes('已')).length;
+  const inquiryResolution = summarizeInquiryResolution(inquiryRows);
 
   return {
     meta: { year, who: who || '未知使用者', generatedAt },
@@ -187,7 +188,7 @@ export function buildOverviewReport({
       careSupport: careSupportRows.length ? { count: careSupportRows.length, rows: careSupportRows } : null,
       land: landRows.length ? { count: landRows.length, rows: landRows } : null,
       inquiry: inquiryRows.length
-        ? { total: inquiryRows.length, resolved: inquiryResolved, rows: inquiryRows }
+        ? { total: inquiryRows.length, resolved: inquiryResolution.resolved, rows: inquiryRows }
         : null,
     },
   };

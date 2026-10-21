@@ -148,7 +148,7 @@ function sectionStyles(fontName, color) {
  * PDF reads as the same grouped structure as the live 議會報表匯出 web page
  * instead of one undifferentiated stack of colored tables.
  */
-export async function buildOverviewPdf(report, { selectedModules } = {}) {
+export async function buildOverviewPdf(report, { selectedModules, chartImages = {} } = {}) {
   const doc = new jsPDF();
   const fontName = await registerCjkFont(doc);
 
@@ -166,6 +166,31 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
   function table(opts) {
     autoTable(doc, { startY: y, ...opts });
     y = doc.lastAutoTable.finalY;
+  }
+
+  // Embeds one PNG snapshot of a live web-page chart (captured by Report.jsx
+  // via html2canvas just before export, keyed e.g. "finance.expenseTrend" /
+  // "module.awards") directly below the table it illustrates, so the PDF
+  // reads with the same charts as the 議會報表匯出 page instead of tables
+  // alone. A no-op when that chart wasn't captured (e.g. older callers/tests
+  // that don't pass chartImages) — table spacing stays exactly as before.
+  function addChartImage(img, { maxWidth = 150, maxHeight = 78 } = {}) {
+    if (!img) return;
+    if (y > doc.internal.pageSize.getHeight() - 50) {
+      doc.addPage();
+      y = 20;
+    } else {
+      y += TABLE_GAP;
+    }
+    const ratio = img.width / img.height;
+    let w = maxWidth;
+    let h = w / ratio;
+    if (h > maxHeight) {
+      h = maxHeight;
+      w = h * ratio;
+    }
+    doc.addImage(img.dataUrl, 'PNG', 14, y, w, h);
+    y += h + TABLE_GAP;
   }
 
   function zoneHeader(label) {
@@ -206,6 +231,7 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
     body: report.trend.map((entry) => [`${entry.year}年度`, fmtNum(entry.expenseTotal), pctText(entry.deltaPct)]),
     ...sectionStyles(fontName, SECTION_COLORS.trend),
   });
+  addChartImage(chartImages['finance.expenseTrend']);
   y += TABLE_GAP;
   table({
     head: [['業務計畫別項目', '預算金額', '決算金額', '增減', '差異原因說明']],
@@ -228,6 +254,7 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
     ],
     ...sectionStyles(fontName, SECTION_COLORS.revenue),
   });
+  addChartImage(chartImages['finance.revenueSource']);
 
   if (report.basicProfile) {
     zoneHeader('校務資料');
@@ -256,16 +283,21 @@ export async function buildOverviewPdf(report, { selectedModules } = {}) {
     });
 
     // One colored detail table per module — the aggregate table above answers
-    // "how much", these answer "which ones" (item5: 要能呈現細項資料).
+    // "how much", these answer "which ones" (item5: 要能呈現細項資料) — plus
+    // that module's own chart(s) (item: 分析圖表), when captured.
     for (const key of moduleKeys) {
       const detail = moduleDetailTable(key, report.modules[key]);
-      if (!detail.length) continue;
-      y += TABLE_GAP;
-      table({
-        head: [[{ content: MODULE_LABELS[key], colSpan: detail[0].length }], detail[0]],
-        body: detail.slice(1),
-        ...sectionStyles(fontName, SECTION_COLORS[key] || SECTION_COLORS.kpi),
-      });
+      const img = chartImages[`module.${key}`];
+      if (!detail.length && !img) continue;
+      if (detail.length) {
+        y += TABLE_GAP;
+        table({
+          head: [[{ content: MODULE_LABELS[key], colSpan: detail[0].length }], detail[0]],
+          body: detail.slice(1),
+          ...sectionStyles(fontName, SECTION_COLORS[key] || SECTION_COLORS.kpi),
+        });
+      }
+      addChartImage(img);
     }
   }
 

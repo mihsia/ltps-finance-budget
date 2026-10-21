@@ -8,7 +8,8 @@ vi.mock('../firebase', () => ({
 
 const {
   AwardCategoryDonut, AwardLevelBars, SpecialNeedsDonut, ClubParticipationMeter,
-  CareSupportParticipationMeter, CareSupportCategoryDonut, ExpenseTrendBars, RevenueSourceDonut,
+  CareSupportParticipationMeter, CareSupportCategoryDonut, RankedBarChart, InquiryResolutionMeter,
+  ExpenseTrendBars, RevenueSourceDonut,
 } = await import('./Report.jsx');
 
 function textOf(node) {
@@ -218,6 +219,48 @@ describe('CareSupportCategoryDonut', () => {
     const renderer = render(<CareSupportCategoryDonut data={[{ category: '特教課照', count: 4, pct: 100 }]} />);
     expect(textOf(renderer.root)).toContain('特教課照');
     expect(renderer.root.findAllByType('circle')).toHaveLength(2);
+  });
+});
+
+describe('RankedBarChart', () => {
+  it('shows a placeholder message instead of an empty chart when there is no data', () => {
+    const renderer = render(<RankedBarChart data={[]} color="#2E7DAF" unit=" 班" emptyMessage="尚無族語開班資料可供統計。" />);
+    expect(textOf(renderer.root)).toContain('尚無族語開班資料可供統計');
+  });
+
+  it('renders one bar row per entry, scaled against the largest value, with the unit suffix applied', () => {
+    const data = [{ label: '阿美語', value: 4 }, { label: '客語', value: 1 }];
+    const renderer = render(<RankedBarChart data={data} color="#2E7DAF" unit=" 班" emptyMessage="" />);
+    const text = textOf(renderer.root);
+    expect(text).toContain('阿美語');
+    expect(text).toContain('4 班');
+    expect(text).toContain('1 班');
+
+    const fills = renderer.root.findAll((node) => node.props.style?.background === '#2E7DAF');
+    expect(fills.map((f) => f.props.style.width)).toEqual(['100%', '25%']);
+  });
+
+  it('uses a pre-formatted valueText instead of the raw value + unit when provided', () => {
+    const data = [{ label: 'A-1', value: 120000, valueText: '120,000 元' }];
+    const renderer = render(<RankedBarChart data={data} color="#8C8C3E" emptyMessage="" />);
+    expect(textOf(renderer.root)).toContain('120,000 元');
+  });
+});
+
+describe('InquiryResolutionMeter', () => {
+  it('shows a placeholder instead of a divide-by-zero meter when there are no records', () => {
+    const renderer = render(<InquiryResolutionMeter stats={{ resolved: 0, total: 0, pct: null }} />);
+    expect(textOf(renderer.root)).toContain('尚無議會質詢答詢資料可供統計');
+  });
+
+  it('renders the resolved/total counts and percentage, with the bar fill width matching pct', () => {
+    const renderer = render(<InquiryResolutionMeter stats={{ resolved: 2, total: 4, pct: 50 }} />);
+    const text = textOf(renderer.root);
+    expect(text).toContain('已答詢 2 筆／共 4 筆');
+    expect(text).toContain('50%');
+
+    const fill = renderer.root.findAll((node) => node.props.style?.background === '#B1456B')[0];
+    expect(fill.props.style.width).toBe('50%');
   });
 });
 

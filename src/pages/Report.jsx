@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase';
@@ -14,6 +14,10 @@ import { CARE_SUPPORT_CATEGORIES } from '../lib/recordSchemas';
 import { summarizeSpecialNeeds } from '../lib/specialNeedsStats';
 import { summarizeClubParticipation } from '../lib/clubStats';
 import { summarizeRevenueSources } from '../lib/revenueStats';
+import { summarizeClassesByLang } from '../lib/languageStats';
+import { summarizeParcelValues } from '../lib/landStats';
+import { summarizeInquiryResolution } from '../lib/inquiryStats';
+import { captureChartImages } from '../lib/chartCapture';
 import { runAuthorized } from '../lib/accessPolicy';
 import NoModuleAccess from '../components/NoModuleAccess';
 import {
@@ -87,6 +91,36 @@ export function AwardCategoryDonut({ data }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+/**
+ * A generic ranked horizontal bar list — {label, value}[] sorted however the
+ * caller already sorted it, scaled against the largest value, with an
+ * optional pre-formatted valueText (e.g. "120,000 元") in place of the raw
+ * number. Shared by the 圖書藏書量／族語開班／土地現值 charts below instead
+ * of three near-duplicate components, since all three are the same
+ * "compare a handful of labeled magnitudes" job — only the data, color, and
+ * wording differ (AwardLevelBars above predates this and is left as its own
+ * component rather than risking a refactor of already-shipped, tested code).
+ */
+export function RankedBarChart({ data, color, unit = '', emptyMessage }) {
+  if (data.length === 0) {
+    return <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>{emptyMessage}</div>;
+  }
+  const max = Math.max(...data.map((d) => d.value));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 420 }}>
+      {data.map((d) => (
+        <div key={d.label} style={{ display: 'grid', gridTemplateColumns: '84px 1fr auto', alignItems: 'center', gap: 10 }}>
+          <span style={{ font: "600 12px 'Noto Sans TC', sans-serif", color: '#454B45' }}>{d.label}</span>
+          <div style={{ height: 14, background: '#F0EEE6', borderRadius: 7, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: max ? `${(d.value / max) * 100}%` : '0%', background: color, borderRadius: 7 }} />
+          </div>
+          <span style={{ font: '700 12px Inter, sans-serif', color: '#1E2420', textAlign: 'right' }}>{d.valueText ?? `${d.value}${unit}`}</span>
+        </div>
+      ))}
     </div>
   );
 }
@@ -312,6 +346,33 @@ export function CareSupportParticipationMeter({ stats }) {
   );
 }
 
+/**
+ * A meter for 議會質詢答詢 的答詢完成率 — a count-against-its-own-total
+ * ratio, same job as the participation meters above, so a meter (not a
+ * 2-slice donut) is the right form here too. Unlike the participation
+ * meters, resolved can never exceed total (it's a subset count, not an
+ * independently-entered number), so there's no need to clamp the fill
+ * separately from the displayed percentage.
+ */
+export function InquiryResolutionMeter({ stats }) {
+  const { resolved, total, pct } = stats;
+  if (!total) {
+    return <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>尚無議會質詢答詢資料可供統計。</div>;
+  }
+  const { track, fill } = progressBar(pct, '#B1456B');
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+        <span style={{ font: "600 12.5px 'Noto Sans TC', sans-serif", color: '#454B45' }}>
+          已答詢 {resolved} 筆／共 {total} 筆
+        </span>
+        <span style={{ font: '800 20px Inter, sans-serif', color: '#1E2420' }}>{pct}%</span>
+      </div>
+      <div style={track}><div style={fill} /></div>
+    </div>
+  );
+}
+
 /** A horizontal bar chart of 歲出三年比較 — one teal bar per year, kept in chronological (not ranked) order since the point is the trend, not which year is biggest; amount and YoY change are read directly off each bar. */
 export function ExpenseTrendBars({ data }) {
   if (data.length === 0) {
@@ -525,6 +586,13 @@ export default function Report({ year, years }) {
   const [preview, setPreview] = useState(null);
   const selectedModules = OPTIONAL_MODULE_CHOICES.map((m) => m.key).filter((key) => selected[key]);
 
+  // DOM nodes for every chart currently on screen, keyed the same way
+  // overviewExport.js's chartImages map expects ("finance.expenseTrend",
+  // "module.awards", …) — captured into PNGs just before a PDF export so
+  // the PDF shows the same charts as this page instead of tables alone.
+  const chartRefs = useRef({});
+  const setChartRef = (key) => (el) => { chartRefs.current[key] = el; };
+
   const sourceStates = [
     basicState, libraryState, budgetState, languageState, languageCertState, specialNeedsState,
     awardsState, clubState, careSupportState, landState, inquiryState, yA, yB, yC,
@@ -553,19 +621,40 @@ export default function Report({ year, years }) {
   const careSupportParticipationStats = summarizeClubParticipation(activeCareSupport, totalStudents);
   const careSupportCategoryStats = summarizeByCategory(activeCareSupport, CARE_SUPPORT_CATEGORIES);
   const revenueSourceStats = summarizeRevenueSources(activeRevenue);
+  const libraryBookStats = libraryState.data ? [
+    { label: '一般書籍', value: Number(libraryState.data.generalBooks || 0) },
+    { label: '族語／原住民書籍', value: Number(libraryState.data.indigenousBooks || 0) },
+  ] : [];
+  const activeLanguageClasses = (languageState.data || [])
+    .filter((r) => !r.deletedAt && r.recordType === 'class');
+  const languageClassStats = summarizeClassesByLang(activeLanguageClasses)
+    .map((d) => ({ label: d.lang, value: d.classes }));
+  const activeLand = (landState.data || []).filter((r) => !r.deletedAt);
+  const landValueStats = summarizeParcelValues(activeLand)
+    .map((d) => ({ label: d.parcel, value: d.value, valueText: `${fmtNum(d.value)} 元` }));
+  const activeInquiry = (inquiryState.data || []).filter((r) => !r.deletedAt);
+  const inquiryResolutionStats = summarizeInquiryResolution(activeInquiry);
 
   // Each module's own chart(s), rendered inline inside its card in 各模組現況
   // rather than a separate 統計分析 zone — so a module's number and its
-  // chart read together, not several scrolls apart. Modules without chart
-  // logic (library/language/land/inquiry) simply have no entry here and
-  // stay plain stat + detail-table cards.
+  // chart read together, not several scrolls apart. Every optional module
+  // now has at least one chart; the right form varies by what the data's
+  // job actually is (donut for a fixed-category breakdown, meter for a
+  // count-against-its-own-total ratio, ranked bars for comparing a handful
+  // of labeled magnitudes) rather than defaulting everything to a pie.
   const MODULE_CHARTS = {
-    awards: [
-      { heading: '依類別分布', node: <AwardCategoryDonut data={awardCategoryStats} /> },
-      { heading: '依等級分布', node: <AwardLevelBars data={awardLevelStats} /> },
+    library: [
+      { heading: '館藏組成', node: <RankedBarChart data={libraryBookStats} color={OPTIONAL_MODULE_COLORS.library} unit=" 冊" emptyMessage="尚未填寫圖書藏書資料。" /> },
+    ],
+    language: [
+      { heading: '各語系開班數', node: <RankedBarChart data={languageClassStats} color={OPTIONAL_MODULE_COLORS.language} unit=" 班" emptyMessage="尚無族語開班資料可供統計。" /> },
     ],
     specialNeeds: [
       { heading: '佔全體學生比例', node: <SpecialNeedsDonut data={specialNeedsStats} totalStudents={totalStudents} /> },
+    ],
+    awards: [
+      { heading: '依類別分布', node: <AwardCategoryDonut data={awardCategoryStats} /> },
+      { heading: '依等級分布', node: <AwardLevelBars data={awardLevelStats} /> },
     ],
     club: [
       { heading: '參與比例', node: <ClubParticipationMeter stats={clubParticipationStats} /> },
@@ -573,6 +662,12 @@ export default function Report({ year, years }) {
     careSupport: [
       { heading: '依班別類別分布', node: <CareSupportCategoryDonut data={careSupportCategoryStats} /> },
       { heading: '參與比例', node: <CareSupportParticipationMeter stats={careSupportParticipationStats} /> },
+    ],
+    land: [
+      { heading: '各地號現值', node: <RankedBarChart data={landValueStats} color={OPTIONAL_MODULE_COLORS.land} emptyMessage="尚無土地現值資料可供統計。" /> },
+    ],
+    inquiry: [
+      { heading: '答詢完成率', node: <InquiryResolutionMeter stats={inquiryResolutionStats} /> },
     ],
   };
   const trend = trendStates.map(({ year: y, state }) => ({
@@ -623,7 +718,8 @@ export default function Report({ year, years }) {
     XLSX.writeFile(buildOverviewWorkbook(report, { selectedModules }), name);
   };
   const downloadPdf = async (name) => {
-    const doc = await buildOverviewPdf(report, { selectedModules });
+    const chartImages = await captureChartImages(chartRefs.current);
+    const doc = await buildOverviewPdf(report, { selectedModules, chartImages });
     doc.save(name);
   };
 
@@ -645,7 +741,8 @@ export default function Report({ year, years }) {
     setPreview(null);
   };
   const openPdfPreview = () => runAuthorized(() => authorizeModule('report'), async () => {
-    const doc = await buildOverviewPdf(report, { selectedModules });
+    const chartImages = await captureChartImages(chartRefs.current);
+    const doc = await buildOverviewPdf(report, { selectedModules, chartImages });
     setPreview({ kind: 'pdf', name: `${year}年度基金總覽報表.pdf`, url: doc.output('bloburl') });
   });
   const openExcelPreview = () => runAuthorized(() => authorizeModule('report'), async () => {
@@ -689,7 +786,7 @@ export default function Report({ year, years }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 20, alignItems: 'start', marginBottom: 8, maxWidth: 960 }}>
         <div>
           <div style={sectionLabel}>歲出三年比較（千元）</div>
-          <div style={{ ...card, marginBottom: 12 }}>
+          <div ref={setChartRef('finance.expenseTrend')} style={{ ...card, marginBottom: 12 }}>
             <ExpenseTrendBars data={report.trend} />
           </div>
           <div style={{ ...card, padding: 0, overflowY: 'hidden' }} className="table-scroll">
@@ -737,7 +834,7 @@ export default function Report({ year, years }) {
 
         <div>
           <div style={sectionLabel}>歲入來源（千元）</div>
-          <div style={{ ...card, marginBottom: 12 }}>
+          <div ref={setChartRef('finance.revenueSource')} style={{ ...card, marginBottom: 12 }}>
             <RevenueSourceDonut data={revenueSourceStats} />
           </div>
           <div style={{ ...card, padding: 0, overflowY: 'hidden' }} className="table-scroll">
@@ -787,7 +884,7 @@ export default function Report({ year, years }) {
                 <div style={{ font: '800 17px Inter, sans-serif' }}>{moduleValueText(m.key)}</div>
               </div>
               {charts && (
-                <div style={{ padding: '4px 14px 14px', borderTop: '1px solid #EEEBE2', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div ref={setChartRef(`module.${m.key}`)} style={{ padding: '4px 14px 14px', borderTop: '1px solid #EEEBE2', display: 'flex', flexDirection: 'column', gap: 16 }}>
                   {charts.map(({ heading, node }) => (
                     <div key={heading}>
                       <div style={{ ...analysisCardHeading, marginBottom: 8 }}>{heading}</div>

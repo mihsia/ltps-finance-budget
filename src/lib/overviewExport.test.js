@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
-import { describe, expect, it } from 'vitest';
+import jsPDF from 'jspdf';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildOverviewReport } from './overviewReport';
 import { buildOverviewPdf, buildOverviewWorkbook } from './overviewExport';
 
@@ -71,7 +72,17 @@ describe('buildOverviewWorkbook', () => {
   });
 });
 
+// A real (if trivial) 1x1 transparent PNG — jsPDF's addImage decodes the
+// PNG bytes for real rather than trusting the caller's width/height, so a
+// placeholder string like "data:image/png;base64,AAAA" throws "Incomplete
+// or corrupt PNG file" instead of standing in as a lightweight fixture.
+const ONE_PIXEL_PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
 describe('buildOverviewPdf', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('registers the Chinese-capable font before rendering and produces a saveable document', async () => {
     const doc = await buildOverviewPdf(sampleReport());
     expect(doc.getFontList().NotoSansTC).toEqual(['normal', 'bold']);
@@ -81,5 +92,22 @@ describe('buildOverviewPdf', () => {
     // have rows in the sample report) push the document past one page, and
     // every page should have gotten a "第 x 頁，共 y 頁" footer stamped on it.
     expect(doc.internal.getNumberOfPages()).toBeGreaterThanOrEqual(1);
+  });
+
+  it('embeds a chart image (captured by Report.jsx via html2canvas) under its matching table', async () => {
+    const addImageSpy = vi.spyOn(jsPDF.API, 'addImage');
+    const chartImages = {
+      'finance.expenseTrend': { dataUrl: ONE_PIXEL_PNG, width: 300, height: 150 },
+      'module.specialNeeds': { dataUrl: ONE_PIXEL_PNG, width: 200, height: 200 },
+    };
+    await buildOverviewPdf(sampleReport(), { chartImages });
+    expect(addImageSpy).toHaveBeenCalledTimes(2);
+    expect(addImageSpy.mock.calls.every((call) => call[0] === ONE_PIXEL_PNG)).toBe(true);
+  });
+
+  it('calls addImage not at all when no chart was captured for any key', async () => {
+    const addImageSpy = vi.spyOn(jsPDF.API, 'addImage');
+    await buildOverviewPdf(sampleReport());
+    expect(addImageSpy).not.toHaveBeenCalled();
   });
 });
