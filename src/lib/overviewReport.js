@@ -9,6 +9,7 @@ export const OPTIONAL_MODULE_COLORS = {
   specialNeeds: '#A0764A',
   awards: '#A1497E',
   club: '#4F8C3E',
+  careSupport: '#D9714E',
   land: '#8C8C3E',
   inquiry: '#B1456B',
 };
@@ -48,6 +49,14 @@ export const OPTIONAL_MODULE_DETAIL_FIELDS = {
     { key: 'endTime', label: '結束時間' },
     { key: 'venue', label: '上課場地' },
     { key: 'feePerStudent', label: '每生費用（元）' },
+  ],
+  careSupport: [
+    { key: 'category', label: '班別類別' },
+    { key: 'name', label: '班別名稱' },
+    { key: 'teacher', label: '任課老師' },
+    { key: 'participants', label: '學生人數' },
+    { key: 'schedule', label: '開課時段' },
+    { key: 'venue', label: '上課地點' },
   ],
   land: [
     { key: 'parcel', label: '地號' },
@@ -91,6 +100,7 @@ export function buildOverviewReport({
   specialNeedsRows = [],
   awardsRows = [],
   clubRows = [],
+  careSupportRows = [],
   landRows = [],
   inquiryRows = [],
   generatedAt = new Date(),
@@ -174,6 +184,7 @@ export function buildOverviewReport({
       specialNeeds: specialNeedsRows.length ? { total: specialNeedsTotal, rows: specialNeedsRows } : null,
       awards: awardsRows.length ? { count: awardsRows.length, rows: awardsRows } : null,
       club: clubRows.length ? { count: clubRows.length, rows: clubRows } : null,
+      careSupport: careSupportRows.length ? { count: careSupportRows.length, rows: careSupportRows } : null,
       land: landRows.length ? { count: landRows.length, rows: landRows } : null,
       inquiry: inquiryRows.length
         ? { total: inquiryRows.length, resolved: inquiryResolved, rows: inquiryRows }

@@ -11,6 +11,7 @@ const MODULE_LABELS = {
   specialNeeds: '特生統計（總人數）',
   awards: '獲獎紀錄（筆數）',
   club: '課後社團（社團數）',
+  careSupport: '課照學扶（班別數）',
   land: '土地現值（地號數）',
   inquiry: '議會質詢答詢（已結案／總數）',
 };
@@ -43,6 +44,7 @@ function moduleValueText(key, summary) {
   if (key === 'specialNeeds') return `${summary.total} 人`;
   if (key === 'awards') return `${summary.count} 筆`;
   if (key === 'club') return `${summary.count} 個`;
+  if (key === 'careSupport') return `${summary.count} 班`;
   if (key === 'land') return `${summary.count} 筆`;
   if (key === 'inquiry') return `${summary.resolved} / ${summary.total} 已結案`;
   return '—';

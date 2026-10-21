@@ -306,7 +306,7 @@ describe('deleteLatestYear', () => {
 
     const [recordsBatch, modulesBatch, finalBatch] = batches;
     expect(recordsBatch.delete).toHaveBeenCalledTimes(2);
-    expect(modulesBatch.delete).toHaveBeenCalledTimes(11);
+    expect(modulesBatch.delete).toHaveBeenCalledTimes(12);
     expect(finalBatch.delete).toHaveBeenCalledWith(expect.objectContaining({ id: '115' }));
     expect(finalBatch.set).toHaveBeenCalledWith(
       expect.objectContaining({ id: '114' }),

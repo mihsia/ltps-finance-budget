@@ -104,7 +104,7 @@ describe('buildOverviewReport', () => {
       specialNeedsRows: [], awardsRows: [], clubRows: [], landRows: [], inquiryRows: [],
     });
     expect(report.modules).toEqual({
-      library: null, language: null, specialNeeds: null, awards: null, club: null, land: null, inquiry: null,
+      library: null, language: null, specialNeeds: null, awards: null, club: null, careSupport: null, land: null, inquiry: null,
     });
   });
 
@@ -118,6 +118,7 @@ describe('buildOverviewReport', () => {
       specialNeedsRows: [{ category: '原住民', count: 17 }, { category: '新住民', count: 25 }],
       awardsRows: [{ category: '科學類', item: '縣科展' }],
       clubRows: [{ name: '桌球社' }, { name: '直笛隊' }],
+      careSupportRows: [{ name: '課照班A' }],
       landRows: [],
       inquiryRows: [
         { councilor: '王議員', subject: '代理教師人力', answer: '已完成', status: '已答詢' },
@@ -135,6 +136,7 @@ describe('buildOverviewReport', () => {
       count: 2,
       rows: [{ name: '桌球社' }, { name: '直笛隊' }],
     });
+    expect(report.modules.careSupport).toEqual({ count: 1, rows: [{ name: '課照班A' }] });
     expect(report.modules.land).toBeNull();
     expect(report.modules.inquiry).toEqual({
       total: 2,

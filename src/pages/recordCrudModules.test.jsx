@@ -155,7 +155,7 @@ beforeEach(() => {
   };
   hookMocks.yearDecision = { allowed: true, code: 'year-writable', reason: null };
   for (const year of ['113', '114', '115']) {
-    for (const moduleKey of ['budget', 'language', 'languageCert', 'awards', 'club', 'land', 'inquiry']) {
+    for (const moduleKey of ['budget', 'language', 'languageCert', 'awards', 'club', 'careSupport', 'land', 'inquiry']) {
       hookMocks.recordStates.set(`${year}/${moduleKey}/0`, readyRecords([]));
       hookMocks.moduleStates.set(`${year}/${moduleKey}`, {
         data: null,
@@ -416,6 +416,7 @@ describe('schema-driven Generic records CRUD page', () => {
   it.each([
     ['awards', ['類別', '獲獎項目', '賽事類型', '學生姓名', '等級', '日期']],
     ['club', ['社團名稱', '指導老師', '人數', '上課星期', '開始時間', '結束時間', '上課場地', '每生費用（元）']],
+    ['careSupport', ['班別類別', '班別名稱', '任課老師', '學生人數', '開課時段', '上課地點']],
     ['land', ['地號', '面積(㎡)', '公告現值(元/㎡)']],
     ['inquiry', ['日期', '議員', '題目', '答案', '答詢狀態']],
   ])('preserves %s column semantics from its record schema', (moduleKey, labels) => {

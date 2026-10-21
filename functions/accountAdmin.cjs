@@ -5,7 +5,7 @@
 // every signed-in user can already see and so is never an assignable scope).
 const ACCOUNT_MODULE_KEYS = [
   'basic', 'specialNeeds', 'budget', 'library', 'language', 'languageCert',
-  'awards', 'club', 'land', 'inquiry',
+  'awards', 'club', 'careSupport', 'land', 'inquiry',
   'budgetbook', 'report', 'archive', 'settings',
 ];
 
@@ -135,6 +135,7 @@ const MODULE_LABELS = {
   languageCert: '族語認證',
   awards: '獲獎紀錄',
   club: '課後社團',
+  careSupport: '課照學扶',
   land: '土地現值',
   inquiry: '質詢答詢',
   budgetbook: '預算書表',

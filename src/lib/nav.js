@@ -18,6 +18,7 @@ export const icons = {
   info: 'M8 1.5C4.4 1.5 1.5 4.4 1.5 8C1.5 11.6 4.4 14.5 8 14.5C11.6 14.5 14.5 11.6 14.5 8C14.5 4.4 11.6 1.5 8 1.5ZM8 3.3C10.6 3.3 12.7 5.4 12.7 8C12.7 10.6 10.6 12.7 8 12.7C5.4 12.7 3.3 10.6 3.3 8C3.3 5.4 5.4 3.3 8 3.3ZM7.2 5H8.8V6.4H7.2ZM7.2 7.6H8.8V11H7.2Z',
   help: 'M8 1.5C4.4 1.5 1.5 4.4 1.5 8C1.5 11.6 4.4 14.5 8 14.5C11.6 14.5 14.5 11.6 14.5 8C14.5 4.4 11.6 1.5 8 1.5ZM5.8 5.9C5.8 4.5 6.7 3.6 8.1 3.6C9.4 3.6 10.3 4.5 10.3 5.6C10.3 6.5 9.8 7 9.1 7.5C8.4 7.9 8.1 8.2 8.1 8.9V9.2H6.9V8.8C6.9 7.8 7.4 7.3 8.1 6.8C8.7 6.4 9 6.1 9 5.6C9 5 8.6 4.6 8 4.6C7.3 4.6 6.9 5.1 6.9 5.9ZM7.3 10.3H8.8V11.7H7.3Z',
   certificate: 'M8 1.5C10.2 1.5 12 3.3 12 5.5C12 7.1 11.1 8.4 9.8 9V8.9L11 14.5L8 12.6L5 14.5L6.2 8.9V9C4.9 8.4 4 7.1 4 5.5C4 3.3 5.8 1.5 8 1.5ZM8 3.3C6.8 3.3 5.8 4.3 5.8 5.5C5.8 6.7 6.8 7.7 8 7.7C9.2 7.7 10.2 6.7 10.2 5.5C10.2 4.3 9.2 3.3 8 3.3Z',
+  clock: 'M8 1.5C4.4 1.5 1.5 4.4 1.5 8C1.5 11.6 4.4 14.5 8 14.5C11.6 14.5 14.5 11.6 14.5 8C14.5 4.4 11.6 1.5 8 1.5ZM8 3.3C10.6 3.3 12.7 5.4 12.7 8C12.7 10.6 10.6 12.7 8 12.7C5.4 12.7 3.3 10.6 3.3 8C3.3 5.4 5.4 3.3 8 3.3ZM7.3 4.5H8.7V8.3L11 9.8L10.3 11L7.3 9.1Z',
 };
 
 export const navGroups = [
@@ -33,6 +34,7 @@ export const navGroups = [
     { key: 'language', label: '族語開班', icon: 'chat', color: '#2E7DAF', desc: '本土語言（閩南語、客語）及原住民族語開班班級數與學生人數' },
     { key: 'languageCert', label: '族語認證', icon: 'certificate', color: '#3E7A8C', desc: '師資與學生族語能力認證統計、通過名冊登錄' },
     { key: 'club', label: '課後社團', icon: 'star', color: '#4F8C3E', desc: '課後社團開設班別與人數' },
+    { key: 'careSupport', label: '課照學扶', icon: 'clock', color: '#D9714E', desc: '課後照顧、學習扶助等開班情況與人數' },
     { key: 'awards', label: '獲獎紀錄', icon: 'award', color: '#A1497E', desc: '記錄學生與學校各項競賽獲獎資訊' },
   ] },
   { label: '財務與行政', items: [
@@ -50,11 +52,12 @@ export const navGroups = [
   ] },
 ];
 
-export const genericModuleKeys = ['awards', 'club', 'land', 'inquiry', 'specialNeeds'];
+export const genericModuleKeys = ['awards', 'club', 'careSupport', 'land', 'inquiry', 'specialNeeds'];
 
 export const genericModuleMeta = {
   awards: { title: '獲獎紀錄', desc: '記錄學生與學校各項競賽獲獎資訊', columns: ['類別', '獲獎項目', '等級', '日期'] },
   club: { title: '課後社團', desc: '課後社團開設班別與人數', columns: ['社團名稱', '指導老師', '人數', '上課時間'] },
+  careSupport: { title: '課照學扶', desc: '課後照顧、學習扶助等開班情況與人數', columns: ['班別類別', '班別名稱', '任課老師', '學生人數', '開課時段', '上課地點'] },
   land: { title: '土地公告現值', desc: '學校用地地號與公告現值資訊', columns: ['地號', '面積(㎡)', '公告現值(元/㎡)'] },
   inquiry: { title: '議會質詢／答詢紀錄', desc: '議員質詢與學校答詢內容存檔', columns: ['日期', '議員', '題目', '答案', '答詢狀態'] },
   specialNeeds: { title: '特生統計', desc: '原住民、新住民、低收入戶、身障生、單親生等統計人數', columns: ['類別', '人數', '說明'] },

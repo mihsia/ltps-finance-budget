@@ -211,6 +211,8 @@ export const INQUIRY_STATUS_OPTIONS = ['待答詢', '已答詢'];
 // 課後社團只在平日放學後上課，週六不開課。
 export const CLUB_WEEKDAYS = ['週一', '週二', '週三', '週四', '週五'];
 
+export const CARE_SUPPORT_CATEGORIES = ['課照班', '特教課照', '學扶班'];
+
 export const genericRecordSchemas = {
   awards: {
     recordType: 'award',
@@ -288,6 +290,22 @@ export const genericRecordSchemas = {
       },
       { key: 'count', label: '人數', kind: 'integer' },
       { key: 'note', label: '說明', kind: 'text', maxLength: 200, optional: true },
+    ],
+  },
+  careSupport: {
+    recordType: 'careSupport',
+    fields: [
+      {
+        key: 'category', label: '班別類別', kind: 'select', options: CARE_SUPPORT_CATEGORIES, allowCustom: true, maxLength: 60,
+      },
+      { key: 'name', label: '班別名稱', kind: 'text', maxLength: 100 },
+      { key: 'teacher', label: '任課老師', kind: 'text', maxLength: 80 },
+      // Named to match club's 'participants' field so both modules can share
+      // src/lib/clubStats.js's summarizeClubParticipation() for their
+      // 參與比例 meter in Report.jsx.
+      { key: 'participants', label: '學生人數', kind: 'integer' },
+      { key: 'schedule', label: '開課時段', kind: 'text', maxLength: 60 },
+      { key: 'venue', label: '上課地點', kind: 'text', maxLength: 60 },
     ],
   },
 };

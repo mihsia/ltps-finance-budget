@@ -218,6 +218,29 @@ export function ClubParticipationMeter({ stats }) {
   );
 }
 
+/** Same shape as ClubParticipationMeter above, for 課照學扶 — kept as its own component (distinct wording/color) rather than a shared one parameterized by props, matching how this file already keeps each module's chart separate. */
+export function CareSupportParticipationMeter({ stats }) {
+  const { totalParticipants, totalStudents, pct } = stats;
+  if (!totalStudents) {
+    return <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>尚未填寫學生人數（基本資料），無法計算比例。</div>;
+  }
+  const { track, fill } = progressBar(Math.min(pct, 100), '#D9714E');
+  return (
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+        <span style={{ font: "600 12.5px 'Noto Sans TC', sans-serif", color: '#454B45' }}>
+          課照學扶參與人次 {totalParticipants} 人次／全校學生 {totalStudents} 人
+        </span>
+        <span style={{ font: '800 20px Inter, sans-serif', color: '#1E2420' }}>{pct}%</span>
+      </div>
+      <div style={track}><div style={fill} /></div>
+      <div style={{ font: "400 11px 'Noto Sans TC', sans-serif", color: '#8A9089', marginTop: 6 }}>
+        以課照學扶參與人次計算；同一學生參加多個班別會重複計入，並非不重複學生人數。
+      </div>
+    </div>
+  );
+}
+
 /** A horizontal bar chart of 歲出三年比較 — one teal bar per year, kept in chronological (not ranked) order since the point is the trend, not which year is biggest; amount and YoY change are read directly off each bar. */
 export function ExpenseTrendBars({ data }) {
   if (data.length === 0) {
@@ -342,6 +365,7 @@ const OPTIONAL_MODULE_CHOICES = [
   { key: 'specialNeeds', label: '特生統計' },
   { key: 'awards', label: '獲獎紀錄' },
   { key: 'club', label: '課後社團' },
+  { key: 'careSupport', label: '課照學扶' },
   { key: 'land', label: '土地現值' },
   { key: 'inquiry', label: '議會質詢答詢' },
 ];
@@ -398,6 +422,7 @@ export default function Report({ year, years }) {
   const specialNeedsState = useYearRecords(year, 'specialNeeds');
   const awardsState = useYearRecords(year, 'awards');
   const clubState = useYearRecords(year, 'club');
+  const careSupportState = useYearRecords(year, 'careSupport');
   const landState = useYearRecords(year, 'land');
   const inquiryState = useYearRecords(year, 'inquiry');
   const { entries, logExport } = useExportHistory(year);
@@ -431,7 +456,7 @@ export default function Report({ year, years }) {
 
   const sourceStates = [
     basicState, libraryState, budgetState, languageState, languageCertState, specialNeedsState,
-    awardsState, clubState, landState, inquiryState, yA, yB, yC,
+    awardsState, clubState, careSupportState, landState, inquiryState, yA, yB, yC,
   ];
   if (!canEditModule('report')) {
     return <NoModuleAccess title="議會報表匯出" />;
@@ -453,6 +478,8 @@ export default function Report({ year, years }) {
   const specialNeedsStats = summarizeSpecialNeeds(activeSpecialNeeds, totalStudents);
   const activeClubs = (clubState.data || []).filter((r) => !r.deletedAt);
   const clubParticipationStats = summarizeClubParticipation(activeClubs, totalStudents);
+  const activeCareSupport = (careSupportState.data || []).filter((r) => !r.deletedAt);
+  const careSupportParticipationStats = summarizeClubParticipation(activeCareSupport, totalStudents);
   const revenueSourceStats = summarizeRevenueSources(activeRevenue);
 
   // Each module's own chart(s), rendered inline inside its card in 各模組現況
@@ -470,6 +497,9 @@ export default function Report({ year, years }) {
     ],
     club: [
       { heading: '參與比例', node: <ClubParticipationMeter stats={clubParticipationStats} /> },
+    ],
+    careSupport: [
+      { heading: '參與比例', node: <CareSupportParticipationMeter stats={careSupportParticipationStats} /> },
     ],
   };
   const trend = trendStates.map(({ year: y, state }) => ({
@@ -494,6 +524,7 @@ export default function Report({ year, years }) {
     specialNeedsRows: activeSpecialNeeds,
     awardsRows: activeAwards,
     clubRows: activeClubs,
+    careSupportRows: activeCareSupport,
     landRows: (landState.data || []).filter((r) => !r.deletedAt),
     inquiryRows: (inquiryState.data || []).filter((r) => !r.deletedAt),
   });
@@ -506,6 +537,7 @@ export default function Report({ year, years }) {
     if (key === 'specialNeeds') return `${summary.total} 人`;
     if (key === 'awards') return `${summary.count} 筆`;
     if (key === 'club') return `${summary.count} 個`;
+    if (key === 'careSupport') return `${summary.count} 班`;
     if (key === 'land') return `${summary.count} 筆`;
     if (key === 'inquiry') return `${summary.resolved} / ${summary.total} 已結案`;
     return null;
