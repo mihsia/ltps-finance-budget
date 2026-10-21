@@ -253,7 +253,7 @@ describe('Basic fixed-field module', () => {
     await act(async () => control(mounted.renderer, '儲存草稿').props.onClick());
     await act(async () => control(mounted.renderer, '儲存並送出審核').props.onClick());
     expect(save).not.toHaveBeenCalled();
-    expect(pageText(mounted.renderer)).toContain('所有人數與班級數都必須是非負整數');
+    expect(pageText(mounted.renderer)).toContain('「教師員額（編制內）」必須是非負整數，或留白。');
 
     inputs = mounted.renderer.root.findAllByType('input');
     act(() => inputs[2].props.onChange({ target: { value: '29' } }));

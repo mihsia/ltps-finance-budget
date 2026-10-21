@@ -2,8 +2,15 @@ export function isNonNegativeIntegerString(value) {
   return typeof value === 'string' && /^\d+$/.test(value);
 }
 
+// A blank field is treated as "not yet filled in" rather than invalid — these
+// fields are all counts that default to 0 when unset (see Basic.jsx's own
+// Number(value || 0) totals), so leaving one empty must not block saving the
+// rest of the form.
 export function validateFixedFields(values, fields) {
-  const invalidFields = fields.filter((field) => !isNonNegativeIntegerString(values[field]));
+  const invalidFields = fields.filter((field) => {
+    const value = values[field];
+    return value !== '' && !isNonNegativeIntegerString(value);
+  });
   return { valid: invalidFields.length === 0, invalidFields };
 }
 

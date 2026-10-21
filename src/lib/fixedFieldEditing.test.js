@@ -28,6 +28,15 @@ describe('fixed-field validation', () => {
     expect(validateFixedFields({ classes: '1', students: '2', staff: '0' }, fields))
       .toEqual({ valid: true, invalidFields: [] });
   });
+
+  it('treats a blank field as not-yet-filled-in rather than invalid', () => {
+    const fields = ['classes', 'students', 'staff'];
+
+    expect(validateFixedFields({ classes: '1', students: '', staff: '0' }, fields))
+      .toEqual({ valid: true, invalidFields: [] });
+    expect(validateFixedFields({ classes: '1', students: '', staff: '-1' }, fields))
+      .toEqual({ valid: false, invalidFields: ['staff'] });
+  });
 });
 
 describe('local deadline parsing', () => {

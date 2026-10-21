@@ -124,7 +124,8 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
       if (!decision.allowed) return decision;
       const validation = validateFixedFields(editor.form, COUNT_FIELDS);
       if (!validation.valid) {
-        return { allowed: false, reason: '所有人數與班級數都必須是非負整數。' };
+        const names = validation.invalidFields.map((field) => FIELD_LABELS[field]).join('、');
+        return { allowed: false, reason: `「${names}」必須是非負整數，或留白。` };
       }
       const payload = { ...editor.form, status };
       const token = editor.beginSave(payload);

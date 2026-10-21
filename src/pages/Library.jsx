@@ -7,6 +7,7 @@ import NoModuleAccess from '../components/NoModuleAccess';
 import { pageTitle, pageSubtitle, card, input, label, btnPrimary, btnSecondary, lockedBanner, deadlineBanner } from '../styles';
 
 const FIELDS = ['generalBooks', 'indigenousBooks'];
+const FIELD_LABELS = { generalBooks: '一般書籍', indigenousBooks: '族語書籍' };
 const checkLibraryDeadline = deadlineExtraCheck('library', '圖書館藏書量');
 
 export default function Library({ year, hasCurrentYear = () => false }) {
@@ -59,8 +60,10 @@ export default function Library({ year, hasCurrentYear = () => false }) {
     const result = await runAuthorized(() => authorizeModuleActor('library'), async ({ actor }) => {
       const decision = checkInvocation();
       if (!decision.allowed) return decision;
-      if (!validateFixedFields(editor.form, FIELDS).valid) {
-        return { allowed: false, reason: '所有藏書數量都必須是非負整數。' };
+      const validation = validateFixedFields(editor.form, FIELDS);
+      if (!validation.valid) {
+        const names = validation.invalidFields.map((field) => FIELD_LABELS[field]).join('、');
+        return { allowed: false, reason: `「${names}」必須是非負整數，或留白。` };
       }
       const payload = { ...editor.form };
       const token = editor.beginSave(payload);
