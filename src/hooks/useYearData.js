@@ -272,16 +272,54 @@ export function useAvailableYears() {
   return years;
 }
 
+// Modules whose data lives as rows in a `records` subcollection rather than
+// as fields on the module doc itself. All of them except 'budget' are
+// carried forward into the new year as an editable starting point when the
+// year is created — 'budget' is deliberately excluded because
+// src/pages/Archive.jsx's "匯入新年度預算書" flow is the one place that
+// populates a new year's budget figures, from that year's own approved PDF
+// rather than last year's numbers.
+const RECORD_MODULE_KEYS_TO_COPY = ['language', 'languageCert', 'awards', 'club', 'land', 'inquiry', 'specialNeeds'];
+
+// Firestore caps a single WriteBatch at 500 operations; stay comfortably
+// under that so a year with an unusually large number of records across
+// every copied module still copies cleanly across several batches instead
+// of erroring partway.
+const COPY_BATCH_SIZE = 450;
+
+async function copyActiveRecords(fromYear, nextYear) {
+  const writes = [];
+  for (const key of RECORD_MODULE_KEYS_TO_COPY) {
+    const fromSnap = await getDocs(collection(db, 'years', fromYear, 'modules', key, 'records'));
+    for (const recordDoc of fromSnap.docs) {
+      const record = recordDoc.data();
+      if (record.deletedAt) continue;
+      const { createdAt: _createdAt, updatedAt: _updatedAt, deletedAt: _deletedAt, deletedBy: _deletedBy, ...rest } = record;
+      writes.push({
+        ref: doc(collection(db, 'years', nextYear, 'modules', key, 'records')),
+        data: { ...rest, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), deletedAt: null, deletedBy: null },
+      });
+    }
+  }
+  for (let i = 0; i < writes.length; i += COPY_BATCH_SIZE) {
+    const batch = writeBatch(db);
+    for (const { ref, data } of writes.slice(i, i + COPY_BATCH_SIZE)) batch.set(ref, data);
+    await batch.commit();
+  }
+}
+
 /**
  * Creates the next fiscal year by copying every module doc from `fromYear`,
- * then unlocking it.
+ * copying every active (non-soft-deleted) record from every module in
+ * RECORD_MODULE_KEYS_TO_COPY as a fresh starting point to edit, then
+ * unlocking it.
  *
- * This is two sequential batch commits, not one: the module-doc security
- * rule checks the target year is unlocked via a `get()`, and that read does
- * not see a sibling write's still-uncommitted document from the same
- * WriteBatch (unlike a transaction, a batch gives rules no such visibility).
- * The year doc is committed first so it exists by the time the module copy
- * is rule-checked.
+ * This is two-plus sequential batch commits, not one: the module-doc
+ * security rule checks the target year is unlocked via a `get()`, and that
+ * read does not see a sibling write's still-uncommitted document from the
+ * same WriteBatch (unlike a transaction, a batch gives rules no such
+ * visibility). The year doc is committed first so it exists by the time the
+ * module and record copies are rule-checked.
  */
 export async function createNextYear(fromYear) {
   const nextYear = String(Number(fromYear) + 1);
@@ -299,6 +337,9 @@ export async function createNextYear(fromYear) {
     }
   }
   await moduleBatch.commit();
+
+  await copyActiveRecords(fromYear, nextYear);
+
   return nextYear;
 }
 

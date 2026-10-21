@@ -111,6 +111,7 @@ function installMountedFirestoreHarness() {
   firestoreMocks.query.mockImplementation((source, ...constraints) => ({ source, constraints }));
   firestoreMocks.serverTimestamp.mockReturnValue({ type: 'server-timestamp' });
   firestoreMocks.getDocFromServer.mockResolvedValue(moduleSnapshot({ title: 'server value' }));
+  firestoreMocks.getDocs.mockResolvedValue({ docs: [] });
   firestoreMocks.writeBatch.mockImplementation(() => {
     const batch = {
       set: vi.fn(),
@@ -211,6 +212,44 @@ describe('createNextYear', () => {
       expect.objectContaining({ fundName: 'x' }),
     );
     expect(moduleBatch.commit).toHaveBeenCalledOnce();
+  });
+
+  it('carries forward active records from every record-based module except budget, as fresh rows with new timestamps', async () => {
+    const { batches } = installMountedFirestoreHarness();
+    firestoreMocks.getDoc.mockResolvedValue(moduleSnapshot(null));
+    firestoreMocks.getDocs.mockImplementation((collRef) => {
+      const key = collRef.path.at(-2);
+      if (key === 'language') {
+        return Promise.resolve({
+          docs: [
+            { data: () => ({ language: '閩南語', classCount: 2, deletedAt: null }) },
+            { data: () => ({ language: '太魯閣語', classCount: 1, deletedAt: { seconds: 1 } }) },
+          ],
+        });
+      }
+      if (key === 'budget') {
+        throw new Error('budget records must never be read when creating the next year');
+      }
+      return Promise.resolve({ docs: [] });
+    });
+
+    await hookModule.createNextYear('115');
+
+    expect(batches).toHaveLength(3);
+    const recordsBatch = batches[2];
+    expect(recordsBatch.set).toHaveBeenCalledOnce();
+    expect(recordsBatch.set).toHaveBeenCalledWith(
+      expect.objectContaining({ path: expect.arrayContaining(['years', '116', 'modules', 'language', 'records']) }),
+      expect.objectContaining({
+        language: '閩南語',
+        classCount: 2,
+        createdAt: { type: 'server-timestamp' },
+        updatedAt: { type: 'server-timestamp' },
+        deletedAt: null,
+        deletedBy: null,
+      }),
+    );
+    expect(recordsBatch.commit).toHaveBeenCalledOnce();
   });
 });
 
