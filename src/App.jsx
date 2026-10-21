@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { useAvailableYears } from './hooks/useYearData';
 import { useCurrentYearGuard } from './hooks/useCurrentYearGuard';
+import { resolveEffectiveYear } from './lib/yearSelection';
 import { genericModuleKeys } from './lib/nav';
 import Header from './components/Header';
 import Sidebar from './components/Sidebar';
@@ -24,11 +25,13 @@ import Changelog from './pages/Changelog';
 function Shell() {
   const years = useAvailableYears();
   const latestYear = years[years.length - 1];
-  const [year, setYear] = useState(latestYear);
+  // null means "the user hasn't explicitly picked a year this session" —
+  // see src/lib/yearSelection.js for why this isn't seeded from latestYear.
+  const [year, setYear] = useState(null);
   const [nav, setNav] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  const effectiveYear = years.includes(year) ? year : latestYear;
+  const effectiveYear = resolveEffectiveYear(years, year);
   const hasCurrentYear = useCurrentYearGuard(effectiveYear, latestYear);
 
   const pageProps = { year: effectiveYear, years, latestYear, setYear, setNav, hasCurrentYear };
