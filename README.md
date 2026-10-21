@@ -125,7 +125,7 @@ Storage：`budget-books/{year}/{fileName}`（公開讀取，僅能透過 `upload
 - **左側選單位置**：放在「教學與活動」分組、緊接在「課後社團」之後，兩者性質相近。
 - **權限控管**：與其他模組一致，透過 `canEditModule('careSupport')` 控管頁面存取，並可在「帳號管理」頁將此模組指派給特定帳號的「負責模組」。
 - **建立下一年度會複製**：比照課後社團，列入 `src/hooks/useYearData.js` 的 `RECORD_MODULE_KEYS_TO_COPY`，建立新年度時會把目前年度未停用的紀錄複製過去作為起點資料。
-- **報表統計**：議會報表匯出頁「各模組現況」新增課照學扶卡片，比照課後社團的「參與比例」計量表，顯示課照學扶參與人次佔全校學生的比例（共用 `src/lib/clubStats.js` 的 `summarizeClubParticipation`，因為兩個模組的欄位都叫 `participants`）；匯出的 PDF／Excel 也會包含此模組的筆數與細項資料。
+- **報表統計**：議會報表匯出頁「各模組現況」新增課照學扶卡片，包含兩張圖表：「依班別類別分布」圓環圖（課照班／特教課照／學扶班，比照獲獎紀錄的依類別分布，共用 `src/lib/awardStats.js` 的 `summarizeByCategory`，傳入 `CARE_SUPPORT_CATEGORIES` 作為固定類別清單）、「參與比例」計量表（比照課後社團，顯示課照學扶參與人次佔全校學生的比例，共用 `src/lib/clubStats.js` 的 `summarizeClubParticipation`，因為兩個模組的欄位都叫 `participants`）；匯出的 PDF／Excel 也會包含此模組的筆數與細項資料（圖表僅顯示於網頁版，與獲獎紀錄、特生統計的圖表一致）。
 - **總覽儀表的填報完成度**：`src/pages/Dashboard.jsx` 的「填報完成度」卡片也納入此模組。
 
 ## 修正清單式模組的紀錄表格在欄位較多時無法捲動

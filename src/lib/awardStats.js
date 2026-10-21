@@ -3,14 +3,16 @@ import { AWARD_CATEGORIES } from './recordSchemas';
 const OTHER_CATEGORY = '其他';
 
 /**
- * Counts award records by 類別, preserving AWARD_CATEGORIES' fixed order so
- * the donut chart's slice order and legend stay stable across renders. A
- * category outside that fixed list (e.g. older free-text data predating the
- * dropdown) folds into a trailing "其他" bucket rather than being dropped.
- * Categories with zero records are omitted — nothing to show a slice for.
+ * Counts records by 類別, preserving fixedCategories' order so a donut
+ * chart's slice order and legend stay stable across renders. A category
+ * outside that fixed list (e.g. a custom-entered value, or older free-text
+ * data predating a dropdown) folds into a trailing "其他" bucket rather than
+ * being dropped. Categories with zero records are omitted — nothing to show
+ * a slice for. Defaults to AWARD_CATEGORIES so existing 獲獎紀錄 callers are
+ * unaffected; other modules (e.g. 課照學扶) pass their own fixed list.
  */
-export function summarizeByCategory(records) {
-  const counts = new Map(AWARD_CATEGORIES.map((category) => [category, 0]));
+export function summarizeByCategory(records, fixedCategories = AWARD_CATEGORIES) {
+  const counts = new Map(fixedCategories.map((category) => [category, 0]));
   let other = 0;
   for (const record of records) {
     const category = record?.category;
@@ -18,7 +20,7 @@ export function summarizeByCategory(records) {
     else other += 1;
   }
   const total = records.length;
-  const entries = AWARD_CATEGORIES.map((category) => ({ category, count: counts.get(category) }));
+  const entries = fixedCategories.map((category) => ({ category, count: counts.get(category) }));
   if (other > 0) entries.push({ category: OTHER_CATEGORY, count: other });
   return entries
     .filter((entry) => entry.count > 0)

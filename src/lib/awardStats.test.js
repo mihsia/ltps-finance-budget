@@ -34,6 +34,17 @@ describe('summarizeByCategory', () => {
   it('returns an empty list for no records', () => {
     expect(summarizeByCategory([])).toEqual([]);
   });
+
+  it('accepts a different fixed category list for reuse by other modules', () => {
+    const records = [
+      { category: '學扶班' }, { category: '課照班' }, { category: '課照班' }, { category: '自訂班別' },
+    ];
+    expect(summarizeByCategory(records, ['課照班', '特教課照', '學扶班'])).toEqual([
+      { category: '課照班', count: 2, pct: 50 },
+      { category: '學扶班', count: 1, pct: 25 },
+      { category: '其他', count: 1, pct: 25 },
+    ]);
+  });
 });
 
 describe('summarizeByLevel', () => {

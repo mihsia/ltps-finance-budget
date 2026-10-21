@@ -8,7 +8,7 @@ vi.mock('../firebase', () => ({
 
 const {
   AwardCategoryDonut, AwardLevelBars, SpecialNeedsDonut, ClubParticipationMeter,
-  CareSupportParticipationMeter, ExpenseTrendBars, RevenueSourceDonut,
+  CareSupportParticipationMeter, CareSupportCategoryDonut, ExpenseTrendBars, RevenueSourceDonut,
 } = await import('./Report.jsx');
 
 function textOf(node) {
@@ -183,6 +183,41 @@ describe('CareSupportParticipationMeter', () => {
     expect(textOf(renderer.root)).toContain('120%');
     const fill = renderer.root.findAll((node) => node.props.style?.background === '#D9714E')[0];
     expect(fill.props.style.width).toBe('100%');
+  });
+});
+
+describe('CareSupportCategoryDonut', () => {
+  it('shows a placeholder message instead of an empty chart when there is no data', () => {
+    const renderer = render(<CareSupportCategoryDonut data={[]} />);
+    expect(textOf(renderer.root)).toContain('尚無課照學扶資料可供統計');
+    expect(renderer.root.findAllByType('svg')).toHaveLength(0);
+  });
+
+  it('renders one ring segment plus a direct-labeled legend row per category, with no NaN leaking into SVG attributes', () => {
+    const data = [
+      { category: '課照班', count: 3, pct: 60 },
+      { category: '學扶班', count: 1, pct: 20 },
+      { category: '其他', count: 1, pct: 20 },
+    ];
+    const renderer = render(<CareSupportCategoryDonut data={data} />);
+    const text = textOf(renderer.root);
+    expect(text).toContain('課照班');
+    expect(text).toContain('3 班');
+    expect(text).toContain('（60%）');
+    expect(text).toContain('5'); // total shown in the donut's center
+
+    const circles = renderer.root.findAllByType('circle');
+    expect(circles).toHaveLength(data.length + 1);
+    for (const circle of circles.slice(1)) {
+      expect(circle.props.strokeDasharray).not.toMatch(/NaN/);
+      expect(circle.props.strokeDashoffset).not.toBeNaN();
+    }
+  });
+
+  it('renders a single full ring without error for one category', () => {
+    const renderer = render(<CareSupportCategoryDonut data={[{ category: '特教課照', count: 4, pct: 100 }]} />);
+    expect(textOf(renderer.root)).toContain('特教課照');
+    expect(renderer.root.findAllByType('circle')).toHaveLength(2);
   });
 });
 
