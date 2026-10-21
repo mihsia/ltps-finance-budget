@@ -7,7 +7,7 @@
 // APP_VERSION and shows a notice when they've drifted apart, so a stale
 // manual is visible rather than silently out of date. Bump this constant
 // whenever the content below is reviewed/updated for a new release.
-export const MANUAL_LAST_REVIEWED_VERSION = '1.32';
+export const MANUAL_LAST_REVIEWED_VERSION = '1.33';
 
 // A block is one of:
 //   { type: 'p', text }                              — a paragraph

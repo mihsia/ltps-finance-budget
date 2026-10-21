@@ -9,16 +9,20 @@ beforeEach(() => {
   html2canvasMock.mockReset();
 });
 
-function fakeCanvas(dataUrl, width, height) {
-  return { width, height, toDataURL: () => dataUrl };
+function fakeCanvas(dataUrl) {
+  return { toDataURL: () => dataUrl };
+}
+
+function fakeChartEl(offsetWidth, offsetHeight) {
+  return { offsetWidth, offsetHeight };
 }
 
 describe('captureChartImages', () => {
-  it('captures each present DOM node into a keyed {dataUrl, width, height} entry', async () => {
-    const elA = {};
-    const elB = {};
+  it("captures each present DOM node's own CSS pixel size (not the captured canvas's scaled-up pixel size)", async () => {
+    const elA = fakeChartEl(300, 150);
+    const elB = fakeChartEl(200, 200);
     html2canvasMock.mockImplementation(async (el) => (
-      el === elA ? fakeCanvas('data:image/png;base64,AAAA', 300, 150) : fakeCanvas('data:image/png;base64,BBBB', 200, 200)
+      el === elA ? fakeCanvas('data:image/png;base64,AAAA') : fakeCanvas('data:image/png;base64,BBBB')
     ));
 
     const images = await captureChartImages({ 'finance.expenseTrend': elA, 'module.specialNeeds': elB });
@@ -30,9 +34,9 @@ describe('captureChartImages', () => {
   });
 
   it('skips a key whose element is null (chart not currently rendered) instead of failing the whole capture', async () => {
-    html2canvasMock.mockResolvedValue(fakeCanvas('data:image/png;base64,CCCC', 100, 100));
+    html2canvasMock.mockResolvedValue(fakeCanvas('data:image/png;base64,CCCC'));
 
-    const images = await captureChartImages({ 'module.awards': null, 'module.club': {} });
+    const images = await captureChartImages({ 'module.awards': null, 'module.club': fakeChartEl(100, 100) });
 
     expect(Object.keys(images)).toEqual(['module.club']);
     expect(html2canvasMock).toHaveBeenCalledOnce();

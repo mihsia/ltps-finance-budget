@@ -168,13 +168,24 @@ export async function buildOverviewPdf(report, { selectedModules, chartImages = 
     y = doc.lastAutoTable.finalY;
   }
 
+  // CSS pixels (the unit img.width/height arrive in — see chartCapture.js)
+  // are nominally 96 per inch; converting at that rate lands the image in
+  // the PDF at (up to the caps below) the same physical size it had on the
+  // web page, instead of always being stretched up to a fixed width. A
+  // small 2-bar chart therefore stays small and a wider one stays wider —
+  // the earlier fixed-150mm-wide version made every chart balloon to
+  // roughly half the page regardless of how little it had to show.
+  const PX_TO_MM = 25.4 / 96;
+
   // Embeds one PNG snapshot of a live web-page chart (captured by Report.jsx
   // via html2canvas just before export, keyed e.g. "finance.expenseTrend" /
   // "module.awards") directly below the table it illustrates, so the PDF
   // reads with the same charts as the 議會報表匯出 page instead of tables
   // alone. A no-op when that chart wasn't captured (e.g. older callers/tests
   // that don't pass chartImages) — table spacing stays exactly as before.
-  function addChartImage(img, { maxWidth = 150, maxHeight = 78 } = {}) {
+  // maxWidth/maxHeight here are only a safety ceiling (a chart captured from
+  // an unusually wide browser window), not the default display size.
+  function addChartImage(img, { maxWidth = 100, maxHeight = 55 } = {}) {
     if (!img) return;
     if (y > doc.internal.pageSize.getHeight() - 50) {
       doc.addPage();
@@ -182,12 +193,15 @@ export async function buildOverviewPdf(report, { selectedModules, chartImages = 
     } else {
       y += TABLE_GAP;
     }
-    const ratio = img.width / img.height;
-    let w = maxWidth;
-    let h = w / ratio;
+    let w = img.width * PX_TO_MM;
+    let h = img.height * PX_TO_MM;
+    if (w > maxWidth) {
+      h *= maxWidth / w;
+      w = maxWidth;
+    }
     if (h > maxHeight) {
+      w *= maxHeight / h;
       h = maxHeight;
-      w = h * ratio;
     }
     doc.addImage(img.dataUrl, 'PNG', 14, y, w, h);
     y += h + TABLE_GAP;
