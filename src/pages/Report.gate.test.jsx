@@ -26,6 +26,8 @@ vi.mock('firebase/firestore', () => ({
 vi.mock('../hooks/useYearData', () => ({
   useYearModule: () => ({ data: null, loading: false, error: null }),
   useYearRecords: () => ({ data: [], loading: false, error: null }),
+  useYearMeta: () => ({ meta: null, loading: false, exists: false, error: null }),
+  updateYearReportNarrative: vi.fn(),
 }));
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({
@@ -33,6 +35,8 @@ vi.mock('../contexts/AuthContext', () => ({
     user: { email: 'admin@example.com' },
     canEditModule: (moduleKey) => moduleKey === 'report' && mocks.canEditReport,
     authorizeModule: () => ({ allowed: true }),
+    isAdmin: true,
+    authorizeAdmin: () => ({ allowed: true }),
   }),
 }));
 

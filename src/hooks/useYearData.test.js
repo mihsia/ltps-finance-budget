@@ -377,6 +377,45 @@ describe('updateYearDeadline', () => {
   });
 });
 
+describe('updateYearReportNarrative', () => {
+  it('writes a trimmed override to the given dot-path under reportNarratives', async () => {
+    installMountedFirestoreHarness();
+    firestoreMocks.updateDoc.mockResolvedValue(undefined);
+
+    await hookModule.updateYearReportNarrative('116', 'finance', '  自訂的財務說明文字。  ');
+
+    expect(firestoreMocks.updateDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '116' }),
+      { 'reportNarratives.finance': '自訂的財務說明文字。' },
+    );
+  });
+
+  it('writes to a nested modules.<key> path for a per-module override', async () => {
+    installMountedFirestoreHarness();
+    firestoreMocks.updateDoc.mockResolvedValue(undefined);
+
+    await hookModule.updateYearReportNarrative('116', 'modules.library', '自訂的圖書說明。');
+
+    expect(firestoreMocks.updateDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '116' }),
+      { 'reportNarratives.modules.library': '自訂的圖書說明。' },
+    );
+  });
+
+  it('clears an override with deleteField() when given a blank/whitespace-only text', async () => {
+    installMountedFirestoreHarness();
+    firestoreMocks.updateDoc.mockResolvedValue(undefined);
+    firestoreMocks.deleteField.mockReturnValue({ type: 'delete-field' });
+
+    await hookModule.updateYearReportNarrative('116', 'basicProfile', '   ');
+
+    expect(firestoreMocks.updateDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ id: '116' }),
+      { 'reportNarratives.basicProfile': { type: 'delete-field' } },
+    );
+  });
+});
+
 describe('useYearRecords listener', () => {
   beforeEach(() => {
     vi.clearAllMocks();

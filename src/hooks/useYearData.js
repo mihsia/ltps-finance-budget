@@ -447,6 +447,24 @@ export async function updateYearDeadline(year, dateString) {
   });
 }
 
+/**
+ * Saves (or clears) one admin-edited override for the 議會報表匯出 PDF's
+ * auto-generated narrative text, at /years/{year}.reportNarratives.<path> —
+ * `path` is "finance", "basicProfile", or "modules.<moduleKey>" (Firestore's
+ * own dot-path update syntax, so this writes exactly one leaf field without
+ * touching any sibling override). An empty/blank text clears that leaf back
+ * to deleteField(), so the PDF falls back to src/lib/overviewNarrative.js's
+ * system-generated draft for that section again instead of storing an empty
+ * string override forever.
+ */
+export async function updateYearReportNarrative(year, path, text) {
+  const yearRef = doc(db, 'years', year);
+  const trimmed = (text || '').trim();
+  await updateDoc(yearRef, {
+    [`reportNarratives.${path}`]: trimmed ? trimmed : deleteField(),
+  });
+}
+
 /** Live-subscribes to /years/{year}, giving lock state + per-module deadlines. */
 export function useYearMeta(year) {
   const scopeGeneration = useMemo(() => ({ year }), [year]);

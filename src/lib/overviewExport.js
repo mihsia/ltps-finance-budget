@@ -4,6 +4,7 @@ import autoTable from 'jspdf-autotable';
 import { registerCjkFont } from './pdfFont';
 import { fmtNum, fmtDate } from './format';
 import { OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_COLORS } from './overviewReport';
+import { buildDefaultNarratives } from './overviewNarrative';
 
 const MODULE_LABELS = {
   library: '圖書藏書量',
@@ -143,12 +144,21 @@ function sectionStyles(fontName, color) {
  * Renders the same report into a jsPDF document with the embedded Chinese
  * font, colored per-section headers, and page-number footers.
  *
- * Tables are grouped under bold zone headers (財務概況／校務資料／各模組現況)
- * with a bigger gap before a new zone than between tables inside one, so the
- * PDF reads as the same grouped structure as the live 議會報表匯出 web page
- * instead of one undifferentiated stack of colored tables.
+ * The body leads with a short narrative paragraph per zone/module (an
+ * admin-editable draft — see src/lib/overviewNarrative.js — auto-generated
+ * here when the caller doesn't pass one) plus that zone's chart(s), so a
+ * reader gets "what happened" before any table. Every itemized/逐筆 detail
+ * table (業務計畫別明細、歲入明細、each module's row-by-row table) is held
+ * back and rendered together, in the same order, on a fresh page headed
+ * "附件：詳細資料" at the very end — nothing is dropped, it's just grouped
+ * as a reference appendix instead of interrupting the narrative flow.
+ * 校務資料 is the one exception: its table was already short (≤7 rows), so
+ * it's simply replaced by its narrative paragraph in the body, with no
+ * appendix counterpart.
  */
-export async function buildOverviewPdf(report, { selectedModules, chartImages = {} } = {}) {
+export async function buildOverviewPdf(report, {
+  selectedModules, chartImages = {}, narratives = buildDefaultNarratives(report),
+} = {}) {
   const doc = new jsPDF();
   const fontName = await registerCjkFont(doc);
 
@@ -224,6 +234,48 @@ export async function buildOverviewPdf(report, { selectedModules, chartImages = 
     y += 8;
   }
 
+  // One paragraph of admin-editable draft text per zone/module (see
+  // src/lib/overviewNarrative.js), wrapped to the page width and placed
+  // before that section's chart(s), so a reader gets "what happened" before
+  // any number. A no-op for an empty string (e.g. 校務資料 when no basic
+  // profile was ever filled in).
+  function addNarrative(text) {
+    if (!text) return;
+    const maxWidth = doc.internal.pageSize.getWidth() - 28;
+    const lines = doc.splitTextToSize(text, maxWidth);
+    const lineHeight = 5.2;
+    const blockHeight = lines.length * lineHeight;
+    if (y + blockHeight > doc.internal.pageSize.getHeight() - 20) {
+      doc.addPage();
+      y = 20;
+    } else {
+      y += TABLE_GAP;
+    }
+    doc.setFont(fontName, 'normal');
+    doc.setFontSize(10.5);
+    doc.setTextColor(69, 75, 69);
+    doc.text(lines, 14, y);
+    y += blockHeight + TABLE_GAP;
+  }
+
+  // A smaller, module-colored heading for one module's own subsection inside
+  // 各模組現況 — lighter than zoneHeader (no rule, no big gap before it)
+  // since it introduces one module among several in the same zone, not a
+  // new zone.
+  function moduleSubHeading(label, color) {
+    if (y > doc.internal.pageSize.getHeight() - 30) {
+      doc.addPage();
+      y = 20;
+    } else {
+      y += TABLE_GAP + 2;
+    }
+    doc.setFont(fontName, 'bold');
+    doc.setFontSize(11.5);
+    doc.setTextColor(...hexToRgb(color));
+    doc.text(label, 14, y);
+    y += 6;
+  }
+
   // 關鍵指標 — the headline summary, shown before any zone (matches the web
   // page's top KPI row, which also sits outside the zone grouping).
   table({
@@ -240,12 +292,46 @@ export async function buildOverviewPdf(report, { selectedModules, chartImages = 
   });
 
   zoneHeader('財務概況');
+  addNarrative(narratives.finance);
+  addChartImage(chartImages['finance.expenseTrend']);
+  addChartImage(chartImages['finance.revenueSource']);
+
+  if (report.basicProfile) {
+    zoneHeader('校務資料');
+    addNarrative(narratives.basicProfile);
+  }
+
+  const moduleKeys = (selectedModules || Object.keys(MODULE_LABELS)).filter((key) => report.modules[key]);
+  if (moduleKeys.length) {
+    zoneHeader('各模組現況');
+    for (const key of moduleKeys) {
+      moduleSubHeading(MODULE_LABELS[key], SECTION_COLORS[key] || SECTION_COLORS.kpi);
+      addNarrative(narratives.modules[key]);
+      addChartImage(chartImages[`module.${key}`]);
+    }
+  }
+
+  // --- 附件：詳細資料 --- every itemized/逐筆 table the body above used to
+  // show inline now lives here instead, on its own fresh page: 財務概況's
+  // three tables (unconditional, same as the zone above), then one colored
+  // detail table per module that actually has itemized rows, in the same
+  // order as the body's module loop just walked.
+  doc.addPage();
+  y = 20;
+  doc.setFont(fontName, 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(30, 36, 32);
+  doc.text('附件：詳細資料', 14, y);
+  doc.setDrawColor(227, 223, 211);
+  doc.setLineWidth(0.6);
+  doc.line(14, y + 3, doc.internal.pageSize.getWidth() - 14, y + 3);
+  y += 12;
+
   table({
     head: [['歲出三年比較', '金額（千元）', '較上年增減']],
     body: report.trend.map((entry) => [`${entry.year}年度`, fmtNum(entry.expenseTotal), pctText(entry.deltaPct)]),
     ...sectionStyles(fontName, SECTION_COLORS.trend),
   });
-  addChartImage(chartImages['finance.expenseTrend']);
   y += TABLE_GAP;
   table({
     head: [['業務計畫別項目', '預算金額', '決算金額', '增減', '差異原因說明']],
@@ -268,51 +354,16 @@ export async function buildOverviewPdf(report, { selectedModules, chartImages = 
     ],
     ...sectionStyles(fontName, SECTION_COLORS.revenue),
   });
-  addChartImage(chartImages['finance.revenueSource']);
 
-  if (report.basicProfile) {
-    zoneHeader('校務資料');
+  for (const key of moduleKeys) {
+    const detail = moduleDetailTable(key, report.modules[key]);
+    if (!detail.length) continue;
+    y += TABLE_GAP;
     table({
-      head: [['學校基本資料', '數值']],
-      body: [
-        ['班級數', report.basicProfile.classes],
-        ['學生人數', report.basicProfile.students],
-        ['教師員額（正式／代課）', `${report.basicProfile.regularTeachers} / ${report.basicProfile.partTimeTeachers}`],
-        ['代理教師（懸缺代理／增置員額）', `${report.basicProfile.substituteVacancy} / ${report.basicProfile.substituteAdditional}`],
-        ['生師比', report.basicProfile.studentTeacherRatio == null ? '—' : `${report.basicProfile.studentTeacherRatio} : 1`],
-        ['學雜費（各年級平均，元）', report.basicProfile.tuitionFeeAvg ?? '—'],
-        ['午餐補助（全年度，千元）', report.basicProfile.lunchSubsidyTotal ?? '—'],
-      ],
-      ...sectionStyles(fontName, SECTION_COLORS.basicProfile),
+      head: [[{ content: MODULE_LABELS[key], colSpan: detail[0].length }], detail[0]],
+      body: detail.slice(1),
+      ...sectionStyles(fontName, SECTION_COLORS[key] || SECTION_COLORS.kpi),
     });
-  }
-
-  const moduleKeys = (selectedModules || Object.keys(MODULE_LABELS)).filter((key) => report.modules[key]);
-  if (moduleKeys.length) {
-    zoneHeader('各模組現況');
-    table({
-      head: [['各模組現況', '現況']],
-      body: moduleKeys.map((key) => [MODULE_LABELS[key], moduleValueText(key, report.modules[key])]),
-      ...sectionStyles(fontName, SECTION_COLORS.kpi),
-    });
-
-    // One colored detail table per module — the aggregate table above answers
-    // "how much", these answer "which ones" (item5: 要能呈現細項資料) — plus
-    // that module's own chart(s) (item: 分析圖表), when captured.
-    for (const key of moduleKeys) {
-      const detail = moduleDetailTable(key, report.modules[key]);
-      const img = chartImages[`module.${key}`];
-      if (!detail.length && !img) continue;
-      if (detail.length) {
-        y += TABLE_GAP;
-        table({
-          head: [[{ content: MODULE_LABELS[key], colSpan: detail[0].length }], detail[0]],
-          body: detail.slice(1),
-          ...sectionStyles(fontName, SECTION_COLORS[key] || SECTION_COLORS.kpi),
-        });
-      }
-      addChartImage(img);
-    }
   }
 
   const totalPages = doc.internal.getNumberOfPages();

@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { buildOverviewReport } from './overviewReport';
+import { buildDefaultNarratives } from './overviewNarrative';
 import { buildOverviewPdf, buildOverviewWorkbook } from './overviewExport';
 
 function sampleReport() {
@@ -88,10 +89,10 @@ describe('buildOverviewPdf', () => {
     expect(doc.getFontList().NotoSansTC).toEqual(['normal', 'bold']);
     expect(doc).toHaveProperty('save');
     expect(typeof doc.output('datauristring')).toBe('string');
-    // Itemized per-module detail tables (library/language/specialNeeds all
-    // have rows in the sample report) push the document past one page, and
-    // every page should have gotten a "第 x 頁，共 y 頁" footer stamped on it.
-    expect(doc.internal.getNumberOfPages()).toBeGreaterThanOrEqual(1);
+    // The body (narrative + charts) and the "附件：詳細資料" appendix (every
+    // itemized table) always land on at least two separate pages, and every
+    // page should have gotten a "第 x 頁，共 y 頁" footer stamped on it.
+    expect(doc.internal.getNumberOfPages()).toBeGreaterThanOrEqual(2);
   });
 
   it('embeds a chart image (captured by Report.jsx via html2canvas) under its matching table', async () => {
@@ -109,5 +110,67 @@ describe('buildOverviewPdf', () => {
     const addImageSpy = vi.spyOn(jsPDF.API, 'addImage');
     await buildOverviewPdf(sampleReport());
     expect(addImageSpy).not.toHaveBeenCalled();
+  });
+});
+
+// jsPDF's own text()/addPage() are bound directly onto each instance inside
+// its constructor (not copied from a shared, spy-able prototype object the
+// way jspdf-autotable-style plugins are), so they can't be intercepted with
+// vi.spyOn the way addImage is below. splitTextToSize, like addImage, IS a
+// plugin attached to the shared jsPDF.API object and copied onto each new
+// instance at construction time — spying on it (before the `new jsPDF()`
+// buildOverviewPdf does internally) captures addNarrative()'s exact input
+// text, pre-wrapping, which is the only point in this pipeline a narrative
+// string exists as a single untouched value.
+function narrativeCalls(splitSpy) {
+  return splitSpy.mock.calls.map(([text]) => text);
+}
+
+describe('buildOverviewPdf narrative + appendix structure', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('auto-generates narrative text (via overviewNarrative.js) when the caller passes none', async () => {
+    const report = sampleReport();
+    const splitSpy = vi.spyOn(jsPDF.API, 'splitTextToSize');
+    await buildOverviewPdf(report);
+    const defaults = buildDefaultNarratives(report);
+    const drawn = narrativeCalls(splitSpy);
+    expect(drawn).toContain(defaults.finance);
+    expect(drawn).toContain(defaults.basicProfile);
+    expect(drawn).toContain(defaults.modules.library);
+  });
+
+  it('draws a caller-supplied narrative override instead of the auto-generated draft', async () => {
+    const report = sampleReport();
+    const splitSpy = vi.spyOn(jsPDF.API, 'splitTextToSize');
+    const narratives = {
+      ...buildDefaultNarratives(report),
+      finance: '管理者自訂的財務概況說明文字。',
+    };
+    await buildOverviewPdf(report, { narratives });
+    const drawn = narrativeCalls(splitSpy);
+    expect(drawn).toContain('管理者自訂的財務概況說明文字。');
+    expect(drawn).not.toContain(buildDefaultNarratives(report).finance);
+  });
+
+  it('still draws the 財務概況 narrative off zero rows, with no basicProfile/module narratives to draw alongside it', async () => {
+    const report = buildOverviewReport({ year: '115', expenseRows: [], revenueRows: [] });
+    const splitSpy = vi.spyOn(jsPDF.API, 'splitTextToSize');
+    await buildOverviewPdf(report);
+    const defaults = buildDefaultNarratives(report);
+    expect(defaults.basicProfile).toBe('');
+    expect(Object.keys(defaults.modules)).toHaveLength(0);
+    expect(narrativeCalls(splitSpy)).toContain(defaults.finance);
+  });
+
+  it('always adds a trailing 附件 page, even for a report with nothing to itemize', async () => {
+    const report = buildOverviewReport({ year: '115', expenseRows: [], revenueRows: [] });
+    const doc = await buildOverviewPdf(report);
+    // No basicProfile/module zones and a short KPI table easily fit on page
+    // 1, so page 2 existing at all demonstrates the appendix page break
+    // fires unconditionally rather than only when content overflows.
+    expect(doc.internal.getNumberOfPages()).toBe(2);
   });
 });

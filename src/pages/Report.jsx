@@ -2,12 +2,14 @@ import { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import { collection, addDoc, serverTimestamp, query, orderBy, limit, onSnapshot } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase';
-import { useYearModule, useYearRecords } from '../hooks/useYearData';
+import { useYearMeta, useYearModule, useYearRecords, updateYearReportNarrative } from '../hooks/useYearData';
 import { useAuth } from '../contexts/AuthContext';
 import { fmtNum, fmtDate } from '../lib/format';
 import { buildCouncilWorkbook } from '../lib/councilExport';
 import { buildOverviewPdf, buildOverviewWorkbook } from '../lib/overviewExport';
 import { buildOverviewReport, OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_COLORS } from '../lib/overviewReport';
+import { buildDefaultNarratives, resolveNarratives } from '../lib/overviewNarrative';
+import NarrativeField from '../components/NarrativeField';
 import { languageRecordSummary } from '../lib/recordDerivations';
 import { summarizeByCategory, summarizeByLevel } from '../lib/awardStats';
 import { CARE_SUPPORT_CATEGORIES } from '../lib/recordSchemas';
@@ -558,8 +560,9 @@ export default function Report({ year, years }) {
   const landState = useYearRecords(year, 'land');
   const inquiryState = useYearRecords(year, 'inquiry');
   const { entries, logExport } = useExportHistory(year);
-  const { profile, user, canEditModule, authorizeModule } = useAuth();
+  const { profile, user, canEditModule, authorizeModule, isAdmin, authorizeAdmin } = useAuth();
   const who = profile?.name || user?.email || '未知使用者';
+  const yearMetaState = useYearMeta(year);
 
   // Recent 3 fiscal years for the 歲出三年比較 trend and the 基金用途明細表
   // comparison columns (fixed number of hook calls, same pattern as
@@ -595,7 +598,7 @@ export default function Report({ year, years }) {
 
   const sourceStates = [
     basicState, libraryState, budgetState, languageState, languageCertState, specialNeedsState,
-    awardsState, clubState, careSupportState, landState, inquiryState, yA, yB, yC,
+    awardsState, clubState, careSupportState, landState, inquiryState, yA, yB, yC, yearMetaState,
   ];
   if (!canEditModule('report')) {
     return <NoModuleAccess title="議會報表匯出" />;
@@ -697,6 +700,22 @@ export default function Report({ year, years }) {
     inquiryRows: (inquiryState.data || []).filter((r) => !r.deletedAt),
   });
 
+  // The PDF's narrative paragraphs: a system-generated draft per zone/module
+  // (buildDefaultNarratives — always derived fresh from today's report data)
+  // with any admin-saved override (/years/{year}.reportNarratives) merged on
+  // top, section by section. Both the live preview below and the exported
+  // PDF (openPdfPreview/downloadPdf) read from this same resolved object.
+  const savedNarratives = yearMetaState.meta?.reportNarratives || null;
+  const defaultNarratives = buildDefaultNarratives(report);
+  const narratives = resolveNarratives(defaultNarratives, savedNarratives);
+
+  const saveNarrative = async (path, text) => {
+    const result = await runAuthorized(() => authorizeAdmin(), async () => {
+      await updateYearReportNarrative(year, path, text);
+    });
+    return result.executed ? { ok: true } : { ok: false, reason: result.reason };
+  };
+
   const moduleValueText = (key) => {
     const summary = report.modules[key];
     if (!summary) return null;
@@ -719,7 +738,7 @@ export default function Report({ year, years }) {
   };
   const downloadPdf = async (name) => {
     const chartImages = await captureChartImages(chartRefs.current);
-    const doc = await buildOverviewPdf(report, { selectedModules, chartImages });
+    const doc = await buildOverviewPdf(report, { selectedModules, chartImages, narratives });
     doc.save(name);
   };
 
@@ -742,7 +761,7 @@ export default function Report({ year, years }) {
   };
   const openPdfPreview = () => runAuthorized(() => authorizeModule('report'), async () => {
     const chartImages = await captureChartImages(chartRefs.current);
-    const doc = await buildOverviewPdf(report, { selectedModules, chartImages });
+    const doc = await buildOverviewPdf(report, { selectedModules, chartImages, narratives });
     setPreview({ kind: 'pdf', name: `${year}年度基金總覽報表.pdf`, url: doc.output('bloburl') });
   });
   const openExcelPreview = () => runAuthorized(() => authorizeModule('report'), async () => {
@@ -910,6 +929,45 @@ export default function Report({ year, years }) {
             </div>
           );
         })}
+      </div>
+
+      <ZoneHeader>文字說明（PDF 用）</ZoneHeader>
+      <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#6B726A', marginBottom: 16, maxWidth: 780 }}>
+        以下文字由系統依目前資料自動產生草稿，會寫入 PDF 匯出內容的對應段落；{isAdmin ? '可點選「編輯」調整用詞，調整後會保留到你下次按「還原為自動產生」為止。' : '僅管理者可編輯，你目前看到的是系統自動產生的草稿或管理者已儲存的文字。'}
+      </div>
+      <div style={{ maxWidth: 780, marginBottom: 24 }}>
+        <NarrativeField
+          label="財務概況"
+          color="#B5533E"
+          defaultText={defaultNarratives.finance}
+          savedText={savedNarratives?.finance ?? null}
+          canEdit={isAdmin}
+          onSave={(text) => saveNarrative('finance', text)}
+          onReset={() => saveNarrative('finance', '')}
+        />
+        {report.basicProfile && (
+          <NarrativeField
+            label="校務資料"
+            color="#C9832F"
+            defaultText={defaultNarratives.basicProfile}
+            savedText={savedNarratives?.basicProfile ?? null}
+            canEdit={isAdmin}
+            onSave={(text) => saveNarrative('basicProfile', text)}
+            onReset={() => saveNarrative('basicProfile', '')}
+          />
+        )}
+        {OPTIONAL_MODULE_CHOICES.filter((m) => selected[m.key] && report.modules[m.key]).map((m) => (
+          <NarrativeField
+            key={m.key}
+            label={m.label}
+            color={OPTIONAL_MODULE_COLORS[m.key] || '#1F5F52'}
+            defaultText={defaultNarratives.modules[m.key]}
+            savedText={savedNarratives?.modules?.[m.key] ?? null}
+            canEdit={isAdmin}
+            onSave={(text) => saveNarrative(`modules.${m.key}`, text)}
+            onReset={() => saveNarrative(`modules.${m.key}`, '')}
+          />
+        ))}
       </div>
 
       <ZoneHeader>匯出與紀錄</ZoneHeader>
