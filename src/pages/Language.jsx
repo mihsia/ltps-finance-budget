@@ -10,6 +10,7 @@ import {
   validateLanguageRecord,
 } from '../lib/recordSchemas';
 import { deadlineExtraCheck, getDeadlineState } from '../lib/fixedFieldEditing';
+import { softDeleteVerb } from '../lib/recordLifecycle';
 import NoModuleAccess from '../components/NoModuleAccess';
 import {
   pageTitle, pageSubtitle, card, input, btnPrimary, btnOutline, btnSecondary,
@@ -163,7 +164,7 @@ export default function Language({
           {classRows.map((record) => (
             <div key={record.id} style={{ ...tableRow(writeVisible ? '2fr 1fr 1fr 150px' : '2fr 1fr 1fr'), alignItems: 'center' }}>
               <span>{record.lang}</span><span>{record.classes}</span><span>{record.students}</span>
-              {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯開班資料</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用開班資料中…' : '停用開班資料'}</button></span>}
+              {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯開班資料</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? `${softDeleteVerb(record)}開班資料中…` : `${softDeleteVerb(record)}開班資料`}</button></span>}
             </div>
           ))}
         </div>

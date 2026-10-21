@@ -9,6 +9,7 @@ import {
   validateBudgetRecord,
 } from '../lib/recordSchemas';
 import { deadlineExtraCheck, getDeadlineState } from '../lib/fixedFieldEditing';
+import { softDeleteVerb } from '../lib/recordLifecycle';
 import { fmtNum } from '../lib/format';
 import NoModuleAccess from '../components/NoModuleAccess';
 import {
@@ -240,7 +241,7 @@ export default function Budget({
               {writeVisible && (
                 <span style={{ display: 'flex', gap: 8 }}>
                   <button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯</button>
-                  <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用中…' : '停用'}</button>
+                  <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? `${softDeleteVerb(record)}中…` : softDeleteVerb(record)}</button>
                 </span>
               )}
             </div>

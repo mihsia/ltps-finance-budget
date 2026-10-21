@@ -11,6 +11,7 @@ import {
   validateGenericRecord,
 } from '../lib/recordSchemas';
 import { deadlineExtraCheck, getDeadlineState } from '../lib/fixedFieldEditing';
+import { softDeleteVerb } from '../lib/recordLifecycle';
 import { buildAwardExportWorkbook, buildAwardImportTemplateWorkbook, parseAwardImportFile } from '../lib/awardImport';
 import { buildInquiryExportWorkbook, buildInquiryImportTemplateWorkbook, parseInquiryImportFile } from '../lib/inquiryImport';
 import NoModuleAccess from '../components/NoModuleAccess';
@@ -353,7 +354,7 @@ export default function Generic({
                 {writeVisible && (
                   <span style={{ display: 'flex', gap: 8 }}>
                     <button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯</button>
-                    <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用中…' : '停用'}</button>
+                    <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? `${softDeleteVerb(record)}中…` : softDeleteVerb(record)}</button>
                   </span>
                 )}
               </div>

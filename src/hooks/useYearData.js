@@ -295,9 +295,15 @@ async function copyActiveRecords(fromYear, nextYear) {
       const record = recordDoc.data();
       if (record.deletedAt) continue;
       const { createdAt: _createdAt, updatedAt: _updatedAt, deletedAt: _deletedAt, deletedBy: _deletedBy, ...rest } = record;
+      // One timestamp reused for both fields (not two separate
+      // serverTimestamp() calls) so copied-but-never-edited rows reliably
+      // read as createdAt === updatedAt — src/lib/recordLifecycle.js's
+      // isUntouchedSinceCreation() depends on that to label their
+      // soft-delete button "移除" instead of "停用".
+      const timestamp = serverTimestamp();
       writes.push({
         ref: doc(collection(db, 'years', nextYear, 'modules', key, 'records')),
-        data: { ...rest, createdAt: serverTimestamp(), updatedAt: serverTimestamp(), deletedAt: null, deletedBy: null },
+        data: { ...rest, createdAt: timestamp, updatedAt: timestamp, deletedAt: null, deletedBy: null },
       });
     }
   }

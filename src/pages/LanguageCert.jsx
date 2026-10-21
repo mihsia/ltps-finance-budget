@@ -12,6 +12,7 @@ import {
   validateLanguageRecord,
 } from '../lib/recordSchemas';
 import { deadlineExtraCheck, getDeadlineState } from '../lib/fixedFieldEditing';
+import { softDeleteVerb } from '../lib/recordLifecycle';
 import NoModuleAccess from '../components/NoModuleAccess';
 import {
   pageTitle, pageSubtitle, card, input, btnPrimary, btnOutline, btnSecondary,
@@ -193,7 +194,7 @@ export default function LanguageCert({
             {teacherRows.map((record) => (
               <div key={record.id} style={{ ...tableRow(writeVisible ? '1.3fr 1.3fr 1fr 160px' : '1.3fr 1.3fr 1fr'), alignItems: 'center' }}>
                 <span>{record.lang}</span><span>{record.name}</span><span>{record.certified}</span>
-                {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯師資名冊</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用師資名冊中…' : '停用師資名冊'}</button></span>}
+                {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯師資名冊</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? `${softDeleteVerb(record)}師資名冊中…` : `${softDeleteVerb(record)}師資名冊`}</button></span>}
               </div>
             ))}
           </div>
@@ -205,7 +206,7 @@ export default function LanguageCert({
             {rosterRows.map((record) => (
               <div key={record.id} style={{ ...tableRow(writeVisible ? '1.2fr 1fr 1fr 140px' : '1.2fr 1fr 1fr'), alignItems: 'center' }}>
                 <span>{record.lang}</span><span>{record.level}</span><span>{record.name}</span>
-                {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯名冊</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? '停用名冊中…' : '停用名冊'}</button></span>}
+                {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯名冊</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? `${softDeleteVerb(record)}名冊中…` : `${softDeleteVerb(record)}名冊`}</button></span>}
               </div>
             ))}
           </div>
