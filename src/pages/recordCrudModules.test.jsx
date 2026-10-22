@@ -426,15 +426,20 @@ describe('schema-driven Generic records CRUD page', () => {
     mounted.unmount();
   });
 
-  it('shows 校地總面積 summed across active 地號 rows (in 公頃), excluding stopped-use rows', () => {
+  it('shows a fixed 校地總面積 (in 公頃) that does not depend on the 地號 rows below it', () => {
     installRecords('land', readyRecords([
       { id: 'a', recordType: 'land', parcel: 'A-1', area: 5000, announcedValue: 500, deletedAt: null },
       { id: 'b', recordType: 'land', parcel: 'B-2', area: 15000, announcedValue: 400, deletedAt: null },
     ]));
     const mounted = mount(Generic, { moduleKey: 'land' });
     expect(pageText(mounted.renderer)).toContain('校地總面積');
-    expect(pageText(mounted.renderer)).toContain('2 公頃');
+    expect(pageText(mounted.renderer)).toContain('2.14 公頃');
     mounted.unmount();
+
+    installRecords('land', readyRecords([]));
+    const mountedEmpty = mount(Generic, { moduleKey: 'land' });
+    expect(pageText(mountedEmpty.renderer)).toContain('2.14 公頃');
+    mountedEmpty.unmount();
   });
 
   it('does not show a 校地總面積 summary for a module without one (e.g. 獲獎紀錄)', () => {

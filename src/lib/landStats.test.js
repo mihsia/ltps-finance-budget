@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { summarizeParcelValues, totalAreaHectares } from './landStats';
+import { summarizeParcelValues, SCHOOL_LAND_TOTAL_AREA_SQM, SCHOOL_LAND_TOTAL_AREA_HECTARES } from './landStats';
 
 describe('summarizeParcelValues', () => {
   it('multiplies 面積 by 公告現值 per parcel, sorted by value descending', () => {
@@ -23,24 +23,9 @@ describe('summarizeParcelValues', () => {
   });
 });
 
-describe('totalAreaHectares', () => {
-  it('sums 面積(㎡) across every parcel and converts to 公頃 (÷10,000)', () => {
-    const records = [
-      { parcel: 'A-1', area: 5000, announcedValue: 500 },
-      { parcel: 'B-2', area: 15000, announcedValue: 400 },
-    ];
-    expect(totalAreaHectares(records)).toBe(2);
-  });
-
-  it('rounds to 2 decimal places', () => {
-    expect(totalAreaHectares([{ parcel: 'A-1', area: 12345 }])).toBe(1.23);
-  });
-
-  it('treats a blank/missing 面積 as 0', () => {
-    expect(totalAreaHectares([{ parcel: 'A-1', area: '' }, { parcel: 'B-2' }])).toBe(0);
-  });
-
-  it('returns 0 for no records', () => {
-    expect(totalAreaHectares([])).toBe(0);
+describe('SCHOOL_LAND_TOTAL_AREA_HECTARES', () => {
+  it('is the official 21,390㎡ converted to 公頃 (÷10,000), rounded to 2 decimal places', () => {
+    expect(SCHOOL_LAND_TOTAL_AREA_SQM).toBe(21390);
+    expect(SCHOOL_LAND_TOTAL_AREA_HECTARES).toBe(2.14);
   });
 });

@@ -165,6 +165,22 @@ describe('buildOverviewPdf narrative + appendix structure', () => {
     expect(narrativeCalls(splitSpy)).toContain(defaults.finance);
   });
 
+  it('draws 分組審查摘要 before the 關鍵指標 table, and skips the zone entirely when there is nothing to summarize', async () => {
+    const report = sampleReport();
+    const splitSpy = vi.spyOn(jsPDF.API, 'splitTextToSize');
+    await buildOverviewPdf(report);
+    const defaults = buildDefaultNarratives(report);
+    expect(defaults.reviewSummary).not.toBe('');
+    const drawn = narrativeCalls(splitSpy);
+    expect(drawn[0]).toBe(defaults.reviewSummary);
+
+    const emptyReport = buildOverviewReport({ year: '115', expenseRows: [], revenueRows: [] });
+    const splitSpyEmpty = vi.spyOn(jsPDF.API, 'splitTextToSize');
+    await buildOverviewPdf(emptyReport);
+    expect(buildDefaultNarratives(emptyReport).reviewSummary).toBe('');
+    expect(narrativeCalls(splitSpyEmpty)).not.toContain('');
+  });
+
   it('always adds a trailing 附件 page, even for a report with nothing to itemize', async () => {
     const report = buildOverviewReport({ year: '115', expenseRows: [], revenueRows: [] });
     const doc = await buildOverviewPdf(report);

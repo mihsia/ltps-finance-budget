@@ -432,15 +432,16 @@ describe('Library fixed-field module', () => {
     let pending;
     act(() => { pending = control(mounted.renderer, '儲存').props.onClick(); });
     await act(async () => Promise.resolve());
-    expect(save).toHaveBeenCalledWith({ generalBooks: '11', indigenousBooks: '2', libraryBudget: '' }, {
+    expect(save).toHaveBeenCalledWith({ generalBooks: '11', indigenousBooks: '2', libraryBudget: '', libraryPlan: '' }, {
       actor: { uid: 'admin-fixed', name: '校務管理員' },
-      fields: ['generalBooks', 'indigenousBooks', 'libraryBudget'],
+      fields: ['generalBooks', 'indigenousBooks', 'libraryBudget', 'libraryPlan'],
     });
 
     hookMocks.modules.library = readyModule({
       generalBooks: '11',
       indigenousBooks: '2',
       libraryBudget: '',
+      libraryPlan: '',
       unrelated: { keep: true },
       updatedAt: { seconds: 2 },
     }, save);
@@ -498,6 +499,37 @@ describe('Library fixed-field module', () => {
     mounted.unmount();
   });
 
+  it('shows and saves 規劃用途 alongside the book counts', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    hookMocks.modules.library = readyModule({ generalBooks: 100, indigenousBooks: 10, libraryPlan: '充實低年級繪本' }, save);
+    const mounted = mount(Library);
+    expect(pageText(mounted.renderer)).toContain('規劃用途');
+    expect(pageText(mounted.renderer)).toContain('充實低年級繪本');
+
+    await act(async () => control(mounted.renderer, '編輯數量').props.onClick());
+    const textarea = mounted.renderer.root.findByType('textarea');
+    act(() => textarea.props.onChange({ target: { value: '  更新書籍並補充科普讀物  ' } }));
+    await act(async () => control(mounted.renderer, '儲存').props.onClick());
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({ libraryPlan: '更新書籍並補充科普讀物' }),
+      expect.anything(),
+    );
+    mounted.unmount();
+  });
+
+  it('rejects 規劃用途 text over 500 characters without calling save', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    hookMocks.modules.library = readyModule({ generalBooks: 1, indigenousBooks: 2 }, save);
+    const mounted = mount(Library);
+    await act(async () => control(mounted.renderer, '編輯數量').props.onClick());
+    const textarea = mounted.renderer.root.findByType('textarea');
+    act(() => textarea.props.onChange({ target: { value: 'A'.repeat(501) } }));
+    await act(async () => control(mounted.renderer, '儲存').props.onClick());
+    expect(pageText(mounted.renderer)).toContain('不得超過 500 個字');
+    expect(save).not.toHaveBeenCalled();
+    mounted.unmount();
+  });
+
   it('uses the invocation-current audit actor and writes nothing when that actor is unavailable', async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     hookMocks.modules.library = readyModule({ generalBooks: 1, indigenousBooks: 2 }, save);
@@ -508,10 +540,10 @@ describe('Library fixed-field module', () => {
     authMocks.actor = { uid: 'current-user', name: '即時名稱' };
     await act(async () => retainedSave());
     expect(save).toHaveBeenCalledWith(
-      { generalBooks: '1', indigenousBooks: '2', libraryBudget: '' },
+      { generalBooks: '1', indigenousBooks: '2', libraryBudget: '', libraryPlan: '' },
       {
         actor: { uid: 'current-user', name: '即時名稱' },
-        fields: ['generalBooks', 'indigenousBooks', 'libraryBudget'],
+        fields: ['generalBooks', 'indigenousBooks', 'libraryBudget', 'libraryPlan'],
       },
     );
 

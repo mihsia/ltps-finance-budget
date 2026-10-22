@@ -7,7 +7,7 @@
 // APP_VERSION and shows a notice when they've drifted apart, so a stale
 // manual is visible rather than silently out of date. Bump this constant
 // whenever the content below is reviewed/updated for a new release.
-export const MANUAL_LAST_REVIEWED_VERSION = '1.37';
+export const MANUAL_LAST_REVIEWED_VERSION = '1.38';
 
 // A block is one of:
 //   { type: 'p', text }                              — a paragraph
@@ -86,6 +86,7 @@ export const MANUAL_SECTIONS = [
       },
       { type: 'note', text: '「對齊議會既有格式（.xls 範本）」是另一份單獨對齊議會原有審查格式的 Excel 檔案，與「全貌總覽」的 PDF／Excel 是不同的匯出內容。' },
       { type: 'p', text: '「全貌總覽」PDF 的正文（財務概況、校務資料、各模組現況）先呈現一段文字說明再放圖表，不逐筆列出明細；所有逐筆明細表（業務計畫別明細、歲入明細、各模組逐筆資料）改放到 PDF 最後新開一頁的「附件：詳細資料」，資料完全沒有減少，只是正文更容易一眼看懂重點（此調整僅套用於 PDF，Excel 匯出格式不變）。' },
+      { type: 'p', text: '網頁與 PDF 最前端會先顯示「分組審查摘要」：依議員常見提問議題（校長年資、班級學生數含原住民／新住民、族語認證與開班、競賽成績、特色社團、歲出年增減、代理教師與運動教練／校護人數、AED、圖書經費規劃等），自動彙整系統裡已有的資料成一到兩段文字，供校長口頭報告時參考（原則上控制在 1 分鐘內可讀完）；內容不足的項目會自動省略，不會顯示空白或佔位文字。' },
       { type: 'note', text: '文字說明由系統依目前資料自動產生草稿，顯示在「報表匯出」頁的「文字說明（PDF 用）」區塊；管理者可點選「編輯」調整用詞，儲存後會保留到你再次按「還原為自動產生」為止，一般使用者僅能檢視目前的文字。' },
       { type: 'p', text: '每次下載都會記錄在頁面下方的「匯出紀錄」，列出檔名、時間與匯出人，方便日後查核。' },
       { type: 'image', src: '/manual/manual-report.png', alt: '議會報表匯出頁，顯示財務概況圖表、各模組現況卡片與匯出按鈕', caption: '議會報表匯出頁' },

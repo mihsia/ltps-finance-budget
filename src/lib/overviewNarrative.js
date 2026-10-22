@@ -2,7 +2,13 @@ import { fmtNum } from './format';
 import { summarizeByCategory } from './awardStats';
 import { summarizeSpecialNeeds } from './specialNeedsStats';
 import { summarizeClubParticipation } from './clubStats';
-import { summarizeParcelValues, totalAreaHectares } from './landStats';
+import { summarizeParcelValues, SCHOOL_LAND_TOTAL_AREA_HECTARES } from './landStats';
+import { LANGUAGE_OPTIONS } from './recordSchemas';
+
+// LANGUAGE_OPTIONS lists 本土語（閩南語、客語）first, then every 原住民族語
+// — reused here to split a school's open 族語班 into those two groups for
+// 分組審查摘要, without a second hardcoded language list to keep in sync.
+const LOCAL_LANGUAGES = new Set(LANGUAGE_OPTIONS.slice(0, 2));
 
 function pctWord(value) {
   return `${value >= 0 ? '增加' : '減少'} ${Math.abs(value).toFixed(2)}%`;
@@ -61,7 +67,12 @@ function libraryNarrative(summary) {
       sentence += `，占整體 ${pct}%`;
     }
   }
-  return `${sentence}。`;
+  sentence += '。';
+  if (summary.budget) {
+    sentence += `本年度圖書經費規劃 ${fmtNum(Number(summary.budget))} 千元`;
+    sentence += summary.plan ? `，用途：${summary.plan}。` : '。';
+  }
+  return sentence;
 }
 
 function languageNarrative(summary) {
@@ -113,8 +124,7 @@ function careSupportNarrative(summary, totalStudents) {
 function landNarrative(summary) {
   if (!summary) return '';
   const totalValue = summarizeParcelValues(summary.rows).reduce((sum, entry) => sum + entry.value, 0);
-  const hectares = totalAreaHectares(summary.rows);
-  let sentence = `校地總面積約 ${hectares} 公頃，列管土地共 ${fmtNum(summary.count)} 筆`;
+  let sentence = `校地總面積 ${SCHOOL_LAND_TOTAL_AREA_HECTARES} 公頃，列管土地共 ${fmtNum(summary.count)} 筆`;
   if (totalValue > 0) sentence += `，總公告現值合計 ${fmtNum(totalValue)} 元`;
   return `${sentence}。`;
 }
@@ -125,6 +135,87 @@ function inquiryNarrative(summary) {
   let sentence = `議會質詢／答詢共 ${fmtNum(summary.total)} 案，已結案 ${fmtNum(summary.resolved)} 案`;
   if (pct != null) sentence += `，結案率 ${pct}%`;
   return `${sentence}。`;
+}
+
+function specialNeedsCategoryCount(rows, category) {
+  return (rows || [])
+    .filter((row) => row.category === category)
+    .reduce((sum, row) => sum + (Number(row.count) || 0), 0);
+}
+
+/**
+ * Compiles the two paragraphs a校長 reads aloud for 議會分組預算審查（小組
+ * 審查以每校不超過 1 分鐘為原則）— one 校務現況段落 covering 校長服務年
+ * 資／班級學生數（含原住民、新住民）／族語認證／族語與本土語開課／競賽
+ * 成績／特色社團, one 預算與人力段落 covering 歲出年增減／代理教師／運
+ * 動教練／校護／AED／圖書經費規劃. Everything here is read straight off
+ * buildOverviewReport()'s own result — no separate data entry — so a
+ * missing figure just drops its clause instead of showing a placeholder.
+ * 補辦預算之情形與族語認證報名人數目前系統沒有對應資料，不在此自動產
+ * 生；需要時可由管理者在這段文字後手動補上一句，儲存即成為自訂版本。
+ */
+function reviewSummaryNarrative(report) {
+  const basic = report.basicProfile;
+  const specialNeedsRows = report.modules.specialNeeds?.rows;
+  const language = report.modules.language;
+  const library = report.modules.library;
+  const awards = report.modules.awards;
+  const club = report.modules.club;
+
+  const part1 = [];
+  if (basic?.principalTotalTenure || basic?.principalTenure) {
+    part1.push(`校長服務總年資 ${basic.principalTotalTenure || '—'} 年（擔任校長 ${basic.principalTenure || '—'} 年）`);
+  }
+  if (basic) {
+    const indigenous = specialNeedsCategoryCount(specialNeedsRows, '原住民');
+    const newResident = specialNeedsCategoryCount(specialNeedsRows, '新住民');
+    let sentence = `全校 ${basic.classes ?? '—'} 班、${basic.students ?? '—'} 位學生`;
+    if (indigenous || newResident) sentence += `（其中原住民學生 ${indigenous} 人、新住民學生 ${newResident} 人）`;
+    part1.push(sentence);
+  }
+  if (language) {
+    const langs = [...new Set((language.rows || []).map((row) => row.lang).filter(Boolean))];
+    const indigenousLangs = langs.filter((lang) => !LOCAL_LANGUAGES.has(lang));
+    const localLangs = langs.filter((lang) => LOCAL_LANGUAGES.has(lang));
+    const clauses = [];
+    if (indigenousLangs.length) clauses.push(`開設原住民族語班（${indigenousLangs.join('、')}）`);
+    if (localLangs.length) clauses.push(`開設本土語班（${localLangs.join('、')}）`);
+    if (language.certifiedStudents) clauses.push(`學生通過族語認證 ${language.certifiedStudents} 人`);
+    if (clauses.length) part1.push(clauses.join('，'));
+  }
+  if (awards) {
+    const categories = summarizeByCategory(awards.rows);
+    let sentence = `本年度獲獎紀錄共 ${fmtNum(awards.count)} 筆`;
+    if (categories.length) {
+      const top = categories.reduce((a, b) => (b.count > a.count ? b : a));
+      sentence += `，以「${top.category}」類別最多`;
+    }
+    part1.push(sentence);
+  }
+  if (club) part1.push(`特色社團共 ${fmtNum(club.count)} 個`);
+  const paragraph1 = part1.length ? `${part1.join('；')}。` : '';
+
+  const part2 = [];
+  const deltaPct = report.trend.length ? report.trend[report.trend.length - 1].deltaPct : null;
+  if (deltaPct != null) part2.push(`本年度歲出預算較上年度${pctWord(deltaPct)}`);
+  if (basic) {
+    const staffing = [];
+    if (basic.substituteTotal != null) staffing.push(`代理教師 ${basic.substituteTotal} 人`);
+    if (basic.sportsCoaches) staffing.push(`運動教練 ${basic.sportsCoaches} 人`);
+    if (basic.schoolNurses) staffing.push(`校護 ${basic.schoolNurses} 人`);
+    if (staffing.length) part2.push(staffing.join('、'));
+    if (basic.aedCount || basic.aedCertifiedTeachers) {
+      part2.push(`AED ${basic.aedCount || 0} 台，有證照可操作教師 ${basic.aedCertifiedTeachers || 0} 人`);
+    }
+  }
+  if (library?.budget) {
+    let sentence = `圖書經費規劃 ${fmtNum(Number(library.budget))} 千元`;
+    if (library.plan) sentence += `（${library.plan}）`;
+    part2.push(sentence);
+  }
+  const paragraph2 = part2.length ? `${part2.join('；')}。` : '';
+
+  return [paragraph1, paragraph2].filter(Boolean).join('\n\n');
 }
 
 const MODULE_NARRATIVE_BUILDERS = {
@@ -155,6 +246,7 @@ export function buildDefaultNarratives(report) {
     if (summary) modules[key] = builder(summary, report.kpi.students);
   }
   return {
+    reviewSummary: reviewSummaryNarrative(report),
     finance: financeNarrative(report),
     basicProfile: basicProfileNarrative(report.basicProfile),
     modules,
@@ -174,6 +266,7 @@ export function resolveNarratives(defaults, saved) {
     modules[key] = savedModules[key] ?? defaults.modules[key];
   }
   return {
+    reviewSummary: saved?.reviewSummary ?? defaults.reviewSummary,
     finance: saved?.finance ?? defaults.finance,
     basicProfile: saved?.basicProfile ?? defaults.basicProfile,
     modules,

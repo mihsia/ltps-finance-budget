@@ -14,7 +14,7 @@ import { deadlineExtraCheck, getDeadlineState } from '../lib/fixedFieldEditing';
 import { softDeleteVerb } from '../lib/recordLifecycle';
 import { buildAwardExportWorkbook, buildAwardImportTemplateWorkbook, parseAwardImportFile } from '../lib/awardImport';
 import { buildInquiryExportWorkbook, buildInquiryImportTemplateWorkbook, parseInquiryImportFile } from '../lib/inquiryImport';
-import { totalAreaHectares } from '../lib/landStats';
+import { SCHOOL_LAND_TOTAL_AREA_HECTARES } from '../lib/landStats';
 import NoModuleAccess from '../components/NoModuleAccess';
 import {
   pageTitle, pageSubtitle, card, input, btnPrimary, btnOutline, btnSecondary,
@@ -62,15 +62,16 @@ const IMPORT_EXPORT = {
   },
 };
 
-// A small computed stat shown above a module's record list — keyed by
-// moduleKey the same way IMPORT_EXPORT is, so adding one here is the only
-// wiring needed. Currently just 校地概況's 校地總面積(公頃), summed from
-// every active 地號's 面積 via src/lib/landStats.js's totalAreaHectares
-// (shared with the PDF narrative, so both read the same number).
+// A small stat shown above a module's record list — keyed by moduleKey the
+// same way IMPORT_EXPORT is, so adding one here is the only wiring needed.
+// Currently just 校地概況's 校地總面積(公頃): a fixed官方公告數字（見
+// src/lib/landStats.js），not summed from the地號 rows below it, so
+// `compute` ignores its rows argument — kept so this stays a drop-in
+// config object if a future module summary ever does need the rows.
 const MODULE_SUMMARY = {
   land: {
     label: '校地總面積',
-    compute: (rows) => `${totalAreaHectares(rows)} 公頃`,
+    compute: () => `${SCHOOL_LAND_TOTAL_AREA_HECTARES} 公頃`,
   },
 };
 
@@ -284,6 +285,7 @@ export default function Generic({
         <div style={{ ...card, maxWidth: 320, marginBottom: 16 }}>
           <div style={{ font: "400 12px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 4 }}>{moduleSummary.label}</div>
           <div style={{ font: '800 22px Inter, sans-serif', color: '#1E2420' }}>{moduleSummary.compute(activeRecords)}</div>
+          <div style={{ font: "400 11px 'Noto Sans TC', sans-serif", color: '#8A9089', marginTop: 4 }}>依教育部校務資訊公告數字固定，不隨下方地號資料增減</div>
         </div>
       )}
 

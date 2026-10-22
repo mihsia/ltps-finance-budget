@@ -6,8 +6,16 @@ import { deadlineExtraCheck, getDeadlineState, validateFixedFields } from '../li
 import NoModuleAccess from '../components/NoModuleAccess';
 import { pageTitle, pageSubtitle, card, input, label, btnPrimary, btnSecondary, lockedBanner, deadlineBanner } from '../styles';
 
-const FIELDS = ['generalBooks', 'indigenousBooks', 'libraryBudget'];
-const FIELD_LABELS = { generalBooks: '一般書籍', indigenousBooks: '族語書籍', libraryBudget: '圖書經費（千元）' };
+const COUNT_FIELDS = ['generalBooks', 'indigenousBooks', 'libraryBudget'];
+// 規劃用途是自由文字（如何運用圖書經費），不是數量，獨立於上面的整數欄位
+// 驗證之外，另外檢查長度即可。
+const FIELDS = [...COUNT_FIELDS, 'libraryPlan'];
+const FIELD_LABELS = {
+  generalBooks: '一般書籍',
+  indigenousBooks: '族語書籍',
+  libraryBudget: '圖書經費（千元）',
+  libraryPlan: '規劃用途',
+};
 
 export default function Library({ year, hasCurrentYear = () => false }) {
   const moduleState = useYearModule(year, 'library');
@@ -59,12 +67,15 @@ export default function Library({ year, hasCurrentYear = () => false }) {
     const result = await runAuthorized(() => authorizeModuleActor('library'), async ({ actor }) => {
       const decision = checkInvocation();
       if (!decision.allowed) return decision;
-      const validation = validateFixedFields(editor.form, FIELDS);
+      const validation = validateFixedFields(editor.form, COUNT_FIELDS);
       if (!validation.valid) {
         const names = validation.invalidFields.map((field) => FIELD_LABELS[field]).join('、');
         return { allowed: false, reason: `「${names}」必須是非負整數，或留白。` };
       }
-      const payload = { ...editor.form };
+      if (editor.form.libraryPlan.trim().length > 500) {
+        return { allowed: false, reason: '「規劃用途」不得超過 500 個字。' };
+      }
+      const payload = { ...editor.form, libraryPlan: editor.form.libraryPlan.trim() };
       const token = editor.beginSave(payload);
       if (!token) return { allowed: true };
       try {
@@ -124,6 +135,10 @@ export default function Library({ year, hasCurrentYear = () => false }) {
             <div>圖書經費</div>
             <div style={{ font: '800 26px Inter, sans-serif' }}>{editor.form.libraryBudget || 0} <small>千元</small></div>
           </div>
+          <div style={{ ...card, gridColumn: '1/-1' }}>
+            <div>規劃用途</div>
+            <div style={{ font: "400 14px 'Noto Sans TC', sans-serif", marginTop: 6, whiteSpace: 'pre-wrap' }}>{editor.form.libraryPlan || '尚未填寫'}</div>
+          </div>
           {canStartEditing && (
             <button type="button" onClick={beginEditing} style={{ ...btnPrimary, border: 0, gridColumn: '1/-1', width: 'fit-content' }}>編輯數量</button>
           )}
@@ -133,6 +148,17 @@ export default function Library({ year, hasCurrentYear = () => false }) {
           <div><label style={label}>一般書籍</label><input disabled={editor.pending} style={input} value={editor.form.generalBooks} onChange={(event) => editor.updateField('generalBooks', event.target.value)} /></div>
           <div><label style={label}>族語書籍</label><input disabled={editor.pending} style={input} value={editor.form.indigenousBooks} onChange={(event) => editor.updateField('indigenousBooks', event.target.value)} /></div>
           <div><label style={label}>圖書經費（千元）</label><input disabled={editor.pending} style={input} value={editor.form.libraryBudget} onChange={(event) => editor.updateField('libraryBudget', event.target.value)} /></div>
+          <div style={{ gridColumn: '1/-1' }}>
+            <label style={label}>規劃用途</label>
+            <textarea
+              aria-label="規劃用途"
+              disabled={editor.pending}
+              value={editor.form.libraryPlan}
+              onChange={(event) => editor.updateField('libraryPlan', event.target.value)}
+              rows={3}
+              style={{ ...input, resize: 'vertical' }}
+            />
+          </div>
           <div style={{ gridColumn: '1/-1', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button type="button" disabled={editor.pending} onClick={commit} style={{ ...btnPrimary, border: 0 }}>儲存</button>
             <button type="button" disabled={editor.pending} onClick={cancelEditing} style={btnSecondary}>取消</button>

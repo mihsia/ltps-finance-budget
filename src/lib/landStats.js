@@ -13,14 +13,10 @@ export function summarizeParcelValues(records) {
     .sort((a, b) => b.value - a.value);
 }
 
-/**
- * Sums every listed 地號's 面積(㎡) and converts to 公頃 (1 公頃 = 10,000
- * ㎡) — the unit 校地總面積 is conventionally reported in for 議會審查
- * (ha, not raw ㎡). Rounded to 2 decimal places; shared by the「校地概況」
- * module page's own summary stat and the PDF narrative so both read the
- * same number off the same formula.
- */
-export function totalAreaHectares(records) {
-  const totalSqm = records.reduce((sum, record) => sum + Number(record?.area || 0), 0);
-  return Math.round((totalSqm / 10000) * 100) / 100;
-}
+// 校地總面積固定為教育部全球資訊網公告的 21,390 平方公尺（約 2.14 公頃）
+// —一筆法定的校地事實，不會隨著「校地概況」模組逐筆填寫的地號資料增減
+// 而改變，所以直接存成常數，不再由地號面積加總推算（加總值可能因地號
+// 資料有缺漏或調整而與官方公告數字脫節）。「校地概況」模組頁的總面積
+// 顯示、PDF 文字說明都讀這個常數，兩處永遠一致。
+export const SCHOOL_LAND_TOTAL_AREA_SQM = 21390;
+export const SCHOOL_LAND_TOTAL_AREA_HECTARES = Math.round((SCHOOL_LAND_TOTAL_AREA_SQM / 10000) * 100) / 100;

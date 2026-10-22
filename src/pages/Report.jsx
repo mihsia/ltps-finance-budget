@@ -781,6 +781,14 @@ export default function Report({ year, years }) {
       <div style={pageTitle}>議會報表匯出</div>
       <div style={{ font: "400 13px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 18 }}>{year}年度 · 利澤國小基金總覽（議會用）</div>
 
+      {narratives.reviewSummary && (
+        <div style={{ ...card, maxWidth: 780, marginBottom: 20, borderLeft: '4px solid #1F5F52' }}>
+          <div style={{ font: "700 13px 'Noto Sans TC', sans-serif", marginBottom: 8 }}>分組審查摘要（供口頭報告用，不超過 1 分鐘）</div>
+          <div style={{ font: "400 13px 'Noto Sans TC', sans-serif", color: '#454B45', whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>{narratives.reviewSummary}</div>
+          <div style={{ font: "400 11px 'Noto Sans TC', sans-serif", color: '#8A9089', marginTop: 8 }}>內容取自下方「文字說明（PDF 用）」區塊的「分組審查摘要」，調整請至該區塊編輯。</div>
+        </div>
+      )}
+
       <div style={sectionLabel}>關鍵指標</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20, maxWidth: 900 }}>
         <div style={statTile}>
@@ -936,6 +944,15 @@ export default function Report({ year, years }) {
         以下文字由系統依目前資料自動產生草稿，會寫入 PDF 匯出內容的對應段落；{isAdmin ? '可點選「編輯」調整用詞，調整後會保留到你下次按「還原為自動產生」為止。' : '僅管理者可編輯，你目前看到的是系統自動產生的草稿或管理者已儲存的文字。'}
       </div>
       <div style={{ maxWidth: 780, marginBottom: 24 }}>
+        <NarrativeField
+          label="分組審查摘要"
+          color="#1F5F52"
+          defaultText={defaultNarratives.reviewSummary}
+          savedText={savedNarratives?.reviewSummary ?? null}
+          canEdit={isAdmin}
+          onSave={(text) => saveNarrative('reviewSummary', text)}
+          onReset={() => saveNarrative('reviewSummary', '')}
+        />
         <NarrativeField
           label="財務概況"
           color="#B5533E"

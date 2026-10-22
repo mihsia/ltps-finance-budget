@@ -170,17 +170,21 @@ export function buildOverviewReport({
       substituteTotal, partTimeTeachers: basic.partTimeTeachers,
       teacherTotal, substituteRatio, studentTeacherRatio,
       tuitionFeeAvg: basic.tuitionFeeAvg ?? null, lunchSubsidyTotal: basic.lunchSubsidyTotal ?? null,
+      principalTotalTenure: basic.principalTotalTenure ?? null, principalTenure: basic.principalTenure ?? null,
+      sportsCoaches: basic.sportsCoaches ?? null, schoolNurses: basic.schoolNurses ?? null,
+      aedCount: basic.aedCount ?? null, aedCertifiedTeachers: basic.aedCertifiedTeachers ?? null,
     } : null,
     modules: {
       library: library ? {
         generalBooks: num(library.generalBooks), indigenousBooks: num(library.indigenousBooks), total: libraryTotal,
+        budget: library.libraryBudget || null, plan: library.libraryPlan || null,
         rows: [
           { label: '一般書籍', value: num(library.generalBooks) },
           { label: '族語／原住民書籍', value: num(library.indigenousBooks) },
         ],
       } : null,
-      language: language.classRows.length
-        ? { classTotal: languageClassTotal, rows: language.classRows }
+      language: (language.classRows.length || language.rosterRows?.length)
+        ? { classTotal: languageClassTotal, certifiedStudents: language.rosterRows?.length || 0, rows: language.classRows }
         : null,
       specialNeeds: specialNeedsRows.length ? { total: specialNeedsTotal, rows: specialNeedsRows } : null,
       awards: awardsRows.length ? { count: awardsRows.length, rows: awardsRows } : null,

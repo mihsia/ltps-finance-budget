@@ -276,6 +276,15 @@ export async function buildOverviewPdf(report, {
     y += 6;
   }
 
+  // 分組審查摘要 — placed before even 關鍵指標 so it's the very first thing
+  // on the page: a 1-2 段文字的 school-side summary built for the 議會分組
+  // 預算審查「每校報告不超過 1 分鐘」場合(see overviewNarrative.js's
+  // reviewSummaryNarrative). A no-op when there's nothing to report yet.
+  if (narratives.reviewSummary) {
+    zoneHeader('分組審查摘要（審查報告用）');
+    addNarrative(narratives.reviewSummary);
+  }
+
   // 關鍵指標 — the headline summary, shown before any zone (matches the web
   // page's top KPI row, which also sits outside the zone grouping).
   table({

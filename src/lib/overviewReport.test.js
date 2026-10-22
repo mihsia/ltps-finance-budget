@@ -42,6 +42,39 @@ describe('buildOverviewReport', () => {
     });
   });
 
+  it('passes through the 校長年資／運動教練／校護／AED personnel fields and 圖書經費／規劃用途', () => {
+    const report = buildOverviewReport({
+      year: '115',
+      basic: {
+        ...BASIC,
+        principalTotalTenure: '12', principalTenure: '3',
+        sportsCoaches: '2', schoolNurses: '1',
+        aedCount: '3', aedCertifiedTeachers: '8',
+      },
+      library: { generalBooks: 100, indigenousBooks: 10, libraryBudget: '50', libraryPlan: '充實低年級繪本' },
+      expenseRows: [], revenueRows: [],
+    });
+    expect(report.basicProfile).toMatchObject({
+      principalTotalTenure: '12', principalTenure: '3',
+      sportsCoaches: '2', schoolNurses: '1',
+      aedCount: '3', aedCertifiedTeachers: '8',
+    });
+    expect(report.modules.library).toMatchObject({ budget: '50', plan: '充實低年級繪本' });
+  });
+
+  it('leaves the personnel fields and 圖書經費／規劃用途 null when unfilled', () => {
+    const report = buildOverviewReport({
+      year: '115', basic: BASIC, library: { generalBooks: 1, indigenousBooks: 0 },
+      expenseRows: [], revenueRows: [],
+    });
+    expect(report.basicProfile).toMatchObject({
+      principalTotalTenure: null, principalTenure: null,
+      sportsCoaches: null, schoolNurses: null,
+      aedCount: null, aedCertifiedTeachers: null,
+    });
+    expect(report.modules.library).toMatchObject({ budget: null, plan: null });
+  });
+
   it('leaves substitute ratio and library totals null when the source module has no data', () => {
     const report = buildOverviewReport({ year: '115', basic: null, library: null, expenseRows: [], revenueRows: [] });
     expect(report.kpi.substituteRatio).toBeNull();
@@ -126,7 +159,7 @@ describe('buildOverviewReport', () => {
       ],
     });
     const languageRows = [{ lang: '閩南語', classes: 13, students: 264 }, { lang: '客語', classes: 1, students: 4 }];
-    expect(report.modules.language).toEqual({ classTotal: 14, rows: languageRows });
+    expect(report.modules.language).toEqual({ classTotal: 14, certifiedStudents: 0, rows: languageRows });
     expect(report.modules.specialNeeds).toEqual({
       total: 42,
       rows: [{ category: '原住民', count: 17 }, { category: '新住民', count: 25 }],
@@ -146,5 +179,27 @@ describe('buildOverviewReport', () => {
         { councilor: '陳議員', subject: '課後社團經費', answer: null, status: '待答詢' },
       ],
     });
+  });
+
+  it('counts 族語認證 rosterRows as modules.language.certifiedStudents, and still includes the module when only roster rows exist', () => {
+    const report = buildOverviewReport({
+      year: '115', expenseRows: [], revenueRows: [],
+      language: {
+        classRows: [{ lang: '閩南語', classes: 3, students: 60 }],
+        teacherRows: [],
+        rosterRows: [{ lang: '閩南語', level: '中級', name: '陳○安' }, { lang: '閩南語', level: '初級', name: '林○華' }],
+      },
+    });
+    expect(report.modules.language).toEqual({
+      classTotal: 3,
+      certifiedStudents: 2,
+      rows: [{ lang: '閩南語', classes: 3, students: 60 }],
+    });
+
+    const rosterOnly = buildOverviewReport({
+      year: '115', expenseRows: [], revenueRows: [],
+      language: { classRows: [], teacherRows: [], rosterRows: [{ lang: '阿美語', level: '初級', name: '王○明' }] },
+    });
+    expect(rosterOnly.modules.language).toEqual({ classTotal: 0, certifiedStudents: 1, rows: [] });
   });
 });
