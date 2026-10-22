@@ -416,6 +416,21 @@ describe('updateYearReportNarrative', () => {
   });
 });
 
+describe('updateYearOpeningFundBalance', () => {
+  it('merge-writes the amount as a string onto the budgetbook module doc', async () => {
+    installMountedFirestoreHarness();
+    firestoreMocks.setDoc.mockResolvedValue(undefined);
+
+    await hookModule.updateYearOpeningFundBalance('116', 728);
+
+    expect(firestoreMocks.setDoc).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'budgetbook', path: ['years', '116', 'modules', 'budgetbook'] }),
+      { openingFundBalance: '728' },
+      { merge: true },
+    );
+  });
+});
+
 describe('useYearRecords listener', () => {
   beforeEach(() => {
     vi.clearAllMocks();

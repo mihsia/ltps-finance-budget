@@ -37,6 +37,18 @@ export const IMPORT_FIELDS = [
     id: 'buildingPlan', label: '建築及設備計畫', group: 'expense', expenseLabel: '建築及設備計畫',
     re: [/建築及設備計畫\s*([\d,]+)\s*改善/, /建築及設備計畫[^\d]{0,10}([\d,]+)/],
   },
+  // From the「基金來源、用途及餘絀預計表」(page 4 of the real 利澤國小
+  // 預算書): the row reads "<前年度決算數> 期初基金餘額 <本年度預算數>
+  // <上年度預算數> <比較增減>" — the first number after the label is this
+  // year's opening balance, matching the same "label immediately followed by
+  // the number of interest" shape the fields above already rely on. Unlike
+  // those, this one is applied straight to 預算書表's own
+  // openingFundBalance field (group 'budgetbook') rather than built into a
+  // budget record.
+  {
+    id: 'openingFundBalance', label: '期初基金餘額（預算書表）', group: 'budgetbook',
+    re: [/期初基金餘額[^\d]{0,10}([\d,]+)/],
+  },
 ];
 
 /** Extracts the plain text runs (<w:t>...</w:t>) from a .docx file's document.xml. */

@@ -277,10 +277,19 @@ describe('Basic fixed-field module', () => {
       partTimeTeachers: '2',
       tuitionFeeAvg: '827',
       lunchSubsidyTotal: '236',
+      principalTotalTenure: '',
+      principalTenure: '',
+      sportsCoaches: '',
+      schoolNurses: '',
+      aedCount: '',
+      aedCertifiedTeachers: '',
       status: 'submitted',
     }, {
       actor: { uid: 'admin-fixed', name: '校務管理員' },
-      fields: ['classes', 'students', 'staff', 'regularTeachers', 'substituteVacancy', 'substituteAdditional', 'partTimeTeachers', 'tuitionFeeAvg', 'lunchSubsidyTotal', 'status'],
+      fields: [
+        'classes', 'students', 'staff', 'regularTeachers', 'substituteVacancy', 'substituteAdditional', 'partTimeTeachers', 'tuitionFeeAvg', 'lunchSubsidyTotal',
+        'principalTotalTenure', 'principalTenure', 'sportsCoaches', 'schoolNurses', 'aedCount', 'aedCertifiedTeachers', 'status',
+      ],
     });
     expect(mounted.renderer.root.findAllByType('input').every((field) => field.props.disabled)).toBe(true);
 
@@ -293,12 +302,47 @@ describe('Basic fixed-field module', () => {
     mounted.unmount();
   });
 
+  it('saves 人員與安全設備概況 values (校長年資／運動教練／校護／AED) alongside the班級概況 fields', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    hookMocks.modules.basic = { ...hookMocks.modules.basic, save };
+    const mounted = mount(Basic);
+
+    await act(async () => control(mounted.renderer, '編輯資料').props.onClick());
+    act(() => {
+      const [
+        principalTotalTenureInput, principalTenureInput, sportsCoachesInput,
+        schoolNursesInput, aedCountInput, aedCertifiedTeachersInput,
+      ] = mounted.renderer.root.findAllByType('input').slice(9, 15);
+      principalTotalTenureInput.props.onChange({ target: { value: '20' } });
+      principalTenureInput.props.onChange({ target: { value: '5' } });
+      sportsCoachesInput.props.onChange({ target: { value: '2' } });
+      schoolNursesInput.props.onChange({ target: { value: '1' } });
+      aedCountInput.props.onChange({ target: { value: '3' } });
+      aedCertifiedTeachersInput.props.onChange({ target: { value: '8' } });
+    });
+    await act(async () => control(mounted.renderer, '儲存草稿').props.onClick());
+
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        principalTotalTenure: '20',
+        principalTenure: '5',
+        sportsCoaches: '2',
+        schoolNurses: '1',
+        aedCount: '3',
+        aedCertifiedTeachers: '8',
+      }),
+      expect.anything(),
+    );
+    mounted.unmount();
+  });
+
   it('accepts an exact submitted-status echo but rejects genuinely unrelated changes', async () => {
     const firstWrite = deferred();
     const save = vi.fn(() => firstWrite.promise);
     const source = {
       classes: '13', students: '262', staff: '28', regularTeachers: '19', substituteVacancy: '6', substituteAdditional: '3', partTimeTeachers: '2',
       tuitionFeeAvg: '827', lunchSubsidyTotal: '236',
+      principalTotalTenure: '', principalTenure: '', sportsCoaches: '', schoolNurses: '', aedCount: '', aedCertifiedTeachers: '',
       status: 'draft', unrelated: { keep: true }, updatedAt: { seconds: 1 },
     };
     hookMocks.modules.basic = readyModule(source, save);
@@ -355,7 +399,7 @@ describe('Basic fixed-field module', () => {
     hookMocks.meta.meta = { locked: false, deadline: false };
     await act(async () => retainedCancel());
 
-    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(9);
+    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(15);
     expect(pageText(mounted.renderer)).toContain('填報截止日格式錯誤');
     expect(control(mounted.renderer, '編輯資料')).toBeUndefined();
     expect(save).not.toHaveBeenCalled();
@@ -388,14 +432,15 @@ describe('Library fixed-field module', () => {
     let pending;
     act(() => { pending = control(mounted.renderer, '儲存').props.onClick(); });
     await act(async () => Promise.resolve());
-    expect(save).toHaveBeenCalledWith({ generalBooks: '11', indigenousBooks: '2' }, {
+    expect(save).toHaveBeenCalledWith({ generalBooks: '11', indigenousBooks: '2', libraryBudget: '' }, {
       actor: { uid: 'admin-fixed', name: '校務管理員' },
-      fields: ['generalBooks', 'indigenousBooks'],
+      fields: ['generalBooks', 'indigenousBooks', 'libraryBudget'],
     });
 
     hookMocks.modules.library = readyModule({
       generalBooks: '11',
       indigenousBooks: '2',
+      libraryBudget: '',
       unrelated: { keep: true },
       updatedAt: { seconds: 2 },
     }, save);
@@ -435,6 +480,24 @@ describe('Library fixed-field module', () => {
     mounted.unmount();
   });
 
+  it('shows and saves 圖書經費（千元）alongside the book counts', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    hookMocks.modules.library = readyModule({ generalBooks: 100, indigenousBooks: 10, libraryBudget: 50 }, save);
+    const mounted = mount(Library);
+    expect(pageText(mounted.renderer)).toContain('圖書經費');
+    expect(pageText(mounted.renderer)).toContain('50 千元');
+
+    await act(async () => control(mounted.renderer, '編輯數量').props.onClick());
+    const inputs = mounted.renderer.root.findAllByType('input');
+    act(() => inputs[2].props.onChange({ target: { value: '80' } }));
+    await act(async () => control(mounted.renderer, '儲存').props.onClick());
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({ libraryBudget: '80' }),
+      expect.anything(),
+    );
+    mounted.unmount();
+  });
+
   it('uses the invocation-current audit actor and writes nothing when that actor is unavailable', async () => {
     const save = vi.fn().mockResolvedValue(undefined);
     hookMocks.modules.library = readyModule({ generalBooks: 1, indigenousBooks: 2 }, save);
@@ -445,10 +508,10 @@ describe('Library fixed-field module', () => {
     authMocks.actor = { uid: 'current-user', name: '即時名稱' };
     await act(async () => retainedSave());
     expect(save).toHaveBeenCalledWith(
-      { generalBooks: '1', indigenousBooks: '2' },
+      { generalBooks: '1', indigenousBooks: '2', libraryBudget: '' },
       {
         actor: { uid: 'current-user', name: '即時名稱' },
-        fields: ['generalBooks', 'indigenousBooks'],
+        fields: ['generalBooks', 'indigenousBooks', 'libraryBudget'],
       },
     );
 
@@ -517,12 +580,43 @@ describe('BudgetBook fixed-field module', () => {
     expect(save).toHaveBeenCalledWith({
       fundName: '新校務基金',
       reviewAuthority: '新審議機關',
+      openingFundBalance: '',
       description: '',
     }, {
       actor: { uid: 'admin-fixed', name: '校務管理員' },
-      fields: ['fundName', 'reviewAuthority', 'description'],
+      fields: ['fundName', 'reviewAuthority', 'openingFundBalance', 'description'],
     });
     expect(pageText(mounted.renderer)).toContain('儲存成功。');
+    mounted.unmount();
+  });
+
+  it('validates 期初基金餘額 as a non-negative integer, saves it, and computes 期末基金餘額', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    hookMocks.modules.budgetbook = readyModule({ fundName: '基金', reviewAuthority: '機關' }, save);
+    hookMocks.records.budget = {
+      data: [
+        { id: 'r1', recordType: 'revenue', label: '政府撥入收入', amount: 100, deletedAt: null },
+        { id: 'e1', recordType: 'expense', label: '國民教育計畫', formula: '', amount: 60, actualAmount: null, varianceNote: null, deletedAt: null },
+      ],
+      loading: false,
+      error: null,
+      update: vi.fn(),
+      authorizeWrite: () => ({ allowed: true, code: 'records-writable', reason: null }),
+    };
+    const mounted = mount(BudgetBook);
+
+    await act(async () => control(mounted.renderer, '編輯基金資料').props.onClick());
+    act(() => field(mounted.renderer, '期初基金餘額').props.onChange({ target: { value: '-5' } }));
+    await act(async () => control(mounted.renderer, '儲存').props.onClick());
+    expect(save).not.toHaveBeenCalled();
+    expect(pageText(mounted.renderer)).toContain('期初基金餘額必須是非負整數');
+
+    act(() => field(mounted.renderer, '期初基金餘額').props.onChange({ target: { value: '728' } }));
+    await act(async () => control(mounted.renderer, '儲存').props.onClick());
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ openingFundBalance: '728' }), expect.anything());
+
+    // 本期賸餘 = 100(歲入) - 60(歲出) = 40 → 期末基金餘額 = 728 + 40 = 768
+    expect(pageText(mounted.renderer)).toContain('期末基金餘額 768 千元');
     mounted.unmount();
   });
 
@@ -541,10 +635,10 @@ describe('BudgetBook fixed-field module', () => {
     act(() => textarea.props.onChange({ target: { value: '  本年度重點為充實圖書設備。  ' } }));
     await act(async () => control(mounted.renderer, '儲存').props.onClick());
     expect(save).toHaveBeenCalledWith({
-      fundName: '基金', reviewAuthority: '機關', description: '本年度重點為充實圖書設備。',
+      fundName: '基金', reviewAuthority: '機關', openingFundBalance: '', description: '本年度重點為充實圖書設備。',
     }, {
       actor: { uid: 'admin-fixed', name: '校務管理員' },
-      fields: ['fundName', 'reviewAuthority', 'description'],
+      fields: ['fundName', 'reviewAuthority', 'openingFundBalance', 'description'],
     });
     mounted.unmount();
   });

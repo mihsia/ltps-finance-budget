@@ -15,7 +15,7 @@
  * overwrites anything a user has since edited through the app.
  *
  * Seeds /years/113-115 with the school's real 115年度預算書 figures (see
- * README "Data Notes"). Everything under 圖書/族語/獎項/社團/土地現值/質詢答詢 and
+ * README "Data Notes"). Everything under 圖書/族語/獎項/社團/校地概況/質詢答詢 and
  * staff counts is illustrative placeholder data and MUST be replaced with the
  * school's real figures (via the app's own forms) before this system is used
  * for an actual council submission.

@@ -14,7 +14,7 @@ const COMPLETION_MODULES = [
   { key: 'awards', label: '獲獎紀錄' },
   { key: 'club', label: '課後社團' },
   { key: 'careSupport', label: '課照學扶' },
-  { key: 'land', label: '土地公告現值' },
+  { key: 'land', label: '校地概況' },
   { key: 'inquiry', label: '議會質詢答詢' },
 ];
 

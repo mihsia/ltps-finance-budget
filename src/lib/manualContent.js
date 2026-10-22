@@ -7,7 +7,7 @@
 // APP_VERSION and shows a notice when they've drifted apart, so a stale
 // manual is visible rather than silently out of date. Bump this constant
 // whenever the content below is reviewed/updated for a new release.
-export const MANUAL_LAST_REVIEWED_VERSION = '1.36';
+export const MANUAL_LAST_REVIEWED_VERSION = '1.37';
 
 // A block is one of:
 //   { type: 'p', text }                              — a paragraph
@@ -19,7 +19,7 @@ export const MANUAL_SECTIONS = [
     id: 'intro',
     title: '系統簡介',
     blocks: [
-      { type: 'p', text: '利澤國小基金預算管理系統依「年度」維護學校各項資料（基本資料、歲入歲出、圖書、族語、獎項、社團、土地現值、議會質詢等），並可產出議會審查用的報表（網頁／PDF／Excel）。' },
+      { type: 'p', text: '利澤國小基金預算管理系統依「年度」維護學校各項資料（基本資料、歲入歲出、圖書、族語、獎項、社團、校地概況、議會質詢等），並可產出議會審查用的報表（網頁／PDF／Excel）。' },
       { type: 'p', text: '左側選單依功能分成「校務與學生」「教學與活動」「財務與行政」等幾組；你能看到並編輯哪些項目，依你的帳號被指派的「負責模組」而定，管理者則可存取所有項目。' },
       { type: 'p', text: '每個年度的資料各自獨立存放，右上角可隨時切換要查看的年度。' },
     ],

@@ -136,7 +136,7 @@ const MODULE_LABELS = {
   awards: '獲獎紀錄',
   club: '課後社團',
   careSupport: '課照學扶',
-  land: '土地現值',
+  land: '校地概況',
   inquiry: '質詢答詢',
   budgetbook: '預算書表',
   report: '報表匯出',

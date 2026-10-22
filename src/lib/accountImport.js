@@ -12,7 +12,7 @@ export const ACCOUNT_IMPORT_HEADERS = ['姓名', '帳號', '處室', '權限', '
 const DEPT_LIST = ['校長室', '教務處', '學務處', '總務處', '人事室', '會計室'];
 const MODULE_LABEL_LIST = [
   '基本資料', '特生統計', '歲入歲出', '圖書藏書', '族語開班', '獲獎紀錄',
-  '課後社團', '土地現值', '質詢答詢', '預算書表', '報表匯出', '歷史歸檔', '帳號管理',
+  '課後社團', '校地概況', '質詢答詢', '預算書表', '報表匯出', '歷史歸檔', '帳號管理',
 ];
 
 /** The downloadable 帳號匯入範本.xlsx — a filled-in example sheet plus a plain-language instructions sheet. */

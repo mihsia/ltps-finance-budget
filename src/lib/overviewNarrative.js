@@ -2,7 +2,7 @@ import { fmtNum } from './format';
 import { summarizeByCategory } from './awardStats';
 import { summarizeSpecialNeeds } from './specialNeedsStats';
 import { summarizeClubParticipation } from './clubStats';
-import { summarizeParcelValues } from './landStats';
+import { summarizeParcelValues, totalAreaHectares } from './landStats';
 
 function pctWord(value) {
   return `${value >= 0 ? '增加' : '減少'} ${Math.abs(value).toFixed(2)}%`;
@@ -113,7 +113,8 @@ function careSupportNarrative(summary, totalStudents) {
 function landNarrative(summary) {
   if (!summary) return '';
   const totalValue = summarizeParcelValues(summary.rows).reduce((sum, entry) => sum + entry.value, 0);
-  let sentence = `列管土地共 ${fmtNum(summary.count)} 筆`;
+  const hectares = totalAreaHectares(summary.rows);
+  let sentence = `校地總面積約 ${hectares} 公頃，列管土地共 ${fmtNum(summary.count)} 筆`;
   if (totalValue > 0) sentence += `，總公告現值合計 ${fmtNum(totalValue)} 元`;
   return `${sentence}。`;
 }

@@ -94,7 +94,7 @@ describe('buildDefaultNarratives', () => {
     expect(modules.awards).toBe('本年度獲獎紀錄共 3 筆，以「語文類」類別最多，計 2 筆。');
     expect(modules.club).toBe('開設課後社團共 2 個，參與學生 35 人，占全校學生 13.4%。');
     expect(modules.careSupport).toBe('開設課照／學扶班共 1 班，參與學生 18 人，占全校學生 6.9%。');
-    expect(modules.land).toBe('列管土地共 1 筆，總公告現值合計 50,000 元。');
+    expect(modules.land).toBe('校地總面積約 0.01 公頃，列管土地共 1 筆，總公告現值合計 50,000 元。');
     expect(modules.inquiry).toBe('議會質詢／答詢共 3 案，已結案 2 案，結案率 66.7%。');
   });
 

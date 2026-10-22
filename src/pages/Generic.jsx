@@ -14,6 +14,7 @@ import { deadlineExtraCheck, getDeadlineState } from '../lib/fixedFieldEditing';
 import { softDeleteVerb } from '../lib/recordLifecycle';
 import { buildAwardExportWorkbook, buildAwardImportTemplateWorkbook, parseAwardImportFile } from '../lib/awardImport';
 import { buildInquiryExportWorkbook, buildInquiryImportTemplateWorkbook, parseInquiryImportFile } from '../lib/inquiryImport';
+import { totalAreaHectares } from '../lib/landStats';
 import NoModuleAccess from '../components/NoModuleAccess';
 import {
   pageTitle, pageSubtitle, card, input, btnPrimary, btnOutline, btnSecondary,
@@ -58,6 +59,18 @@ const IMPORT_EXPORT = {
     buildTemplateWorkbook: buildInquiryImportTemplateWorkbook,
     parseImportFile: parseInquiryImportFile,
     importItemLabel: (row) => row.subject,
+  },
+};
+
+// A small computed stat shown above a module's record list — keyed by
+// moduleKey the same way IMPORT_EXPORT is, so adding one here is the only
+// wiring needed. Currently just 校地概況's 校地總面積(公頃), summed from
+// every active 地號's 面積 via src/lib/landStats.js's totalAreaHectares
+// (shared with the PDF narrative, so both read the same number).
+const MODULE_SUMMARY = {
+  land: {
+    label: '校地總面積',
+    compute: (rows) => `${totalAreaHectares(rows)} 公頃`,
   },
 };
 
@@ -260,12 +273,19 @@ export default function Generic({
 
   const columns = `${schema.fields.map(() => '1fr').join(' ')}${writeVisible ? ' 92px' : ''}`;
   const tableMinWidth = schema.fields.length * 130 + (writeVisible ? 92 : 0);
+  const moduleSummary = MODULE_SUMMARY[moduleKey];
 
   return (
     <div>
       <div style={pageTitle}>{meta.title}</div>
       <div style={{ font: "400 13px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 6 }}>{meta.desc}</div>
       <div style={pageSubtitle}>{year}年度</div>
+      {moduleSummary && (
+        <div style={{ ...card, maxWidth: 320, marginBottom: 16 }}>
+          <div style={{ font: "400 12px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 4 }}>{moduleSummary.label}</div>
+          <div style={{ font: '800 22px Inter, sans-serif', color: '#1E2420' }}>{moduleSummary.compute(activeRecords)}</div>
+        </div>
+      )}
 
       {!yearState.exists && <div style={lockedBanner}>找不到此年度設定，無法編輯或儲存。</div>}
       {yearState.exists && yearState.meta?.locked !== false && (

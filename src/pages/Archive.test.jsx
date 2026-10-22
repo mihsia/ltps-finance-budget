@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   importRecords: vi.fn().mockResolvedValue([]),
   ensureNextYearCreated: vi.fn().mockResolvedValue('116'),
   deleteLatestYear: vi.fn().mockResolvedValue(null),
+  updateYearOpeningFundBalance: vi.fn().mockResolvedValue(undefined),
   setYear: vi.fn(),
   parseImportFile: vi.fn().mockResolvedValue({
     fields: {
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
       eduPlan: 50,
       adminPlan: 30,
       buildingPlan: 20,
+      openingFundBalance: 728,
     },
     missing: [],
   }),
@@ -47,6 +49,7 @@ vi.mock('../hooks/useYearData', () => ({
   ensureNextYearCreated: mocks.ensureNextYearCreated,
   deleteLatestYear: mocks.deleteLatestYear,
   updateYearDeadline: mocks.updateYearDeadline,
+  updateYearOpeningFundBalance: mocks.updateYearOpeningFundBalance,
   useYearMeta: () => mocks.yearMeta,
   useYearRecords: () => mocks.budgetRecords,
 }));
@@ -63,6 +66,7 @@ vi.mock('../lib/importParser', () => ({
     { id: 'eduPlan', label: '國民教育計畫', group: 'expense', expenseLabel: '國民教育計畫' },
     { id: 'adminPlan', label: '一般行政管理計畫', group: 'expense', expenseLabel: '一般行政管理計畫' },
     { id: 'buildingPlan', label: '建築及設備計畫', group: 'expense', expenseLabel: '建築及設備計畫' },
+    { id: 'openingFundBalance', label: '期初基金餘額（預算書表）', group: 'budgetbook' },
   ],
 }));
 vi.mock('../contexts/AuthContext', () => ({
@@ -107,6 +111,7 @@ beforeEach(() => {
   mocks.budgetRecords.loading = false;
   mocks.budgetRecords.error = null;
   mocks.updateYearDeadline.mockResolvedValue(undefined);
+  mocks.updateYearOpeningFundBalance.mockResolvedValue(undefined);
   mocks.yearMeta = { meta: { deadline: null }, loading: false, exists: true, error: null };
 });
 
@@ -163,6 +168,42 @@ describe('Archive budget import', () => {
     }));
     expect(mocks.importRecords.mock.calls[0][0]).not.toHaveProperty('yearData');
     expect(mocks.setYear).toHaveBeenCalledWith('116');
+    act(() => renderer.unmount());
+  });
+
+  it('applies the parsed 期初基金餘額 to the next year\'s 預算書表 on confirm', async () => {
+    mocks.actor = { uid: 'admin-current', name: '即時管理員' };
+    let renderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <Archive years={['113', '114', '115']} latestYear="115" setYear={mocks.setYear} setNav={vi.fn()} />,
+      );
+    });
+    await prepareReview(renderer);
+
+    await act(async () => control(renderer, '確認匯入 116 年度').props.onClick());
+
+    expect(mocks.updateYearOpeningFundBalance).toHaveBeenCalledWith('116', 728);
+    act(() => renderer.unmount());
+  });
+
+  it('leaves the copied-forward draft alone when the upload has no 期初基金餘額 to confirm', async () => {
+    mocks.actor = { uid: 'admin-current', name: '即時管理員' };
+    mocks.parseImportFile.mockResolvedValue({
+      fields: { govGrant: 120, eduPlan: 50, adminPlan: 30, buildingPlan: 20 },
+      missing: ['openingFundBalance'],
+    });
+    let renderer;
+    act(() => {
+      renderer = TestRenderer.create(
+        <Archive years={['113', '114', '115']} latestYear="115" setYear={mocks.setYear} setNav={vi.fn()} />,
+      );
+    });
+    await prepareReview(renderer);
+
+    await act(async () => control(renderer, '確認匯入 116 年度').props.onClick());
+
+    expect(mocks.updateYearOpeningFundBalance).not.toHaveBeenCalled();
     act(() => renderer.unmount());
   });
 });

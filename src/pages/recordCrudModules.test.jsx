@@ -426,6 +426,24 @@ describe('schema-driven Generic records CRUD page', () => {
     mounted.unmount();
   });
 
+  it('shows 校地總面積 summed across active 地號 rows (in 公頃), excluding stopped-use rows', () => {
+    installRecords('land', readyRecords([
+      { id: 'a', recordType: 'land', parcel: 'A-1', area: 5000, announcedValue: 500, deletedAt: null },
+      { id: 'b', recordType: 'land', parcel: 'B-2', area: 15000, announcedValue: 400, deletedAt: null },
+    ]));
+    const mounted = mount(Generic, { moduleKey: 'land' });
+    expect(pageText(mounted.renderer)).toContain('校地總面積');
+    expect(pageText(mounted.renderer)).toContain('2 公頃');
+    mounted.unmount();
+  });
+
+  it('does not show a 校地總面積 summary for a module without one (e.g. 獲獎紀錄)', () => {
+    installRecords('awards', readyRecords([]));
+    const mounted = mount(Generic, { moduleKey: 'awards' });
+    expect(pageText(mounted.renderer)).not.toContain('校地總面積');
+    mounted.unmount();
+  });
+
   it('validates dates and creates a typed awards record with trimmed fields, requiring 學生姓名 for an 個人賽', async () => {
     const records = readyRecords([]);
     installRecords('awards', records);

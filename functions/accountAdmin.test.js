@@ -185,7 +185,7 @@ describe('normalizeImportRow', () => {
 
   it('accepts comma or whitespace separated modules alongside 頓號', () => {
     const row = normalizeImportRow({
-      name: '林小美', account: 'lin', dept: '學務處', role: '填報人員', modules: '獲獎紀錄,課後社團 土地現值',
+      name: '林小美', account: 'lin', dept: '學務處', role: '填報人員', modules: '獲獎紀錄,課後社團 校地概況',
     });
     expect(row.modules).toEqual(['awards', 'club', 'land']);
   });

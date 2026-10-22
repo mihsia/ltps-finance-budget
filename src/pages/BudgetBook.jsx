@@ -5,7 +5,7 @@ import { useFixedFieldEditor } from '../hooks/useFixedFieldEditor';
 import { useAuth } from '../contexts/AuthContext';
 import { functions } from '../firebase';
 import { runAuthorized } from '../lib/accessPolicy';
-import { deadlineExtraCheck, getDeadlineState } from '../lib/fixedFieldEditing';
+import { deadlineExtraCheck, getDeadlineState, validateFixedFields } from '../lib/fixedFieldEditing';
 import { validateBudgetRecord } from '../lib/recordSchemas';
 import { fmtNum } from '../lib/format';
 import { budgetRecordSummary } from '../lib/recordDerivations';
@@ -13,7 +13,7 @@ import { fileToBase64, validatePdfFile } from '../lib/pdfUpload';
 import NoModuleAccess from '../components/NoModuleAccess';
 import { pageTitle, pageSubtitle, card, btnOutline, btnPrimary, btnSecondary, input, label, lockedBanner, deadlineBanner, progressBar } from '../styles';
 
-const FIELDS = ['fundName', 'reviewAuthority', 'description'];
+const FIELDS = ['fundName', 'reviewAuthority', 'openingFundBalance', 'description'];
 
 export default function BudgetBook({ year, hasCurrentYear = () => false }) {
   const budgetState = useYearRecords(year, 'budget');
@@ -87,6 +87,7 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
       const payload = {
         fundName: editor.form.fundName.trim(),
         reviewAuthority: editor.form.reviewAuthority.trim(),
+        openingFundBalance: editor.form.openingFundBalance.trim(),
         description: editor.form.description.trim(),
       };
       if (!payload.fundName || !payload.reviewAuthority) {
@@ -94,6 +95,10 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
       }
       if (payload.fundName.length > 100 || payload.reviewAuthority.length > 100) {
         return { allowed: false, reason: '基金別與審議機關不得超過 100 個字。' };
+      }
+      const balanceValidation = validateFixedFields(payload, ['openingFundBalance']);
+      if (!balanceValidation.valid) {
+        return { allowed: false, reason: '期初基金餘額必須是非負整數（千元），或留白。' };
       }
       if (payload.description.length > 2000) {
         return { allowed: false, reason: '預算書說明不得超過 2000 個字。' };
@@ -198,6 +203,13 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
   } = budgetRecordSummary(budgetState.data);
   const budgetReady = !budgetState.loading && !budgetState.error;
   const shortfall = revenueTotal - expenseTotal;
+  // 期末基金餘額 = 期初基金餘額 + 本期賸餘(短絀) — the same formula the
+  // official「基金來源、用途及餘絀預計表」uses, so it's computed here
+  // rather than stored as its own field (nothing to keep in sync by hand).
+  const openingFundBalance = editor.form.openingFundBalance === ''
+    ? null : Number(editor.form.openingFundBalance);
+  const closingFundBalance = openingFundBalance == null || !budgetReady
+    ? null : openingFundBalance + shortfall;
   const canStartEditing = canEditModule('budgetbook')
     && yearState.exists
     && yearState.meta?.locked === false
@@ -226,6 +238,8 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
           <div>基金來源合計（歲入） <b>{budgetReady ? fmtNum(revenueTotal) : '—'} 千元</b></div>
           <div>基金用途合計（歲出） <b>{budgetReady ? fmtNum(expenseTotal) : '—'} 千元</b></div>
           <div>本期{budgetReady && shortfall < 0 ? '短絀' : '賸餘'} <b>{budgetReady ? fmtNum(shortfall) : '—'}</b></div>
+          <div>期初基金餘額 <b>{openingFundBalance == null ? '—' : `${fmtNum(openingFundBalance)} 千元`}</b></div>
+          <div>期末基金餘額 <b>{closingFundBalance == null ? '—' : `${fmtNum(closingFundBalance)} 千元`}</b></div>
         </div>
         <div style={card}>
           {editor.editing ? (
@@ -234,6 +248,8 @@ export default function BudgetBook({ year, hasCurrentYear = () => false }) {
               <input disabled={editor.pending} value={editor.form.fundName} onChange={(event) => editor.updateField('fundName', event.target.value)} style={{ ...input, marginBottom: 12 }} />
               <label style={label}>審議機關</label>
               <input disabled={editor.pending} value={editor.form.reviewAuthority} onChange={(event) => editor.updateField('reviewAuthority', event.target.value)} style={{ ...input, marginBottom: 12 }} />
+              <label style={label}>期初基金餘額（千元，依當年度預算書「基金來源、用途及餘絀預計表」填入；期末基金餘額會自動算出）</label>
+              <input aria-label="期初基金餘額" disabled={editor.pending} value={editor.form.openingFundBalance} onChange={(event) => editor.updateField('openingFundBalance', event.target.value)} style={{ ...input, marginBottom: 12 }} />
               <label style={label}>預算書說明（手動輸入，無 PDF 時可用來記錄重點內容）</label>
               <textarea
                 aria-label="預算書說明"

@@ -21,7 +21,18 @@ const COUNT_FIELDS = [
   'tuitionFeeAvg',
   'lunchSubsidyTotal',
 ];
-const AUDIT_FIELDS = [...COUNT_FIELDS, 'status'];
+// 人員與安全設備概況 — 議會分組審查常見提問用的校務基本事實，與上面的
+// 班級／學生／教師概況分開一個小節，避免單一區塊欄位太多、不好掃視。
+const PERSONNEL_FIELDS = [
+  'principalTotalTenure',
+  'principalTenure',
+  'sportsCoaches',
+  'schoolNurses',
+  'aedCount',
+  'aedCertifiedTeachers',
+];
+const ALL_FIELDS = [...COUNT_FIELDS, ...PERSONNEL_FIELDS];
+const AUDIT_FIELDS = [...ALL_FIELDS, 'status'];
 const FIELD_LABELS = {
   classes: '班級數',
   students: '學生人數',
@@ -32,6 +43,12 @@ const FIELD_LABELS = {
   partTimeTeachers: '代課老師',
   tuitionFeeAvg: '學雜費（各年級平均，元）',
   lunchSubsidyTotal: '午餐補助（全年度，千元）',
+  principalTotalTenure: '校長服務總年資（年）',
+  principalTenure: '擔任校長年資（年）',
+  sportsCoaches: '運動教練人數',
+  schoolNurses: '校護人數',
+  aedCount: 'AED 數量',
+  aedCertifiedTeachers: '有證照使用 AED 的老師人數',
 };
 
 function messageStyle(message) {
@@ -122,7 +139,7 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
     const result = await runAuthorized(() => authorizeModuleActor('basic'), async ({ actor }) => {
       const decision = checkInvocation();
       if (!decision.allowed) return decision;
-      const validation = validateFixedFields(editor.form, COUNT_FIELDS);
+      const validation = validateFixedFields(editor.form, ALL_FIELDS);
       if (!validation.valid) {
         const names = validation.invalidFields.map((field) => FIELD_LABELS[field]).join('、');
         return { allowed: false, reason: `「${names}」必須是非負整數，或留白。` };
@@ -214,6 +231,26 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
             <button type="button" disabled={editor.pending} onClick={cancelEditing} style={btnSecondary}>取消</button>
           </div>
         )}
+      </div>
+
+      <div style={sectionLabel}>人員與安全設備概況</div>
+      <div style={{ font: "400 12px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 10 }}>議會分組審查常見提問用的校務基本事實</div>
+      <div style={{ ...card, maxWidth: 640, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18, marginBottom: 16 }}>
+        {PERSONNEL_FIELDS.map((field) => (
+          <div key={field}>
+            <label style={label}>{FIELD_LABELS[field]}</label>
+            {editor.editing ? (
+              <input
+                disabled={editor.pending}
+                value={editor.form[field]}
+                onChange={(event) => editor.updateField(field, event.target.value)}
+                style={input}
+              />
+            ) : (
+              <div style={{ font: '700 18px Inter, sans-serif', color: '#1E2420' }}>{editor.form[field] || '—'}</div>
+            )}
+          </div>
+        ))}
       </div>
 
       <div style={sectionLabel}>資料異動稽核紀錄</div>

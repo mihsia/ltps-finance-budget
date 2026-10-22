@@ -39,7 +39,7 @@ export const navGroups = [
   ] },
   { label: '財務與行政', items: [
     { key: 'budget', label: '歲入歲出', icon: 'coin', color: '#B5533E', desc: '年度歲入歲出預算與決算金額、差異原因說明' },
-    { key: 'land', label: '土地現值', icon: 'map', color: '#8C8C3E', desc: '學校用地地號與公告現值資訊' },
+    { key: 'land', label: '校地概況', icon: 'map', color: '#8C8C3E', desc: '校地總面積（公頃）與各地號公告現值資訊' },
     { key: 'inquiry', label: '質詢答詢', icon: 'gavel', color: '#B1456B', desc: '議員質詢與學校答詢內容存檔' },
   ] },
   { label: '報表與管理', items: [
@@ -58,7 +58,7 @@ export const genericModuleMeta = {
   awards: { title: '獲獎紀錄', desc: '記錄學生與學校各項競賽獲獎資訊', columns: ['類別', '獲獎項目', '等級', '日期'] },
   club: { title: '課後社團', desc: '課後社團開設班別與人數', columns: ['社團名稱', '指導老師', '人數', '上課時間'] },
   careSupport: { title: '課照學扶', desc: '課後照顧、學習扶助等開班情況與人數', columns: ['班別類別', '班別名稱', '任課老師', '學生人數', '開課時段', '上課地點'] },
-  land: { title: '土地公告現值', desc: '學校用地地號與公告現值資訊', columns: ['地號', '面積(㎡)', '公告現值(元/㎡)'] },
+  land: { title: '校地概況', desc: '校地總面積（公頃，由各地號面積加總得出）與各地號公告現值資訊', columns: ['地號', '面積(㎡)', '公告現值(元/㎡)'] },
   inquiry: { title: '議會質詢／答詢紀錄', desc: '議員質詢與學校答詢內容存檔', columns: ['日期', '議員', '題目', '答案', '答詢狀態'] },
   specialNeeds: { title: '特生統計', desc: '原住民、新住民、低收入戶、身障生、單親生等統計人數', columns: ['類別', '人數', '說明'] },
 };

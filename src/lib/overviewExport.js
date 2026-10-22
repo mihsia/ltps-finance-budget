@@ -13,7 +13,7 @@ const MODULE_LABELS = {
   awards: '獲獎紀錄（筆數）',
   club: '課後社團（社團數）',
   careSupport: '課照學扶（班別數）',
-  land: '土地現值（地號數）',
+  land: '校地概況（地號數）',
   inquiry: '議會質詢答詢（已結案／總數）',
 };
 

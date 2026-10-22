@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   doc, documentId, onSnapshot, collection, serverTimestamp,
-  query, where, orderBy, limit as fsLimit, getDoc, getDocs, writeBatch, updateDoc, deleteField,
+  query, where, orderBy, limit as fsLimit, getDoc, getDocs, writeBatch, updateDoc, deleteField, setDoc,
 } from 'firebase/firestore';
 import { db, isFirebaseConfigured } from '../firebase';
 import { yearDataRepository } from '../lib/yearDataRepository';
@@ -463,6 +463,23 @@ export async function updateYearReportNarrative(year, path, text) {
   await updateDoc(yearRef, {
     [`reportNarratives.${path}`]: trimmed ? trimmed : deleteField(),
   });
+}
+
+/**
+ * Overwrites just the 期初基金餘額 field on /years/{year}/modules/budgetbook
+ * — used by Archive.jsx's「匯入新年度預算書」flow to apply the value parsed
+ * from the uploaded 預算書 (src/lib/importParser.js's `openingFundBalance`
+ * field) once the admin confirms the import. createNextYear() already
+ * copied last year's value forward as a starting draft (the same way it
+ * carries forward every other 固定欄位模組 field), so this only needs to
+ * run when the import actually found a number to replace that draft with —
+ * it's a plain merge write, not gated by yearWritable() the way per-record
+ * writes are (firestore.rules only requires isActiveAdmin() on module docs
+ * under an unlocked year, same basis as every other 固定欄位 save).
+ */
+export async function updateYearOpeningFundBalance(year, amount) {
+  const moduleRef = doc(db, 'years', year, 'modules', 'budgetbook');
+  await setDoc(moduleRef, { openingFundBalance: String(amount) }, { merge: true });
 }
 
 /** Live-subscribes to /years/{year}, giving lock state + per-module deadlines. */

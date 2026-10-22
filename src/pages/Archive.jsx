@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import {
-  createNextYear, deleteLatestYear, ensureNextYearCreated, updateYearDeadline, useYearMeta, useYearRecords,
+  createNextYear, deleteLatestYear, ensureNextYearCreated, updateYearDeadline, updateYearOpeningFundBalance,
+  useYearMeta, useYearRecords,
 } from '../hooks/useYearData';
 import { useAuth } from '../contexts/AuthContext';
 import { runAuthorized } from '../lib/accessPolicy';
@@ -198,6 +199,16 @@ export default function Archive({ years, latestYear, setYear, setNav }) {
           records,
           actor,
         });
+        // ensureNextYearCreated already copied last year's 期初基金餘額
+        // forward as a starting draft (same as every other 固定欄位模組
+        // field); only overwrite it when the uploaded 預算書 actually gave
+        // us a number (parsed, or filled in by hand during review) —
+        // leaving a truly blank review value alone keeps that draft intact
+        // instead of silently zeroing it out.
+        const openingFundBalanceValue = review.find((r) => r.id === 'openingFundBalance')?.value;
+        if (openingFundBalanceValue) {
+          await updateYearOpeningFundBalance(nextYear, numericReviewValue(review, 'openingFundBalance'));
+        }
 
         cancelImport();
         setYear(nextYear);

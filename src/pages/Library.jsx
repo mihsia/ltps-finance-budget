@@ -6,8 +6,8 @@ import { deadlineExtraCheck, getDeadlineState, validateFixedFields } from '../li
 import NoModuleAccess from '../components/NoModuleAccess';
 import { pageTitle, pageSubtitle, card, input, label, btnPrimary, btnSecondary, lockedBanner, deadlineBanner } from '../styles';
 
-const FIELDS = ['generalBooks', 'indigenousBooks'];
-const FIELD_LABELS = { generalBooks: '一般書籍', indigenousBooks: '族語書籍' };
+const FIELDS = ['generalBooks', 'indigenousBooks', 'libraryBudget'];
+const FIELD_LABELS = { generalBooks: '一般書籍', indigenousBooks: '族語書籍', libraryBudget: '圖書經費（千元）' };
 
 export default function Library({ year, hasCurrentYear = () => false }) {
   const moduleState = useYearModule(year, 'library');
@@ -120,6 +120,10 @@ export default function Library({ year, hasCurrentYear = () => false }) {
             <div>族語書籍</div>
             <div style={{ font: '800 26px Inter, sans-serif' }}>{editor.form.indigenousBooks || 0} <small>本</small></div>
           </div>
+          <div style={card}>
+            <div>圖書經費</div>
+            <div style={{ font: '800 26px Inter, sans-serif' }}>{editor.form.libraryBudget || 0} <small>千元</small></div>
+          </div>
           {canStartEditing && (
             <button type="button" onClick={beginEditing} style={{ ...btnPrimary, border: 0, gridColumn: '1/-1', width: 'fit-content' }}>編輯數量</button>
           )}
@@ -128,6 +132,7 @@ export default function Library({ year, hasCurrentYear = () => false }) {
         <div style={{ ...card, maxWidth: 520, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 18 }}>
           <div><label style={label}>一般書籍</label><input disabled={editor.pending} style={input} value={editor.form.generalBooks} onChange={(event) => editor.updateField('generalBooks', event.target.value)} /></div>
           <div><label style={label}>族語書籍</label><input disabled={editor.pending} style={input} value={editor.form.indigenousBooks} onChange={(event) => editor.updateField('indigenousBooks', event.target.value)} /></div>
+          <div><label style={label}>圖書經費（千元）</label><input disabled={editor.pending} style={input} value={editor.form.libraryBudget} onChange={(event) => editor.updateField('libraryBudget', event.target.value)} /></div>
           <div style={{ gridColumn: '1/-1', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button type="button" disabled={editor.pending} onClick={commit} style={{ ...btnPrimary, border: 0 }}>儲存</button>
             <button type="button" disabled={editor.pending} onClick={cancelEditing} style={btnSecondary}>取消</button>
