@@ -182,7 +182,15 @@ export default function Generic({
     let rows;
     try {
       const buffer = await file.arrayBuffer();
-      const workbook = XLSX.read(buffer, { type: 'array' });
+      // cellDates: a 日期 cell the user typed or pasted as a real Excel date
+      // (not plain text) reads back as a date serial number without this —
+      // parseImportFile's cellText() then stringifies the serial instead of
+      // formatting a date, and every such row fails "日期必須是有效的
+      // YYYY-MM-DD" even though the cell visibly shows a valid date in
+      // Excel. With cellDates:true the cell arrives as a genuine Date object
+      // instead, which cellText() formats correctly (see awardImport.js /
+      // inquiryImport.js).
+      const workbook = XLSX.read(buffer, { type: 'array', cellDates: true });
       const parsed = importExport.parseImportFile(workbook);
       if (parsed.error) {
         setImportState({ status: 'error', error: parsed.error });

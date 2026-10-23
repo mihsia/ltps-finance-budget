@@ -98,6 +98,22 @@ describe('parseAwardImportFile', () => {
     expect(rows).toEqual([]);
     expect(error).toMatch(/工作表/);
   });
+
+  it('formats a 日期 cell that is a genuine Excel date (not plain text) as YYYY-MM-DD', () => {
+    // aoa_to_sheet only keeps a JS Date as a date-typed cell (what
+    // Generic.jsx's cellDates:true read produces for a real Excel date
+    // cell) when told to; otherwise it silently converts it to a plain
+    // number, same as an untyped read would. Pass cellDates here to build
+    // the scenario parseAwardImportFile's cellText() must handle.
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+      AWARD_IMPORT_HEADERS,
+      ['語文類', '宜蘭縣語文競賽', '個人賽', '陳○安', '特優', new Date(Date.UTC(2025, 9, 12))],
+    ], { cellDates: true }), 'Sheet1');
+    const { rows, error } = parseAwardImportFile(wb);
+    expect(error).toBeNull();
+    expect(rows[0].date).toBe('2025-10-12');
+  });
 });
 
 describe('buildAwardExportWorkbook', () => {

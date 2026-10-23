@@ -97,6 +97,22 @@ describe('parseInquiryImportFile', () => {
     expect(rows).toEqual([]);
     expect(error).toMatch(/工作表/);
   });
+
+  it('formats a 日期 cell that is a genuine Excel date (not plain text) as YYYY-MM-DD', () => {
+    // aoa_to_sheet only keeps a JS Date as a date-typed cell (what
+    // Generic.jsx's cellDates:true read produces for a real Excel date
+    // cell) when told to; otherwise it silently converts it to a plain
+    // number, same as an untyped read would. Pass cellDates here to build
+    // the scenario parseInquiryImportFile's cellText() must handle.
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([
+      INQUIRY_IMPORT_HEADERS,
+      [new Date(Date.UTC(2025, 10, 8)), '王議員', '代理教師人力', '', '已答詢'],
+    ], { cellDates: true }), 'Sheet1');
+    const { rows, error } = parseInquiryImportFile(wb);
+    expect(error).toBeNull();
+    expect(rows[0].date).toBe('2025-11-08');
+  });
 });
 
 describe('buildInquiryExportWorkbook', () => {

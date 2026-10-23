@@ -35,8 +35,21 @@ const HEADER_TO_FIELD = {
   日期: 'date', 議員: 'councilor', 題目: 'subject', 答案: 'answer', 答詢狀態: 'status',
 };
 
+// A 日期 cell the user typed or pasted as a real Excel date (not plain text)
+// arrives here as a JS Date, not a string — Generic.jsx reads the upload
+// with cellDates:true for exactly this reason. SheetJS anchors that Date at
+// UTC midnight for a date-only cell, so UTC getters (matching
+// recordSchemas.js's own dateValue()) avoid a timezone-dependent off-by-one.
+function formatCellDate(date) {
+  const y = date.getUTCFullYear();
+  const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+  const d = String(date.getUTCDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 function cellText(value) {
   if (value == null) return '';
+  if (value instanceof Date) return formatCellDate(value);
   return String(value).trim();
 }
 

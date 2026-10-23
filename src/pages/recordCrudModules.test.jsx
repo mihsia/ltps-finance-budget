@@ -957,6 +957,24 @@ describe('Generic awards xlsx export/import', () => {
     mounted.unmount();
   });
 
+  it('imports a row whose 日期 cell is a genuine Excel date, not just a YYYY-MM-DD string', async () => {
+    const records = readyRecords([]);
+    installRecords('awards', records);
+    const mounted = mount(Generic, { moduleKey: 'awards' });
+
+    const file = fakeXlsxFile([
+      AWARD_IMPORT_HEADERS,
+      ['語文類', '宜蘭縣語文競賽－字音字形', '個人賽', '陳○安', '優等', new Date(Date.UTC(2025, 9, 12))],
+    ]);
+    await act(async () => { await fileInput(mounted.renderer).props.onChange({ target: { files: [file], value: '' } }); });
+
+    expect(records.create).toHaveBeenCalledWith({
+      recordType: 'award', category: '語文類', item: '宜蘭縣語文競賽－字音字形', competitionType: '個人賽', studentName: '陳○安', level: '優等', date: '2025-10-12',
+    }, authMocks.actor);
+    expect(pageText(mounted.renderer)).toContain('成功 1 筆／失敗 0 筆');
+    mounted.unmount();
+  });
+
   it('rejects an obviously malformed file without creating any records', async () => {
     const records = readyRecords([]);
     installRecords('awards', records);
