@@ -17,6 +17,17 @@ const MODULE_LABELS = {
   inquiry: '議會質詢答詢（已結案／總數）',
 };
 
+// Groups 各模組現況's modules the same way src/lib/nav.js groups them in the
+// sidebar (校務與學生／教學與活動／財務與行政), so the PDF reads with the
+// same structure as the system itself instead of 8 modules in one flat,
+// uncategorized list (2026-10-27 設計定案 — see the report-layout design
+// round: 單欄堆疊＋分類不清＋關鍵數字埋在文字裡 were the three complaints).
+const MODULE_CATEGORIES = [
+  { label: '校務與學生', keys: ['specialNeeds'] },
+  { label: '教學與活動', keys: ['library', 'language', 'club', 'careSupport', 'awards'] },
+  { label: '財務與行政', keys: ['land', 'inquiry'] },
+];
+
 // A pale fill + its own dark ink per section — the 議會報表 PDF's 模版 D
 // palette (2026-10-27 設計定案), reusing each module's OPTIONAL_MODULE_TILE_COLORS
 // pair (src/lib/overviewReport.js) so a module's table looks the same whether
@@ -142,10 +153,89 @@ export function buildOverviewWorkbook(report, { selectedModules } = {}) {
 function sectionStyles(fontName, tile) {
   return {
     theme: 'plain',
+    // A wrapped row (e.g. a long 班別名稱) would otherwise split across a
+    // page break mid-cell, leaving its second line orphaned under a
+    // repeated header on the next page — 'avoid' moves the whole row to the
+    // next page intact instead (2026-10-27 設計定案).
+    rowPageBreak: 'avoid',
     headStyles: { fillColor: hexToRgb(tile.soft), textColor: hexToRgb(tile.ink), font: fontName, fontStyle: 'bold' },
     bodyStyles: { font: fontName, fontStyle: 'normal', textColor: [30, 36, 32] },
     styles: { font: fontName },
   };
+}
+
+// Measures one 各模組現況 card's content (so the caller can learn its height
+// — and therefore a row's height, the taller of its two cards — before
+// anything is drawn, which is what lets a row that won't fit the remaining
+// page be moved to a fresh page as a whole rather than cut mid-card). Pass
+// the SAME values returned here into drawModuleCard() right after, so the
+// layout actually drawn matches what was measured.
+function measureModuleCard(doc, fontName, width, card) {
+  const padX = 4;
+  const headerH = 9;
+  const innerWidth = width - padX * 2;
+  doc.setFont(fontName, 'normal');
+  doc.setFontSize(8.5);
+  const narrativeLines = card.narrativeText ? doc.splitTextToSize(card.narrativeText, innerWidth).slice(0, 3) : [];
+  let height = headerH + 5 + 7; // header + top padding + the bold value line
+  if (narrativeLines.length) height += narrativeLines.length * 3.6 + 3;
+  let chartW = 0;
+  let chartH = 0;
+  if (card.chartImg) {
+    chartW = innerWidth;
+    chartH = card.chartImg.height * (chartW / card.chartImg.width);
+    const maxChartH = 32;
+    if (chartH > maxChartH) {
+      chartW *= maxChartH / chartH;
+      chartH = maxChartH;
+    }
+    height += chartH + 4;
+  }
+  height += 4; // bottom padding
+  return { height, narrativeLines, chartW, chartH };
+}
+
+// Draws one 各模組現況 card at (x, y): a soft-fill header strip with the
+// module's label, a large bold headline number (the same value already
+// shown in the 網頁版 module card's header — src/pages/Report.jsx's own
+// moduleValueText — so the PDF and the live page agree on the number), up
+// to 3 lines of its narrative, then its chart image if one was captured.
+// `measured` must be measureModuleCard()'s own return value for this card.
+function drawModuleCard(doc, fontName, x, y, width, card, measured) {
+  const { height, narrativeLines, chartW, chartH } = measured;
+  const padX = 4;
+  const headerH = 9;
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(x, y, width, height, 2, 2, 'F');
+  doc.setDrawColor(227, 223, 211);
+  doc.setLineWidth(0.3);
+  doc.roundedRect(x, y, width, height, 2, 2, 'S');
+
+  doc.setFillColor(...hexToRgb(card.tile.soft));
+  doc.rect(x + 0.3, y + 0.3, width - 0.6, headerH - 0.3, 'F');
+  doc.setFont(fontName, 'bold');
+  doc.setFontSize(10);
+  doc.setTextColor(...hexToRgb(card.tile.ink));
+  doc.text(card.label, x + padX, y + headerH / 2 + 2.2);
+
+  let cy = y + headerH + 7;
+  doc.setFont(fontName, 'bold');
+  doc.setFontSize(15);
+  doc.text(card.valueText || '—', x + padX, cy);
+
+  if (narrativeLines.length) {
+    cy += 4;
+    doc.setFont(fontName, 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(107, 114, 106);
+    doc.text(narrativeLines, x + padX, cy);
+    cy += narrativeLines.length * 3.6;
+  }
+
+  if (card.chartImg && chartW > 0) {
+    cy += 3;
+    doc.addImage(card.chartImg.dataUrl, 'PNG', x + padX, cy, chartW, chartH);
+  }
 }
 
 /**
@@ -266,24 +356,6 @@ export async function buildOverviewPdf(report, {
     y += blockHeight + TABLE_GAP;
   }
 
-  // A smaller, module-colored heading for one module's own subsection inside
-  // 各模組現況 — lighter than zoneHeader (no rule, no big gap before it)
-  // since it introduces one module among several in the same zone, not a
-  // new zone.
-  function moduleSubHeading(label, color) {
-    if (y > doc.internal.pageSize.getHeight() - 30) {
-      doc.addPage();
-      y = 20;
-    } else {
-      y += TABLE_GAP + 2;
-    }
-    doc.setFont(fontName, 'bold');
-    doc.setFontSize(11.5);
-    doc.setTextColor(...hexToRgb(color));
-    doc.text(label, 14, y);
-    y += 6;
-  }
-
   // 分組審查摘要 — placed before even 關鍵指標 so it's the very first thing
   // on the page: a 1-2 段文字的 school-side summary built for the 議會分組
   // 預算審查「每校報告不超過 1 分鐘」場合(see overviewNarrative.js's
@@ -310,8 +382,14 @@ export async function buildOverviewPdf(report, {
 
   zoneHeader('財務概況');
   addNarrative(narratives.finance);
-  addChartImage(chartImages['finance.expenseTrend']);
-  addChartImage(chartImages['finance.revenueSource']);
+  // maxWidth/maxHeight raised from the old 100×55mm default — these two
+  // charts stay the report's only full-width, single-column charts (see
+  // MODULE_CATEGORIES below for the 各模組現況 cards, which size their own
+  // charts to the card width instead), so they should use close to the full
+  // ~182mm usable page width rather than being capped to just over half of
+  // it (2026-10-27 設計定案).
+  addChartImage(chartImages['finance.expenseTrend'], { maxWidth: 160, maxHeight: 85 });
+  addChartImage(chartImages['finance.revenueSource'], { maxWidth: 160, maxHeight: 85 });
 
   if (report.basicProfile) {
     zoneHeader('校務資料');
@@ -321,10 +399,64 @@ export async function buildOverviewPdf(report, {
   const moduleKeys = (selectedModules || Object.keys(MODULE_LABELS)).filter((key) => report.modules[key]);
   if (moduleKeys.length) {
     zoneHeader('各模組現況');
-    for (const key of moduleKeys) {
-      moduleSubHeading(MODULE_LABELS[key], (SECTION_TILE_COLORS[key] || SECTION_TILE_COLORS.kpi).ink);
-      addNarrative(narratives.modules[key]);
-      addChartImage(chartImages[`module.${key}`]);
+    // Grouped by category (MODULE_CATEGORIES, matching the sidebar's own
+    // taxonomy) and laid out two cards per row, using the page's full
+    // ~182mm usable width, instead of one module after another down a
+    // single narrow column with the right half of every page left blank
+    // (2026-10-27 設計定案 — see the report-layout design round).
+    const CARD_GAP = 6;
+    const usableWidth = doc.internal.pageSize.getWidth() - 28;
+    const cardWidth = (usableWidth - CARD_GAP) / 2;
+
+    for (const category of MODULE_CATEGORIES) {
+      const keysInCat = category.keys.filter((key) => moduleKeys.includes(key));
+      if (!keysInCat.length) continue;
+
+      // Measure the category's first row before deciding whether the label
+      // needs a fresh page, so the label never ends up alone at the bottom
+      // of a page with its own first card stranded on the next one.
+      const firstRowKeys = [keysInCat[0], keysInCat[1]].filter(Boolean);
+      const firstRowHeight = Math.max(...firstRowKeys.map((key) => measureModuleCard(doc, fontName, cardWidth, {
+        narrativeText: narratives.modules[key],
+        chartImg: chartImages[`module.${key}`],
+      }).height));
+
+      if (y + 6 + firstRowHeight > doc.internal.pageSize.getHeight() - 20) {
+        doc.addPage();
+        y = 20;
+      } else {
+        y += TABLE_GAP + 2;
+      }
+      doc.setFont(fontName, 'bold');
+      doc.setFontSize(10.5);
+      doc.setTextColor(138, 144, 137);
+      doc.text(category.label, 14, y);
+      y += 6;
+
+      for (let i = 0; i < keysInCat.length; i += 2) {
+        const rowKeys = [keysInCat[i], keysInCat[i + 1]].filter(Boolean);
+        const cards = rowKeys.map((key) => ({
+          label: MODULE_LABELS[key],
+          valueText: moduleValueText(key, report.modules[key]),
+          narrativeText: narratives.modules[key],
+          chartImg: chartImages[`module.${key}`],
+          tile: SECTION_TILE_COLORS[key] || SECTION_TILE_COLORS.kpi,
+        }));
+        const measures = cards.map((card) => measureModuleCard(doc, fontName, cardWidth, card));
+        const rowHeight = Math.max(...measures.map((m) => m.height));
+
+        if (y + rowHeight > doc.internal.pageSize.getHeight() - 20) {
+          doc.addPage();
+          y = 20;
+        } else if (i > 0) {
+          y += CARD_GAP;
+        }
+        cards.forEach((card, idx) => {
+          const cx = 14 + idx * (cardWidth + CARD_GAP);
+          drawModuleCard(doc, fontName, cx, y, cardWidth, card, measures[idx]);
+        });
+        y += rowHeight;
+      }
     }
   }
 

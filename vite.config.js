@@ -31,6 +31,17 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff,woff2}'],
+        // The PDF-export Chinese font chunks (src/lib/pdfFont.js) are
+        // deliberately dynamically imported so they only download the first
+        // time someone actually exports a PDF, not on every page load; after
+        // 2026-10-27's font-coverage fix (see build-pdf-font.py) each one is
+        // ~5MB, so precaching them at PWA-install time like the rest of the
+        // app shell would defeat that and also exceeds workbox's default
+        // 2 MiB precache-entry limit. Excluded from the precache manifest —
+        // the dynamic import() still fetches them normally (over the
+        // network, or the browser's own HTTP cache) whenever a PDF export
+        // actually runs.
+        globIgnores: ['**/NotoSansTC-*-subset-*.js'],
         navigateFallback: '/index.html',
         // Firebase Hosting reserves /__/auth/** for the Google-sign-in popup
         // handler (see signInWithPopup in src/contexts/AuthContext.jsx) —

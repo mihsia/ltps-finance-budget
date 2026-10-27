@@ -5,9 +5,30 @@ Chinese-capable font jsPDF embeds so exported PDFs render 中文 correctly
 (jsPDF's built-in fonts only cover Latin, which is why PDF exports used to
 come out as mojibake).
 
-Rebuild this whenever new fixed Chinese UI/report text is added and a
-character might be missing from the subset (a missing glyph renders as a
-blank box in the PDF, nothing worse — but best to keep it current).
+This used to scan the app's own source files for the Chinese characters
+they contain and subset down to just those — which covered the system's
+own fixed UI/report text, but silently dropped any character that only
+ever appears in FREE-TEXT DATA A SCHOOL TYPES IN (a teacher's name, a club
+title, a student's name, an award title, an inquiry subject…): that
+character would render as a zero-width blank glyph in the exported PDF,
+with neighbouring characters reading as if the word had been truncated
+(e.g. 薩克斯風 → 克, 低音銅管 → 低音管) even though nothing was actually cut —
+confirmed 2026-10-27 by comparing a real exported PDF against the system's
+own record list for the same data, character by character.
+
+Since a school can type any Chinese name at any time, scanning source code
+can never fully predict what's needed. Instead this now embeds the full
+CJK Unified Ideographs (+ Ext-A) block plus CJK punctuation, fullwidth
+forms, and the CJK Compatibility block (needed for unit symbols like ㎡) —
+effectively every Han character Noto Sans TC ships, not just the ones this
+app's own interface happens to use. The font file is bigger as a result,
+but it's only dynamically imported when a PDF export actually runs (see
+pdfFont.js), not part of the main bundle, so this doesn't affect normal
+page-load time.
+
+Rebuild this only if jsPDF needs a genuinely new *kind* of symbol later
+(not a Han character — those are already all covered) — add it to
+EXTRA_SYMBOLS below and rerun.
 
 Requires (dev-time only; not needed to build or run the app):
     pip install fonttools brotli
@@ -17,7 +38,6 @@ Usage:
     python3 scripts/build-pdf-font.py
 """
 import base64
-import glob
 import os
 import re
 
@@ -31,41 +51,24 @@ PKG_DIR = os.path.join(ROOT, 'node_modules', '@fontsource', 'noto-sans-tc')
 OUT_DIR = os.path.join(ROOT, 'src', 'assets', 'fonts')
 TMP_DIR = os.path.join(ROOT, '.pdf-font-build-tmp')
 
-SOURCE_GLOBS = [
-    'src/**/*.js', 'src/**/*.jsx',
-    'functions/**/*.js', 'functions/**/*.cjs',
-    'scripts/**/*.js', 'scripts/**/*.cjs',
-]
-# Codepoint ranges scanned for: CJK Unified Ideographs (+ Ext-A), CJK
-# punctuation, and fullwidth forms. Free-text data entered by users later
-# (item names, notes, etc.) is only covered if its characters happen to
-# already appear somewhere in the source or in EXTRA_TERMS_PATH below —
-# anything outside that renders as a blank glyph in PDF exports, not
-# corrupted text elsewhere.
-CJK_RANGES = [(0x4E00, 0x9FFF), (0x3400, 0x4DBF), (0x3000, 0x303F), (0xFF00, 0xFFEF)]
+# Every codepoint in these ranges is embedded wholesale (see the module
+# docstring for why this is no longer driven by scanning source files):
+# CJK Unified Ideographs + Ext-A (virtually every Han character in common
+# and less-common use, covering any name/title a school could type), CJK
+# punctuation, fullwidth forms, and CJK Compatibility (㎡, ㎥, ㎝, … and
+# other unit/compatibility symbols).
+CJK_RANGES = [(0x4E00, 0x9FFF), (0x3400, 0x4DBF), (0x3000, 0x303F), (0xFF00, 0xFFEF), (0x3300, 0x33FF)]
 EXTRA_TERMS_PATH = os.path.join(ROOT, 'scripts', 'pdf-font-extra-terms.txt')
 EXTRA_SYMBOLS = '▼▲－–—…•·、。，．：；？！（）「」『』〈〉《》【】〔〕％‰＄／＼＋－×÷＝＜＞'
 
 
-def in_cjk_ranges(cp):
-    return any(lo <= cp <= hi for lo, hi in CJK_RANGES)
-
-
 def collect_needed_chars():
-    chars = set()
-    for pattern in SOURCE_GLOBS:
-        for path in glob.glob(os.path.join(ROOT, pattern), recursive=True):
-            if 'node_modules' in path or '.test.' in path:
-                continue
-            with open(path, encoding='utf-8') as f:
-                text = f.read()
-            for ch in text:
-                if in_cjk_ranges(ord(ch)):
-                    chars.add(ch)
+    chars = set(chr(cp) for lo, hi in CJK_RANGES for cp in range(lo, hi + 1))
+    # Kept for anything a future EXTRA_TERMS_PATH entry needs that falls
+    # outside CJK_RANGES (everything in the current file is already inside
+    # those ranges, so this is a harmless no-op today, not a required step).
     with open(EXTRA_TERMS_PATH, encoding='utf-8') as f:
-        for ch in f.read():
-            if in_cjk_ranges(ord(ch)):
-                chars.add(ch)
+        chars |= set(f.read())
     chars |= set(chr(c) for c in range(0x20, 0x7F))  # ASCII
     chars |= set(EXTRA_SYMBOLS)
     return chars
