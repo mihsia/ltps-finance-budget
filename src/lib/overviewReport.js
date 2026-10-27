@@ -15,6 +15,24 @@ export const OPTIONAL_MODULE_COLORS = {
   inquiry: '#B1456B',
 };
 
+// Each module's identity as a pale fill + the dark ink of the same hue —
+// the "多彩但柔和" (多模版 D，2026-10-27 議會報表設計定案) treatment for a
+// whole card or table-header surface, as opposed to OPTIONAL_MODULE_COLORS
+// above (kept unchanged; still the saturated data-ink used by the module's
+// own chart, e.g. RankedBarChart — a pale tint there would wash the bars
+// out). `soft` is the fill, `ink` is text/border on that fill; both pass
+// WCAG AA contrast on white and on their own `soft`.
+export const OPTIONAL_MODULE_TILE_COLORS = {
+  library: { soft: '#F1E9F8', ink: '#4A2E66' },
+  language: { soft: '#E6F1F8', ink: '#0F4C66' },
+  specialNeeds: { soft: '#F3E9DE', ink: '#6B4423' },
+  awards: { soft: '#FBE9F2', ink: '#6B1D44' },
+  club: { soft: '#EAF5E6', ink: '#2C5420' },
+  careSupport: { soft: '#FBEAE2', ink: '#7A3A1E' },
+  land: { soft: '#F5F0DC', ink: '#5C5420' },
+  inquiry: { soft: '#FDE8EE', ink: '#85204A' },
+};
+
 // Column spec for each optional module's itemized detail table — shared by
 // the live Report.jsx preview and both export builders so the "細項資料"
 // shown on screen, in the PDF, and in the Excel workbook never drift apart.

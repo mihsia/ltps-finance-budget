@@ -7,7 +7,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { fmtNum, fmtDate } from '../lib/format';
 import { buildCouncilWorkbook } from '../lib/councilExport';
 import { buildOverviewPdf, buildOverviewWorkbook } from '../lib/overviewExport';
-import { buildOverviewReport, OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_COLORS } from '../lib/overviewReport';
+import { buildOverviewReport, OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_COLORS, OPTIONAL_MODULE_TILE_COLORS } from '../lib/overviewReport';
 import { buildDefaultNarratives, resolveNarratives } from '../lib/overviewNarrative';
 import NarrativeField from '../components/NarrativeField';
 import { languageRecordSummary } from '../lib/recordDerivations';
@@ -23,7 +23,7 @@ import { captureChartImages } from '../lib/chartCapture';
 import { runAuthorized } from '../lib/accessPolicy';
 import NoModuleAccess from '../components/NoModuleAccess';
 import {
-  pageTitle, sectionLabel, card, statTile, btnOutline, btnPrimary, btnSecondary, chip, progressBar,
+  pageTitle, sectionLabel, card, btnOutline, btnPrimary, btnSecondary, chip, progressBar,
 } from '../styles';
 
 // Validated against the dataviz skill's CVD-safety checks for an all-pairs
@@ -469,6 +469,19 @@ export function RevenueSourceDonut({ data }) {
   );
 }
 
+// A pale-fill, dark-ink stat tile — the 關鍵指標 row's own look (模版 D,
+// 2026-10-27 議會報表設計定案), distinct from the plain neutral `statTile`
+// style shared with Dashboard.jsx so this page's colour choice doesn't leak
+// into the dashboard.
+function kpiTile(soft, ink) {
+  return {
+    tile: { background: soft, borderRadius: 12, padding: '16px 18px' },
+    label: { font: "400 12px 'Noto Sans TC', sans-serif", color: ink, opacity: 0.85, marginBottom: 6 },
+    value: { font: '700 24px Inter, sans-serif', color: ink },
+    unit: { font: "500 12px 'Noto Sans TC', sans-serif", color: ink, opacity: 0.85 },
+  };
+}
+
 /**
  * A bigger, divided header for a top-level zone of the report (財務概況／
  * 各模組現況／統計分析／匯出與紀錄) — one step up from `sectionLabel`, which
@@ -776,6 +789,14 @@ export default function Report({ year, years }) {
     else if (kind === 'pdf') await exportPdf();
   };
 
+  // 關鍵指標 tiles: a fixed colour per figure's own kind (expense/revenue),
+  // except 本期賸餘／短絀 which flips pale-green/pale-red by sign — the
+  // figure itself is the signal, not a separate delta.
+  const expenseTile = kpiTile('#FBEAE2', '#7A3A1E');
+  const revenueTile = kpiTile('#DCF1FF', '#0A3A80');
+  const shortfallTile = report.kpi.shortfall < 0 ? kpiTile('#FBE9E5', '#831C1E') : kpiTile('#E6F5EA', '#1E6B3A');
+  const studentTile = kpiTile('#F0EEE6', '#1E2420');
+
   return (
     <div>
       <div style={pageTitle}>議會報表匯出</div>
@@ -791,21 +812,21 @@ export default function Report({ year, years }) {
 
       <div style={sectionLabel}>關鍵指標</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 20, maxWidth: 900 }}>
-        <div style={statTile}>
-          <div style={{ font: "400 12px 'Noto Sans TC', sans-serif", color: '#6B726A', marginBottom: 6 }}>{year}年度歲出預算</div>
-          <div style={{ font: '800 20px Inter, sans-serif' }}>{fmtNum(report.kpi.expenseTotal)}<span style={{ font: "600 11px 'Noto Sans TC', sans-serif", color: '#8A9089' }}> 千元</span></div>
+        <div style={expenseTile.tile}>
+          <div style={expenseTile.label}>{year}年度歲出預算</div>
+          <div style={expenseTile.value}>{fmtNum(report.kpi.expenseTotal)}<span style={expenseTile.unit}> 千元</span></div>
         </div>
-        <div style={statTile}>
-          <div style={{ font: "400 12px 'Noto Sans TC', sans-serif", color: '#6B726A', marginBottom: 6 }}>{year}年度歲入預算</div>
-          <div style={{ font: '800 20px Inter, sans-serif' }}>{fmtNum(report.kpi.revenueTotal)}<span style={{ font: "600 11px 'Noto Sans TC', sans-serif", color: '#8A9089' }}> 千元</span></div>
+        <div style={revenueTile.tile}>
+          <div style={revenueTile.label}>{year}年度歲入預算</div>
+          <div style={revenueTile.value}>{fmtNum(report.kpi.revenueTotal)}<span style={revenueTile.unit}> 千元</span></div>
         </div>
-        <div style={statTile}>
-          <div style={{ font: "400 12px 'Noto Sans TC', sans-serif", color: '#6B726A', marginBottom: 6 }}>本期{report.kpi.shortfall < 0 ? '短絀' : '賸餘'}</div>
-          <div style={{ font: '800 20px Inter, sans-serif', color: report.kpi.shortfall < 0 ? '#B5533E' : '#2F8F5B' }}>{fmtNum(report.kpi.shortfall)}<span style={{ font: "600 11px 'Noto Sans TC', sans-serif", color: '#8A9089' }}> 千元</span></div>
+        <div style={shortfallTile.tile}>
+          <div style={shortfallTile.label}>本期{report.kpi.shortfall < 0 ? '短絀' : '賸餘'}</div>
+          <div style={shortfallTile.value}>{fmtNum(report.kpi.shortfall)}<span style={shortfallTile.unit}> 千元</span></div>
         </div>
-        <div style={statTile}>
-          <div style={{ font: "400 12px 'Noto Sans TC', sans-serif", color: '#6B726A', marginBottom: 6 }}>學生人數</div>
-          <div style={{ font: '800 20px Inter, sans-serif' }}>{report.kpi.students ?? '—'}<span style={{ font: "600 11px 'Noto Sans TC', sans-serif", color: '#8A9089' }}> 人 · {report.kpi.classes ?? '—'}班</span></div>
+        <div style={studentTile.tile}>
+          <div style={studentTile.label}>學生人數</div>
+          <div style={studentTile.value}>{report.kpi.students ?? '—'}<span style={studentTile.unit}> 人 · {report.kpi.classes ?? '—'}班</span></div>
         </div>
       </div>
 
@@ -899,16 +920,16 @@ export default function Report({ year, years }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginBottom: 24, maxWidth: 1100 }}>
         {OPTIONAL_MODULE_CHOICES.filter((m) => selected[m.key] && report.modules[m.key]).map((m) => {
-          const color = OPTIONAL_MODULE_COLORS[m.key] || '#1F5F52';
+          const tile = OPTIONAL_MODULE_TILE_COLORS[m.key] || { soft: '#E9F1EE', ink: '#0F3A30' };
           const fields = OPTIONAL_MODULE_DETAIL_FIELDS[m.key] || [];
           const detailRows = report.modules[m.key].rows || [];
           const columns = fields.map(() => '1fr').join(' ');
           const charts = MODULE_CHARTS[m.key];
           return (
-            <div key={m.key} style={{ border: '1px solid #E3DFD3', borderLeft: `4px solid ${color}`, borderRadius: 9, overflow: 'hidden' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px' }}>
-                <div style={{ font: "600 11.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>{m.label}</div>
-                <div style={{ font: '800 17px Inter, sans-serif' }}>{moduleValueText(m.key)}</div>
+            <div key={m.key} style={{ border: '1px solid #E3DFD3', borderRadius: 12, overflow: 'hidden' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', background: tile.soft }}>
+                <div style={{ font: "600 11.5px 'Noto Sans TC', sans-serif", color: tile.ink, opacity: 0.85 }}>{m.label}</div>
+                <div style={{ font: '800 17px Inter, sans-serif', color: tile.ink }}>{moduleValueText(m.key)}</div>
               </div>
               {charts && (
                 <div ref={setChartRef(`module.${m.key}`)} style={{ padding: '4px 14px 14px', borderTop: '1px solid #EEEBE2', display: 'flex', flexDirection: 'column', gap: 16 }}>

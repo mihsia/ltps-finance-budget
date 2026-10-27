@@ -3,7 +3,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { registerCjkFont } from './pdfFont';
 import { fmtNum, fmtDate } from './format';
-import { OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_COLORS } from './overviewReport';
+import { OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_TILE_COLORS } from './overviewReport';
 import { buildDefaultNarratives } from './overviewNarrative';
 
 const MODULE_LABELS = {
@@ -17,16 +17,23 @@ const MODULE_LABELS = {
   inquiry: '議會質詢答詢（已結案／總數）',
 };
 
-// One accent color per section, reused from the sidebar nav's per-module
-// colors (src/lib/nav.js) so the PDF's colored header blocks stay visually
-// consistent with the rest of the app instead of introducing a new palette.
-const SECTION_COLORS = {
-  kpi: '#1F5F52',
-  trend: '#B5533E',
-  variance: '#B5533E',
-  revenue: '#3E8E7E',
-  basicProfile: '#C9832F',
-  ...OPTIONAL_MODULE_COLORS,
+// A pale fill + its own dark ink per section — the 議會報表 PDF's 模版 D
+// palette (2026-10-27 設計定案), reusing each module's OPTIONAL_MODULE_TILE_COLORS
+// pair (src/lib/overviewReport.js) so a module's table looks the same whether
+// it's read on screen or in the PDF; the non-module sections below get their
+// own pairs in the same family (expense-side tables in the 歲出 terracotta,
+// revenue in the 歲入 blue). Pale fill + dark text replaces the old solid-
+// colour-fill-with-white-text header, and callers also pass theme:'plain' to
+// drop jspdf-autotable's default striped rows — both were flagged as
+// generated-dashboard "tells" (saturated header bands, zebra striping) in
+// this round's design review.
+const SECTION_TILE_COLORS = {
+  kpi: { soft: '#E9F1EE', ink: '#0F3A30' },
+  trend: { soft: '#FDEEE0', ink: '#8A4A1E' },
+  variance: { soft: '#FDF6DC', ink: '#7A5A0A' },
+  revenue: { soft: '#DCF1FF', ink: '#0A3A80' },
+  basicProfile: { soft: '#F5E9F7', ink: '#5C2E66' },
+  ...OPTIONAL_MODULE_TILE_COLORS,
 };
 
 function hexToRgb(hex) {
@@ -132,10 +139,11 @@ export function buildOverviewWorkbook(report, { selectedModules } = {}) {
   return wb;
 }
 
-function sectionStyles(fontName, color) {
+function sectionStyles(fontName, tile) {
   return {
-    headStyles: { fillColor: hexToRgb(color), textColor: [255, 255, 255], font: fontName, fontStyle: 'bold' },
-    bodyStyles: { font: fontName, fontStyle: 'normal' },
+    theme: 'plain',
+    headStyles: { fillColor: hexToRgb(tile.soft), textColor: hexToRgb(tile.ink), font: fontName, fontStyle: 'bold' },
+    bodyStyles: { font: fontName, fontStyle: 'normal', textColor: [30, 36, 32] },
     styles: { font: fontName },
   };
 }
@@ -297,7 +305,7 @@ export async function buildOverviewPdf(report, {
       ['代理教師占比', report.kpi.substituteRatio == null ? '—' : `${report.kpi.substituteRatio}%`],
       ['圖書藏書量', report.kpi.libraryTotal == null ? '—' : `${fmtNum(report.kpi.libraryTotal)} 冊`],
     ],
-    ...sectionStyles(fontName, SECTION_COLORS.kpi),
+    ...sectionStyles(fontName, SECTION_TILE_COLORS.kpi),
   });
 
   zoneHeader('財務概況');
@@ -314,7 +322,7 @@ export async function buildOverviewPdf(report, {
   if (moduleKeys.length) {
     zoneHeader('各模組現況');
     for (const key of moduleKeys) {
-      moduleSubHeading(MODULE_LABELS[key], SECTION_COLORS[key] || SECTION_COLORS.kpi);
+      moduleSubHeading(MODULE_LABELS[key], (SECTION_TILE_COLORS[key] || SECTION_TILE_COLORS.kpi).ink);
       addNarrative(narratives.modules[key]);
       addChartImage(chartImages[`module.${key}`]);
     }
@@ -339,7 +347,7 @@ export async function buildOverviewPdf(report, {
   table({
     head: [['歲出三年比較', '金額（千元）', '較上年增減']],
     body: report.trend.map((entry) => [`${entry.year}年度`, fmtNum(entry.expenseTotal), pctText(entry.deltaPct)]),
-    ...sectionStyles(fontName, SECTION_COLORS.trend),
+    ...sectionStyles(fontName, SECTION_TILE_COLORS.trend),
   });
   y += TABLE_GAP;
   table({
@@ -352,7 +360,7 @@ export async function buildOverviewPdf(report, {
       ]),
       ['合計', fmtNum(report.expenseVariance.budgetTotal), report.expenseVariance.hasActual ? fmtNum(report.expenseVariance.actualTotal) : '—', '', ''],
     ],
-    ...sectionStyles(fontName, SECTION_COLORS.variance),
+    ...sectionStyles(fontName, SECTION_TILE_COLORS.variance),
   });
   y += TABLE_GAP;
   table({
@@ -361,7 +369,7 @@ export async function buildOverviewPdf(report, {
       ...report.revenue.rows.map((row) => [row.label, fmtNum(row.amount)]),
       ['合計', fmtNum(report.revenue.total)],
     ],
-    ...sectionStyles(fontName, SECTION_COLORS.revenue),
+    ...sectionStyles(fontName, SECTION_TILE_COLORS.revenue),
   });
 
   for (const key of moduleKeys) {
@@ -371,7 +379,7 @@ export async function buildOverviewPdf(report, {
     table({
       head: [[{ content: MODULE_LABELS[key], colSpan: detail[0].length }], detail[0]],
       body: detail.slice(1),
-      ...sectionStyles(fontName, SECTION_COLORS[key] || SECTION_COLORS.kpi),
+      ...sectionStyles(fontName, SECTION_TILE_COLORS[key] || SECTION_TILE_COLORS.kpi),
     });
   }
 
