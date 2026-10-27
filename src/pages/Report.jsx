@@ -449,40 +449,54 @@ export function RevenueSourceDonut({ data }) {
   const colorFor = (d, i) => (d.label === '其他' ? REVENUE_OTHER_COLOR : (REVENUE_SOURCE_PALETTE[i] || REVENUE_OTHER_COLOR));
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="歲入來源依比例分布圓環圖">
-        <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
-          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#EEEBE2" strokeWidth={ringWidth} />
-          {data.map((d, i) => {
-            const length = (d.amount / total) * circumference;
-            const visibleLength = Math.max(length - 2, 0);
-            const dashoffset = -drawn;
-            drawn += length;
-            return (
-              <circle
-                key={d.label}
-                cx={size / 2}
-                cy={size / 2}
-                r={radius}
-                fill="none"
-                stroke={colorFor(d, i)}
-                strokeWidth={ringWidth}
-                strokeDasharray={`${visibleLength} ${circumference - visibleLength}`}
-                strokeDashoffset={dashoffset}
-              />
-            );
-          })}
-        </g>
-        <text x={size / 2} y={size / 2 - 4} textAnchor="middle" style={{ font: '800 16px Inter, sans-serif', fill: '#1E2420' }}>{fmtNum(total)}</text>
-        <text x={size / 2} y={size / 2 + 14} textAnchor="middle" style={{ font: "500 10.5px 'Noto Sans TC', sans-serif", fill: '#8A9089' }}>千元</text>
-      </svg>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="歲入來源依比例分布圓環圖">
+          <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+            <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#EEEBE2" strokeWidth={ringWidth} />
+            {data.map((d, i) => {
+              const length = (d.amount / total) * circumference;
+              const visibleLength = Math.max(length - 2, 0);
+              const dashoffset = -drawn;
+              drawn += length;
+              return (
+                <circle
+                  key={d.label}
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  fill="none"
+                  stroke={colorFor(d, i)}
+                  strokeWidth={ringWidth}
+                  strokeDasharray={`${visibleLength} ${circumference - visibleLength}`}
+                  strokeDashoffset={dashoffset}
+                />
+              );
+            })}
+          </g>
+          <text x={size / 2} y={size / 2 - 4} textAnchor="middle" style={{ font: '800 16px Inter, sans-serif', fill: '#1E2420' }}>{fmtNum(total)}</text>
+          <text x={size / 2} y={size / 2 + 14} textAnchor="middle" style={{ font: "500 10.5px 'Noto Sans TC', sans-serif", fill: '#8A9089' }}>千元</text>
+        </svg>
+      </div>
+      {/* Legend below the donut in a 2-column grid, full card width — same
+          fix as AwardCategoryDonut/SpecialNeedsDonut above, applied here
+          too: a fixed-size donut with its legend squeezed beside it never
+          grows past that small natural width, so raising overviewExport.js's
+          addChartImage size cap alone couldn't make this chart any bigger
+          in the exported PDF — it only shrinks an oversized capture, never
+          enlarges an already-small one (2026-10-27 設計定案，發現於使用者
+          回報「財務概況的圓餅圖還是偏小」). */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px' }}>
         {data.map((d, i) => (
-          <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ width: 10, height: 10, borderRadius: 3, flex: 'none', background: colorFor(d, i) }} />
-            <span style={{ font: "600 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>{d.label}</span>
-            <span style={{ font: '700 12px Inter, sans-serif', color: '#454B45' }}>{fmtNum(d.amount)}</span>
-            <span style={{ font: "500 11.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>（{d.pct}%）</span>
+          <div key={d.label} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <span style={{ width: 8, height: 8, borderRadius: 2, flex: 'none', background: colorFor(d, i) }} />
+            <span style={{
+              font: "600 11px 'Noto Sans TC', sans-serif", color: '#1E2420',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}
+            >
+              {`${d.label}　`}{fmtNum(d.amount)}<span style={{ color: '#8A9089', fontWeight: 500 }}>・{d.pct}%</span>
+            </span>
           </div>
         ))}
       </div>

@@ -311,7 +311,7 @@ describe('RevenueSourceDonut', () => {
     const text = textOf(renderer.root);
     expect(text).toContain('政府撥入收入');
     expect(text).toContain('53,599');
-    expect(text).toContain('（99.9%）');
+    expect(text).toContain('・99.9%');
     expect(text).toContain('53,639'); // total shown in the donut's center
 
     const circles = renderer.root.findAllByType('circle');
@@ -329,7 +329,7 @@ describe('RevenueSourceDonut', () => {
     ];
     const renderer = render(<RevenueSourceDonut data={data} />);
     const legendSwatches = renderer.root.findAll(
-      (node) => node.props.style?.borderRadius === 3 && node.props.style?.background,
+      (node) => node.props.style?.borderRadius === 2 && node.props.style?.background,
     );
     expect(legendSwatches[0].props.style.background).toBe('#8A9089');
   });
