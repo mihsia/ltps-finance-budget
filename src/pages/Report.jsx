@@ -51,45 +51,56 @@ export function AwardCategoryDonut({ data }) {
   let drawn = 0;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="獲獎項目依類別分布圓環圖">
-        <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
-          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#EEEBE2" strokeWidth={ringWidth} />
-          {data.map((d) => {
-            const length = (d.count / total) * circumference;
-            // A small surface-color gap between slices reads as separation without drawing a border.
-            const visibleLength = Math.max(length - 2, 0);
-            const dashoffset = -drawn;
-            drawn += length;
-            return (
-              <circle
-                key={d.category}
-                cx={size / 2}
-                cy={size / 2}
-                r={radius}
-                fill="none"
-                stroke={AWARD_CATEGORY_COLORS[d.category] || AWARD_CATEGORY_COLORS.其他}
-                strokeWidth={ringWidth}
-                strokeDasharray={`${visibleLength} ${circumference - visibleLength}`}
-                strokeDashoffset={dashoffset}
-              />
-            );
-          })}
-        </g>
-        <text x={size / 2} y={size / 2 - 4} textAnchor="middle" style={{ font: '800 20px Inter, sans-serif', fill: '#1E2420' }}>{total}</text>
-        <text x={size / 2} y={size / 2 + 14} textAnchor="middle" style={{ font: "500 10.5px 'Noto Sans TC', sans-serif", fill: '#8A9089' }}>筆獲獎</text>
-      </svg>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="獲獎項目依類別分布圓環圖">
+          <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+            <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#EEEBE2" strokeWidth={ringWidth} />
+            {data.map((d) => {
+              const length = (d.count / total) * circumference;
+              // A small surface-color gap between slices reads as separation without drawing a border.
+              const visibleLength = Math.max(length - 2, 0);
+              const dashoffset = -drawn;
+              drawn += length;
+              return (
+                <circle
+                  key={d.category}
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  fill="none"
+                  stroke={AWARD_CATEGORY_COLORS[d.category] || AWARD_CATEGORY_COLORS.其他}
+                  strokeWidth={ringWidth}
+                  strokeDasharray={`${visibleLength} ${circumference - visibleLength}`}
+                  strokeDashoffset={dashoffset}
+                />
+              );
+            })}
+          </g>
+          <text x={size / 2} y={size / 2 - 4} textAnchor="middle" style={{ font: '800 20px Inter, sans-serif', fill: '#1E2420' }}>{total}</text>
+          <text x={size / 2} y={size / 2 + 14} textAnchor="middle" style={{ font: "500 10.5px 'Noto Sans TC', sans-serif", fill: '#8A9089' }}>筆獲獎</text>
+        </svg>
+      </div>
+      {/* Legend runs full-width in a 2-column grid below the donut, rather
+          than squeezed into whatever's left beside a fixed-size donut — in a
+          narrow card (the 各模組現況 grid runs two cards per row) that left
+          each legend line too little room and forced it to wrap, especially
+          with several categories (2026-10-27 設計定案). */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px' }}>
         {data.map((d) => (
-          <div key={d.category} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div key={d.category} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
             <span style={{
-              width: 10, height: 10, borderRadius: 3, flex: 'none',
+              width: 8, height: 8, borderRadius: 2, flex: 'none',
               background: AWARD_CATEGORY_COLORS[d.category] || AWARD_CATEGORY_COLORS.其他,
             }}
             />
-            <span style={{ font: "600 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>{d.category}</span>
-            <span style={{ font: '700 12px Inter, sans-serif', color: '#454B45' }}>{d.count} 筆</span>
-            <span style={{ font: "500 11.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>（{d.pct}%）</span>
+            <span style={{
+              font: "600 11px 'Noto Sans TC', sans-serif", color: '#1E2420',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}
+            >
+              {`${d.category}　`}{d.count} 筆<span style={{ color: '#8A9089', fontWeight: 500 }}>・{d.pct}%</span>
+            </span>
           </div>
         ))}
       </div>
@@ -179,48 +190,58 @@ export function SpecialNeedsDonut({ data, totalStudents }) {
   let drawn = 0;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="特生統計依類別佔全體學生百分比圓環圖">
-        <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
-          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#EEEBE2" strokeWidth={ringWidth} />
-          {data.map((d) => {
-            // Categories can overlap (a student may count under more than
-            // one), so clamp each slice to whatever ring length remains
-            // rather than letting the total run past a full circle.
-            const rawLength = (d.count / totalStudents) * circumference;
-            const length = Math.max(Math.min(rawLength, circumference - drawn), 0);
-            const visibleLength = Math.max(length - 2, 0);
-            const dashoffset = -drawn;
-            drawn += length;
-            return (
-              <circle
-                key={d.category}
-                cx={size / 2}
-                cy={size / 2}
-                r={radius}
-                fill="none"
-                stroke={SPECIAL_NEEDS_CATEGORY_COLORS[d.category] || SPECIAL_NEEDS_OTHER_COLOR}
-                strokeWidth={ringWidth}
-                strokeDasharray={`${visibleLength} ${circumference - visibleLength}`}
-                strokeDashoffset={dashoffset}
-              />
-            );
-          })}
-        </g>
-        <text x={size / 2} y={size / 2 - 4} textAnchor="middle" style={{ font: '800 20px Inter, sans-serif', fill: '#1E2420' }}>{totalStudents}</text>
-        <text x={size / 2} y={size / 2 + 14} textAnchor="middle" style={{ font: "500 10.5px 'Noto Sans TC', sans-serif", fill: '#8A9089' }}>學生總數</text>
-      </svg>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="特生統計依類別佔全體學生百分比圓環圖">
+          <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+            <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#EEEBE2" strokeWidth={ringWidth} />
+            {data.map((d) => {
+              // Categories can overlap (a student may count under more than
+              // one), so clamp each slice to whatever ring length remains
+              // rather than letting the total run past a full circle.
+              const rawLength = (d.count / totalStudents) * circumference;
+              const length = Math.max(Math.min(rawLength, circumference - drawn), 0);
+              const visibleLength = Math.max(length - 2, 0);
+              const dashoffset = -drawn;
+              drawn += length;
+              return (
+                <circle
+                  key={d.category}
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  fill="none"
+                  stroke={SPECIAL_NEEDS_CATEGORY_COLORS[d.category] || SPECIAL_NEEDS_OTHER_COLOR}
+                  strokeWidth={ringWidth}
+                  strokeDasharray={`${visibleLength} ${circumference - visibleLength}`}
+                  strokeDashoffset={dashoffset}
+                />
+              );
+            })}
+          </g>
+          <text x={size / 2} y={size / 2 - 4} textAnchor="middle" style={{ font: '800 20px Inter, sans-serif', fill: '#1E2420' }}>{totalStudents}</text>
+          <text x={size / 2} y={size / 2 + 14} textAnchor="middle" style={{ font: "500 10.5px 'Noto Sans TC', sans-serif", fill: '#8A9089' }}>學生總數</text>
+        </svg>
+      </div>
+      {/* Legend below the donut in a 2-column grid, full card width — see
+          AwardCategoryDonut above for why (same fix, same reason); this is
+          the component that actually had the problem in practice, since 特
+          生統計 routinely has 6-7 categories at once. */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px' }}>
         {data.map((d) => (
-          <div key={d.category} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div key={d.category} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
             <span style={{
-              width: 10, height: 10, borderRadius: 3, flex: 'none',
+              width: 8, height: 8, borderRadius: 2, flex: 'none',
               background: SPECIAL_NEEDS_CATEGORY_COLORS[d.category] || SPECIAL_NEEDS_OTHER_COLOR,
             }}
             />
-            <span style={{ font: "600 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>{d.category}</span>
-            <span style={{ font: '700 12px Inter, sans-serif', color: '#454B45' }}>{d.count} 人</span>
-            <span style={{ font: "500 11.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>（佔全體學生 {d.pct}%）</span>
+            <span style={{
+              font: "600 11px 'Noto Sans TC', sans-serif", color: '#1E2420',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}
+            >
+              {`${d.category}　`}{d.count} 人<span style={{ color: '#8A9089', fontWeight: 500 }}>・{d.pct}%</span>
+            </span>
           </div>
         ))}
       </div>
@@ -560,6 +581,9 @@ export function createReportExportHandlers({
   };
 }
 
+const DETAIL_ROWS_INITIAL = 6;
+const DETAIL_ROWS_STEP = 10;
+
 export default function Report({ year, years }) {
   const basicState = useYearModule(year, 'basic');
   const libraryState = useYearModule(year, 'library');
@@ -600,6 +624,12 @@ export default function Report({ year, years }) {
     () => Object.fromEntries(OPTIONAL_MODULE_CHOICES.map((m) => [m.key, true])),
   );
   const [preview, setPreview] = useState(null);
+  // How many of a module card's itemized detail rows are currently shown
+  // (keyed by module key) — a module with many records (e.g. 34 筆獲獎紀錄)
+  // used to print every row inline, making that one card (and the whole
+  // page) unreasonably tall; now it starts capped and "顯示更多" reveals
+  // DETAIL_ROWS_STEP more at a time (2026-10-27 設計定案).
+  const [detailRowLimits, setDetailRowLimits] = useState({});
   const selectedModules = OPTIONAL_MODULE_CHOICES.map((m) => m.key).filter((key) => selected[key]);
 
   // DOM nodes for every chart currently on screen, keyed the same way
@@ -941,20 +971,44 @@ export default function Report({ year, years }) {
                   ))}
                 </div>
               )}
-              {detailRows.length > 0 && (
-                <div style={{ borderTop: '1px solid #EEEBE2' }} className="table-scroll">
-                  <div style={{ minWidth: fields.length * 110 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: columns, padding: '6px 14px', background: '#F5F3EE', font: "700 10.5px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
-                      {fields.map((field) => <span key={field.key}>{field.label}</span>)}
-                    </div>
-                    {detailRows.map((row, i) => (
-                      <div key={i} style={{ display: 'grid', gridTemplateColumns: columns, padding: '6px 14px', borderTop: '1px solid #EEEBE2', font: "500 11.5px 'Noto Sans TC', sans-serif", color: '#454B45' }}>
-                        {fields.map((field) => <span key={field.key}>{row[field.key] == null || row[field.key] === '' ? '—' : row[field.key]}</span>)}
+              {detailRows.length > 0 && (() => {
+                const shownCount = detailRowLimits[m.key] ?? DETAIL_ROWS_INITIAL;
+                const visibleRows = detailRows.slice(0, shownCount);
+                const hasMore = shownCount < detailRows.length;
+                const canCollapse = !hasMore && detailRows.length > DETAIL_ROWS_INITIAL;
+                return (
+                  <>
+                    <div style={{ borderTop: '1px solid #EEEBE2' }} className="table-scroll">
+                      <div style={{ minWidth: fields.length * 110 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: columns, padding: '6px 14px', background: '#F5F3EE', font: "700 10.5px 'Noto Sans TC', sans-serif", color: '#6B726A' }}>
+                          {fields.map((field) => <span key={field.key}>{field.label}</span>)}
+                        </div>
+                        {visibleRows.map((row, i) => (
+                          <div key={i} style={{ display: 'grid', gridTemplateColumns: columns, padding: '6px 14px', borderTop: '1px solid #EEEBE2', font: "500 11.5px 'Noto Sans TC', sans-serif", color: '#454B45' }}>
+                            {fields.map((field) => <span key={field.key}>{row[field.key] == null || row[field.key] === '' ? '—' : row[field.key]}</span>)}
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+                    </div>
+                    {(hasMore || canCollapse) && (
+                      <div
+                        onClick={() => setDetailRowLimits((prev) => ({
+                          ...prev,
+                          [m.key]: hasMore ? Math.min(shownCount + DETAIL_ROWS_STEP, detailRows.length) : DETAIL_ROWS_INITIAL,
+                        }))}
+                        style={{
+                          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                          padding: '8px', borderTop: '1px solid #EEEBE2', background: '#F5F3EE',
+                          color: tile.ink, font: "700 11.5px 'Noto Sans TC', sans-serif", cursor: 'pointer',
+                        }}
+                      >
+                        {hasMore ? `顯示更多（還有 ${detailRows.length - shownCount} 筆）` : '收合'}
+                        <span style={{ fontSize: 13 }}>{hasMore ? '▾' : '▴'}</span>
+                      </div>
+                    )}
+                  </>
+                );
+              })()}
             </div>
           );
         })}

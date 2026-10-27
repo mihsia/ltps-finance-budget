@@ -40,7 +40,7 @@ describe('AwardCategoryDonut', () => {
     const text = textOf(renderer.root);
     expect(text).toContain('語文類');
     expect(text).toContain('3 筆');
-    expect(text).toContain('（60%）');
+    expect(text).toContain('・60%');
     expect(text).toContain('5'); // total shown in the donut's center
 
     const circles = renderer.root.findAllByType('circle');
@@ -108,7 +108,7 @@ describe('SpecialNeedsDonut', () => {
     const text = textOf(renderer.root);
     expect(text).toContain('原住民');
     expect(text).toContain('17 人');
-    expect(text).toContain('（佔全體學生 6.5%）');
+    expect(text).toContain('・6.5%');
     expect(text).toContain('262'); // total students shown in the donut's center
 
     const circles = renderer.root.findAllByType('circle');
