@@ -18,7 +18,7 @@ import { SCHOOL_LAND_TOTAL_AREA_HECTARES } from '../lib/landStats';
 import NoModuleAccess from '../components/NoModuleAccess';
 import {
   pageTitle, pageSubtitle, card, input, btnPrimary, btnOutline, btnSecondary,
-  tableHeadRow, tableRow, stickyActionCell, lockedBanner, deadlineBanner, badge,
+  tableHeadRow, tableRow, stickyActionCell, lockedBanner, deadlineBanner, badge, chip,
 } from '../styles';
 
 function messageStyle(message) {
@@ -75,6 +75,29 @@ const MODULE_SUMMARY = {
   },
 };
 
+// The field (if any) a module's record list can be narrowed by with the
+// 類別 chip row, alongside the search box every module gets — only modules
+// with an obvious categorical column get one; 課後社團／校地概況 don't have
+// one and just get the search box (2026-10-27 設計定案 — see the generic-
+// list search/filter design round: 筆數多的模組一路往下滑才找得到特定一
+// 筆資料, e.g. 34 筆獲獎紀錄).
+const CATEGORY_FILTER_FIELD = {
+  awards: 'category',
+  careSupport: 'category',
+  specialNeeds: 'category',
+  inquiry: 'status',
+};
+
+// True when `search` is empty (matches everything) or found, case-
+// insensitively, in any of the record's own displayed field values — so
+// typing a student's name, a club's name, a councilor's name, etc. all work
+// the same way without the caller needing to know which column that was.
+function recordMatchesSearch(record, fields, search) {
+  const needle = search.trim().toLowerCase();
+  if (!needle) return true;
+  return fields.some((field) => String(record[field.key] ?? '').toLowerCase().includes(needle));
+}
+
 // The custom-entry text box is tracked by its own marker key (rather than
 // derived purely from the field's current value) so picking "其他（自訂）"
 // keeps the text box visible even while its value is still blank. Editing an
@@ -130,6 +153,8 @@ export default function Generic({
   const includeDeleted = showDeleted && recoveryAllowed;
   const recordState = useYearRecords(year, moduleKey, { includeDeleted });
   const [formState, setFormState] = useState(null);
+  const [search, setSearch] = useState('');
+  const [activeCategories, setActiveCategories] = useState([]);
   const importFileRef = useRef(null);
   const [importState, setImportState] = useState(null);
   const actions = useRecordCrudActions({
@@ -145,6 +170,8 @@ export default function Generic({
   useEffect(() => {
     setFormState(null);
     if (!recoveryAllowed) setShowDeleted(false);
+    setSearch('');
+    setActiveCategories([]);
   }, [moduleKey, recoveryAllowed, year]);
 
   const activeRecords = recordState.data.filter(
@@ -284,6 +311,22 @@ export default function Generic({
   const tableMinWidth = schema.fields.length * 130 + (writeVisible ? 92 : 0);
   const moduleSummary = MODULE_SUMMARY[moduleKey];
 
+  // 搜尋框（所有模組）＋ 類別 chip（只有 CATEGORY_FILTER_FIELD 裡有列的模組）
+  // narrow the active-records list shown below, without touching
+  // activeRecords/deletedRecords themselves — 新增一筆、匯出/匯入 Excel 等
+  // 既有功能都還是處理全部資料，只有畫面上顯示的列表被篩選。
+  const categoryFilterField = CATEGORY_FILTER_FIELD[moduleKey];
+  const availableCategories = categoryFilterField
+    ? [...new Set(activeRecords.map((record) => record[categoryFilterField]).filter(Boolean))]
+    : [];
+  const searchedRecords = activeRecords.filter((record) => recordMatchesSearch(record, schema.fields, search));
+  const visibleRecords = categoryFilterField && activeCategories.length
+    ? searchedRecords.filter((record) => activeCategories.includes(record[categoryFilterField]))
+    : searchedRecords;
+  const toggleCategory = (value) => setActiveCategories((current) => (
+    current.includes(value) ? current.filter((v) => v !== value) : [...current, value]
+  ));
+
   return (
     <div>
       <div style={pageTitle}>{meta.title}</div>
@@ -337,6 +380,28 @@ export default function Generic({
         )}
       </div>
 
+      {!includeDeleted && activeRecords.length > 0 && (
+        <div style={{ maxWidth: 860, marginBottom: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <input
+            type="search"
+            aria-label="搜尋"
+            placeholder={`搜尋${schema.fields.map((f) => f.label).join('、')}…`}
+            style={input}
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          {categoryFilterField && availableCategories.length > 0 && (
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {availableCategories.map((value) => (
+                <div key={value} style={chip(activeCategories.includes(value))} onClick={() => toggleCategory(value)}>
+                  {value}{activeCategories.includes(value) ? ' ✕' : ''}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {importExport && importState?.status === 'error' && (
         <div style={{ maxWidth: 820, marginBottom: 14, color: '#B5533E', font: "600 12.5px 'Noto Sans TC', sans-serif" }}>{importState.error}</div>
       )}
@@ -378,7 +443,10 @@ export default function Generic({
             {activeRecords.length === 0 && (
               <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無資料</div>
             )}
-            {activeRecords.map((record) => (
+            {activeRecords.length > 0 && visibleRecords.length === 0 && (
+              <div style={{ padding: '12px 18px', color: '#8A9089' }}>沒有符合搜尋／篩選條件的資料</div>
+            )}
+            {visibleRecords.map((record) => (
               <div key={record.id} style={{ ...tableRow(columns), alignItems: 'center' }}>
                 {schema.fields.map((field) => <span key={field.key}>{record[field.key]}</span>)}
                 {writeVisible && (

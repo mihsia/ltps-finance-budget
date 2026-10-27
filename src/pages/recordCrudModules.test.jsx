@@ -83,7 +83,10 @@ function change(renderer, ariaLabel, value) {
 // Excludes the awards module's always-mounted hidden xlsx file-picker input,
 // which isn't a record form field and shouldn't count toward "no form is open".
 function formInputs(renderer) {
-  return renderer.root.findAllByType('input').filter((node) => node.props.type !== 'file');
+  // Excludes the file-picker input (匯入 Excel) and the record-list search
+  // box (type="search", see Generic.jsx) — neither is part of the create/
+  // edit form these assertions are checking for.
+  return renderer.root.findAllByType('input').filter((node) => node.props.type !== 'file' && node.props.type !== 'search');
 }
 
 function fileInput(renderer) {
@@ -1036,6 +1039,73 @@ describe('Module deadline', () => {
 
     expect(pageText(mounted.renderer)).toContain('已超過填報期限');
     expect(control(mounted.renderer, addLabel)).toBeUndefined();
+    mounted.unmount();
+  });
+});
+
+describe('Generic record list search and category filter', () => {
+  it('search box filters rows by any field, case-insensitively, without touching the underlying records', () => {
+    const records = readyRecords([
+      { id: 'a1', recordType: 'award', category: '體育類', item: '100公尺賽跑', competitionType: '個人賽', studentName: '王小明', level: '第一名', date: '2025-01-01' },
+      { id: 'a2', recordType: 'award', category: '語文類', item: '作文比賽', competitionType: '個人賽', studentName: '陳小華', level: '優等', date: '2025-02-02' },
+    ]);
+    installRecords('awards', records);
+    const mounted = mount(Generic, { moduleKey: 'awards' });
+
+    expect(pageText(mounted.renderer)).toContain('王小明');
+    expect(pageText(mounted.renderer)).toContain('陳小華');
+
+    change(mounted.renderer, '搜尋', '小明');
+    expect(pageText(mounted.renderer)).toContain('王小明');
+    expect(pageText(mounted.renderer)).not.toContain('陳小華');
+
+    // Clearing the search restores the full list — nothing about the
+    // records themselves was mutated by filtering the display.
+    change(mounted.renderer, '搜尋', '');
+    expect(pageText(mounted.renderer)).toContain('陳小華');
+    mounted.unmount();
+  });
+
+  it('category chips narrow the list by the module\'s categorical field, and re-clicking an active chip clears it', () => {
+    const records = readyRecords([
+      { id: 'a1', recordType: 'award', category: '體育類', item: '100公尺賽跑', competitionType: '個人賽', studentName: '王小明', level: '第一名', date: '2025-01-01' },
+      { id: 'a2', recordType: 'award', category: '語文類', item: '作文比賽', competitionType: '個人賽', studentName: '陳小華', level: '優等', date: '2025-02-02' },
+    ]);
+    installRecords('awards', records);
+    const mounted = mount(Generic, { moduleKey: 'awards' });
+
+    expect(control(mounted.renderer, '體育類')).toBeTruthy();
+    act(() => control(mounted.renderer, '體育類').props.onClick());
+    expect(pageText(mounted.renderer)).toContain('王小明');
+    expect(pageText(mounted.renderer)).not.toContain('陳小華');
+
+    act(() => control(mounted.renderer, '體育類 ✕').props.onClick());
+    expect(pageText(mounted.renderer)).toContain('陳小華');
+    mounted.unmount();
+  });
+
+  it('shows a "no match" message instead of "尚無資料" when a filter matches nothing but records exist', () => {
+    const records = readyRecords([
+      { id: 'a1', recordType: 'award', category: '體育類', item: '100公尺賽跑', competitionType: '個人賽', studentName: '王小明', level: '第一名', date: '2025-01-01' },
+    ]);
+    installRecords('awards', records);
+    const mounted = mount(Generic, { moduleKey: 'awards' });
+
+    change(mounted.renderer, '搜尋', '不存在的關鍵字');
+    expect(pageText(mounted.renderer)).toContain('沒有符合搜尋／篩選條件的資料');
+    expect(pageText(mounted.renderer)).not.toContain('尚無資料');
+    mounted.unmount();
+  });
+
+  it('does not show category chips for a module with no categorical field (課後社團), but still offers the search box', () => {
+    const records = readyRecords([
+      { id: 'c1', recordType: 'club', name: '合唱團', instructor: '林老師', participants: 20, weekday: '週一', startTime: '16:00', endTime: '17:00', venue: '音樂教室', feePerStudent: 0 },
+    ]);
+    installRecords('club', records);
+    const mounted = mount(Generic, { moduleKey: 'club' });
+
+    expect(field(mounted.renderer, '搜尋')).toBeTruthy();
+    expect(pageText(mounted.renderer)).not.toContain('✕');
     mounted.unmount();
   });
 });
