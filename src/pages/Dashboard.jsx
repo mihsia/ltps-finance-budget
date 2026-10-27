@@ -1,22 +1,19 @@
 import { useYearModule, useYearRecords } from '../hooks/useYearData';
 import { fmtNum } from '../lib/format';
-import { moduleCompletionPct, completionColor } from '../lib/completion';
-import { budgetRecordSummary, languageRecordSummary } from '../lib/recordDerivations';
+import { activeTypedRecords, budgetRecordSummary, languageRecordSummary } from '../lib/recordDerivations';
+import { summarizeInquiryResolution } from '../lib/inquiryStats';
+import { OPTIONAL_MODULE_TILE_COLORS, moduleValueText } from '../lib/overviewReport';
 import { pageTitle, pageSubtitle, statTile, card, sectionLabel, progressBar } from '../styles';
 
-const COMPLETION_MODULES = [
-  { key: 'basic', label: '學校基本資料' },
-  { key: 'specialNeeds', label: '特生統計' },
-  { key: 'budget', label: '預算數' },
-  { key: 'library', label: '圖書館藏書' },
-  { key: 'language', label: '族語開班' },
-  { key: 'languageCert', label: '族語認證' },
-  { key: 'awards', label: '獲獎紀錄' },
-  { key: 'club', label: '課後社團' },
-  { key: 'careSupport', label: '課照學扶' },
-  { key: 'land', label: '校地概況' },
-  { key: 'inquiry', label: '議會質詢答詢' },
-];
+// 族語認證 isn't one of the 選填模組 report cards (no OPTIONAL_MODULE_TILE_COLORS
+// entry / moduleValueText case), so it carries its own tile colour here —
+// the same soft/ink pair as its sidebar icon (src/lib/nav.js).
+const LANGUAGE_CERT_TILE = { soft: '#E3F2F1', ink: '#1C5C5A' };
+
+// 各模組現況: the 7 選填模組 not already covered by a dashboard KPI tile or
+// chart (圖書藏書量 and 族語開班 have their own spot above), each paired
+// with the module key its headline number is keyed under in `moduleValueText`.
+const MODULE_SUMMARY_KEYS = ['specialNeeds', 'awards', 'club', 'careSupport', 'land', 'inquiry'];
 
 export default function Dashboard({ years, latestYear }) {
   const trendYears = years.length >= 3 ? years.slice(-3) : [...Array(3 - years.length).fill(years[0]), ...years];
@@ -27,7 +24,6 @@ export default function Dashboard({ years, latestYear }) {
   const library = useYearModule(latestYear, 'library');
   const language = useYearRecords(latestYear, 'language');
   const modules = {
-    basic, budget: budgetC, library, language,
     languageCert: useYearRecords(latestYear, 'languageCert'),
     awards: useYearRecords(latestYear, 'awards'),
     club: useYearRecords(latestYear, 'club'),
@@ -60,6 +56,83 @@ export default function Dashboard({ years, latestYear }) {
     ? []
     : languageRecordSummary(language.data).classRows;
   const langMax = Math.max(...langClasses.map((l) => Number(l.students || 0)), 1);
+
+  // 各模組現況 + 待辦／需留意: every number below is derived straight from
+  // this year's active (non-deleted) records, the same way Report.jsx and
+  // overviewReport.js's buildOverviewReport() do it — so these never drift
+  // from what the 報表匯出頁／PDF show for the same module (2026-10-27 設計定案).
+  const activeOf = (key) => activeTypedRecords(modules[key].data);
+
+  const specialNeedsRows = activeOf('specialNeeds');
+  const specialNeedsTotal = specialNeedsRows.reduce((sum, r) => sum + Number(r.count || 0), 0);
+  const specialNeedsPct = staff.students ? ((specialNeedsTotal / Number(staff.students)) * 100).toFixed(1) : null;
+
+  const awardsRows = activeOf('awards');
+  const awardsByCategory = awardsRows.reduce((acc, r) => {
+    if (!r.category) return acc;
+    acc[r.category] = (acc[r.category] || 0) + 1;
+    return acc;
+  }, {});
+  const topAwardCategory = Object.entries(awardsByCategory).sort((a, b) => b[1] - a[1])[0];
+
+  const clubRows = activeOf('club');
+  const clubParticipants = clubRows.reduce((sum, r) => sum + Number(r.participants || 0), 0);
+
+  const careSupportRows = activeOf('careSupport');
+  const careSupportParticipants = careSupportRows.reduce((sum, r) => sum + Number(r.participants || 0), 0);
+
+  const landRows = activeOf('land');
+  const landAreaTotal = landRows.reduce((sum, r) => sum + Number(r.area || 0), 0);
+
+  const inquiryRows = activeOf('inquiry');
+  const inquiryResolution = summarizeInquiryResolution(inquiryRows);
+  const inquiryUnresolved = inquiryResolution.total - inquiryResolution.resolved;
+
+  const certRosterRows = activeTypedRecords(modules.languageCert.data, 'roster');
+  const certLangCount = new Set(certRosterRows.map((r) => r.lang).filter(Boolean)).size;
+
+  const moduleSummaries = {
+    specialNeeds: { total: specialNeedsTotal },
+    awards: { count: awardsRows.length },
+    club: { count: clubRows.length },
+    careSupport: { count: careSupportRows.length },
+    land: { count: landRows.length },
+    inquiry: inquiryResolution,
+  };
+  const moduleSubtext = {
+    specialNeeds: specialNeedsPct != null ? `占全體學生 ${specialNeedsPct}%` : null,
+    awards: topAwardCategory ? `${topAwardCategory[0]}最多・${topAwardCategory[1]}筆` : null,
+    club: clubParticipants ? `參與 ${fmtNum(clubParticipants)} 人` : null,
+    careSupport: careSupportParticipants ? `共 ${fmtNum(careSupportParticipants)} 人` : null,
+    land: landAreaTotal ? `總面積 ${fmtNum(landAreaTotal)} ㎡` : null,
+    inquiry: inquiryResolution.total === 0 ? null : (inquiryUnresolved > 0 ? `尚有 ${inquiryUnresolved} 筆待回覆` : '本年度已全部結案'),
+  };
+  const moduleLabels = {
+    specialNeeds: '特生統計', awards: '獲獎紀錄', club: '課後社團',
+    careSupport: '課照學扶', land: '校地概況', inquiry: '議會質詢',
+  };
+
+  const revenueTotal = budgetC.loading || budgetC.error ? null : budgetRecordSummary(budgetC.data).revenueTotal;
+  const shortfall = (totalLatest != null && revenueTotal != null) ? revenueTotal - totalLatest : null;
+
+  // 待辦／需留意: only real, actionable states — never a routine "一切正常"
+  // confirmation — so the whole block disappears on a normal day instead of
+  // permanently occupying space (使用者 2026-10-27 回饋：填報進度 100% 長期
+  // 不具意義，希望改成「現在該注意什麼」).
+  const alertItems = [];
+  if (inquiryUnresolved > 0) {
+    alertItems.push({
+      tone: 'warn',
+      title: `議會質詢尚有 ${inquiryUnresolved} 筆未結案`,
+    });
+  }
+  if (shortfall != null && shortfall < 0) {
+    alertItems.push({
+      tone: 'danger',
+      title: `本期短絀 ${fmtNum(Math.abs(shortfall))} 千元，請留意`,
+      detail: `${latestYear}年度歲入 ${revenueTotal != null ? fmtNum(revenueTotal) : '—'} 千元・歲出 ${fmtNum(totalLatest)} 千元`,
+    });
+  }
 
   return (
     <div>
@@ -101,6 +174,28 @@ export default function Dashboard({ years, latestYear }) {
         </div>
       </div>
 
+      {alertItems.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={sectionLabel}>待辦／需留意</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+            {alertItems.map((a) => {
+              const tone = a.tone === 'danger'
+                ? { bg: '#FBEAE2', border: '#F0C3A8', dot: '#B5533E', title: '#7A3A1E', detail: '#8A5A3E' }
+                : { bg: '#FDF6DC', border: '#F0E3A8', dot: '#B8860B', title: '#6B5A0A', detail: '#8A7A2E' };
+              return (
+                <div key={a.title} style={{ display: 'flex', alignItems: 'center', gap: 10, background: tone.bg, border: `1px solid ${tone.border}`, borderRadius: 9, padding: '10px 14px', flex: '1 1 280px' }}>
+                  <div style={{ width: 7, height: 7, borderRadius: '50%', background: tone.dot, flex: 'none' }} />
+                  <div>
+                    <div style={{ font: "700 12.5px 'Noto Sans TC', sans-serif", color: tone.title }}>{a.title}</div>
+                    {a.detail && <div style={{ font: "400 11px 'Noto Sans TC', sans-serif", color: tone.detail, marginTop: 1 }}>{a.detail}</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
         <div style={card}>
           <div style={{ font: "700 13.5px 'Noto Sans TC', sans-serif", color: '#1E2420', marginBottom: 16 }}>年度預算趨勢（千元）</div>
@@ -137,20 +232,27 @@ export default function Dashboard({ years, latestYear }) {
       </div>
 
       <div style={{ ...card, marginTop: 16 }}>
-        <div style={sectionLabel}>各模組填報進度（{latestYear}年度）</div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '10px 28px' }}>
-          {COMPLETION_MODULES.map((c) => {
-            const pct = moduleCompletionPct(c.key, modules[c.key].data);
-            const { track, fill } = progressBar(pct, completionColor(pct));
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 12 }}>
+          <div style={sectionLabel}>各模組現況（{latestYear}年度）</div>
+          <div style={{ font: "400 10.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>沿用報表頁／PDF 匯出同一組數字</div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+          {MODULE_SUMMARY_KEYS.map((key) => {
+            const tile = OPTIONAL_MODULE_TILE_COLORS[key] || { soft: '#E9F1EE', ink: '#0F3A30' };
+            const sub = moduleSubtext[key];
             return (
-              <div key={c.key}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', font: "500 12.5px 'Noto Sans TC', sans-serif", color: '#454B45', marginBottom: 5 }}>
-                  <span>{c.label}</span><span>{pct}%</span>
-                </div>
-                <div style={track}><div style={fill} /></div>
+              <div key={key} style={{ background: tile.soft, borderRadius: 10, padding: '12px 14px' }}>
+                <div style={{ font: "600 10.5px 'Noto Sans TC', sans-serif", color: tile.ink, opacity: 0.85, marginBottom: 5 }}>{moduleLabels[key]}</div>
+                <div style={{ font: '800 17px Inter, sans-serif', color: tile.ink }}>{moduleValueText(key, moduleSummaries[key])}</div>
+                {sub && <div style={{ font: "500 10px 'Noto Sans TC', sans-serif", color: tile.ink, opacity: 0.75, marginTop: 2 }}>{sub}</div>}
               </div>
             );
           })}
+          <div style={{ background: LANGUAGE_CERT_TILE.soft, borderRadius: 10, padding: '12px 14px' }}>
+            <div style={{ font: "600 10.5px 'Noto Sans TC', sans-serif", color: LANGUAGE_CERT_TILE.ink, opacity: 0.85, marginBottom: 5 }}>族語認證</div>
+            <div style={{ font: '800 17px Inter, sans-serif', color: LANGUAGE_CERT_TILE.ink }}>{certRosterRows.length} 人</div>
+            {certLangCount > 0 && <div style={{ font: "500 10px 'Noto Sans TC', sans-serif", color: LANGUAGE_CERT_TILE.ink, opacity: 0.75, marginTop: 2 }}>涵蓋 {certLangCount} 語系</div>}
+          </div>
         </div>
       </div>
     </div>

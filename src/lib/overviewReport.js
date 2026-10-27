@@ -1,5 +1,6 @@
 import { budgetVarianceSummary } from './recordDerivations';
 import { summarizeInquiryResolution } from './inquiryStats';
+import { fmtNum } from './format';
 
 // One accent color per optional module, taken from the sidebar nav's own
 // per-module colors (src/lib/nav.js) — reused by the Report.jsx preview and
@@ -91,6 +92,23 @@ export const OPTIONAL_MODULE_DETAIL_FIELDS = {
     { key: 'status', label: '答詢狀態' },
   ],
 };
+
+// Each optional module's headline number, in one place — Report.jsx's module
+// cards, the Excel/PDF exports (overviewExport.js) and Dashboard.jsx's 各模組
+//現況 cards all call this instead of keeping their own copy, so the number
+// shown for a module is identical wherever it appears.
+export function moduleValueText(key, summary) {
+  if (!summary) return '—';
+  if (key === 'library') return `${fmtNum(summary.total)} 冊`;
+  if (key === 'language') return `${summary.classTotal} 班`;
+  if (key === 'specialNeeds') return `${summary.total} 人`;
+  if (key === 'awards') return `${summary.count} 筆`;
+  if (key === 'club') return `${summary.count} 個`;
+  if (key === 'careSupport') return `${summary.count} 班`;
+  if (key === 'land') return `${summary.count} 筆`;
+  if (key === 'inquiry') return `${summary.resolved} / ${summary.total} 已結案`;
+  return '—';
+}
 
 function pct(current, previous) {
   if (previous == null || previous === 0 || current == null) return null;

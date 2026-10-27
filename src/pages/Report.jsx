@@ -7,7 +7,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { fmtNum, fmtDate } from '../lib/format';
 import { buildCouncilWorkbook } from '../lib/councilExport';
 import { buildOverviewPdf, buildOverviewWorkbook } from '../lib/overviewExport';
-import { buildOverviewReport, OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_COLORS, OPTIONAL_MODULE_TILE_COLORS } from '../lib/overviewReport';
+import {
+  buildOverviewReport, OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_COLORS, OPTIONAL_MODULE_TILE_COLORS,
+  moduleValueText as sharedModuleValueText,
+} from '../lib/overviewReport';
 import { buildDefaultNarratives, resolveNarratives } from '../lib/overviewNarrative';
 import NarrativeField from '../components/NarrativeField';
 import { languageRecordSummary } from '../lib/recordDerivations';
@@ -783,19 +786,7 @@ export default function Report({ year, years }) {
     return result.executed ? { ok: true } : { ok: false, reason: result.reason };
   };
 
-  const moduleValueText = (key) => {
-    const summary = report.modules[key];
-    if (!summary) return null;
-    if (key === 'library') return `${fmtNum(summary.total)} 冊`;
-    if (key === 'language') return `${summary.classTotal} 班`;
-    if (key === 'specialNeeds') return `${summary.total} 人`;
-    if (key === 'awards') return `${summary.count} 筆`;
-    if (key === 'club') return `${summary.count} 個`;
-    if (key === 'careSupport') return `${summary.count} 班`;
-    if (key === 'land') return `${summary.count} 筆`;
-    if (key === 'inquiry') return `${summary.resolved} / ${summary.total} 已結案`;
-    return null;
-  };
+  const moduleValueText = (key) => sharedModuleValueText(key, report.modules[key]);
 
   const downloadCouncilExcel = async (name) => {
     XLSX.writeFile(buildCouncilWorkbook({ year, years: recentYears, budgetRecordsByYear }), name);

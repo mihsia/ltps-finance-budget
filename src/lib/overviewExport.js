@@ -3,7 +3,7 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { registerCjkFont } from './pdfFont';
 import { fmtNum, fmtDate } from './format';
-import { OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_TILE_COLORS } from './overviewReport';
+import { OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_TILE_COLORS, moduleValueText } from './overviewReport';
 import { buildDefaultNarratives } from './overviewNarrative';
 
 const MODULE_LABELS = {
@@ -55,18 +55,6 @@ function hexToRgb(hex) {
 function pctText(value) {
   if (value == null) return '—';
   return `${value >= 0 ? '▲' : '▼'} ${Math.abs(value).toFixed(2)}%`;
-}
-
-function moduleValueText(key, summary) {
-  if (key === 'library') return `${fmtNum(summary.total)} 冊`;
-  if (key === 'language') return `${summary.classTotal} 班`;
-  if (key === 'specialNeeds') return `${summary.total} 人`;
-  if (key === 'awards') return `${summary.count} 筆`;
-  if (key === 'club') return `${summary.count} 個`;
-  if (key === 'careSupport') return `${summary.count} 班`;
-  if (key === 'land') return `${summary.count} 筆`;
-  if (key === 'inquiry') return `${summary.resolved} / ${summary.total} 已結案`;
-  return '—';
 }
 
 function detailCell(value) {
