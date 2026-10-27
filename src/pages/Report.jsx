@@ -832,6 +832,27 @@ export default function Report({ year, years }) {
       <div style={pageTitle}>議會報表匯出</div>
       <div style={{ font: "400 13px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 18 }}>{year}年度 · 利澤國小基金總覽（議會用）</div>
 
+      {/* A sticky shortcut to the same 匯出 Excel／匯出 PDF actions at the
+          bottom of the page (under ZoneHeader「匯出與紀錄」) — this page is
+          long (財務概況／各模組現況／文字說明…), so without this, exporting
+          meant scrolling all the way down every time. Stays pinned to the
+          top of .app-main's own scroll area (src/index.css) as the page
+          scrolls; the full 匯出與紀錄 section, including 對齊議會既有格式
+          and the export history list, is unchanged at the bottom
+          (2026-10-27 設計定案). */}
+      <div style={{
+        ...card, position: 'sticky', top: 0, zIndex: 5, maxWidth: 900, marginBottom: 20,
+        padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        flexWrap: 'wrap', gap: 10, boxShadow: '0 2px 6px rgba(30,36,32,.06)',
+      }}
+      >
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <div style={btnOutline} onClick={openExcelPreview}>匯出 Excel</div>
+          <div style={btnPrimary} onClick={openPdfPreview}>匯出 PDF（全貌總覽）</div>
+        </div>
+        <div style={{ font: "400 11px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>將依目前「選擇涵蓋模組」與「文字說明」設定匯出</div>
+      </div>
+
       {narratives.reviewSummary && (
         <div style={{ ...card, maxWidth: 780, marginBottom: 20, borderLeft: '4px solid #1F5F52' }}>
           <div style={{ font: "700 13px 'Noto Sans TC', sans-serif", marginBottom: 8 }}>分組審查摘要（供口頭報告用，不超過 1 分鐘）</div>
