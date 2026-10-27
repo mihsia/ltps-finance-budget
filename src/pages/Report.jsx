@@ -556,13 +556,23 @@ function useExportHistory(year) {
   const [entries, setEntries] = useState([]);
   useEffect(() => {
     if (!isFirebaseConfigured) return;
-    const q = query(collection(db, 'years', year, 'exports'), orderBy('time', 'desc'), limit(10));
+    const q = query(collection(db, 'years', year, 'exports'), orderBy('time', 'desc'), limit(3));
     return onSnapshot(q, (snap) => setEntries(snap.docs.map((d) => d.data())));
   }, [year]);
   const logExport = async (name, user) => {
     await addDoc(collection(db, 'years', year, 'exports'), { name, user, time: serverTimestamp() });
   };
   return { entries, logExport };
+}
+
+// Appended to every exported file's name (e.g. "…_20261027-2125.pdf") so
+// re-exporting the same report later doesn't silently overwrite — or get
+// confused with — an earlier download; matches the moment the file is
+// actually produced, not when its preview was opened (2026-10-27 設計定案).
+function fileTimestampSuffix() {
+  const d = new Date();
+  const pad = (v) => String(v).padStart(2, '0');
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
 }
 
 export function createReportExportHandlers({
@@ -578,7 +588,7 @@ export function createReportExportHandlers({
     exportExcel: (aligned) => runAuthorized(
       () => authorizeModule('report'),
       async () => {
-        const name = `${year}年度議會報表${aligned ? '（議會格式）' : ''}.xlsx`;
+        const name = `${year}年度議會報表${aligned ? '（議會格式）' : ''}_${fileTimestampSuffix()}.xlsx`;
         if (aligned) await downloadExcel(name);
         else await downloadOverviewExcel(name);
         await logExport(name, who);
@@ -587,7 +597,7 @@ export function createReportExportHandlers({
     exportPdf: () => runAuthorized(
       () => authorizeModule('report'),
       async () => {
-        const name = `${year}年度基金總覽報表.pdf`;
+        const name = `${year}年度基金總覽報表_${fileTimestampSuffix()}.pdf`;
         await downloadPdf(name);
         await logExport(name, who);
       },
@@ -819,12 +829,12 @@ export default function Report({ year, years }) {
   const openPdfPreview = () => runAuthorized(() => authorizeModule('report'), async () => {
     const chartImages = await captureChartImages(chartRefs.current);
     const doc = await buildOverviewPdf(report, { selectedModules, chartImages, narratives });
-    setPreview({ kind: 'pdf', name: `${year}年度基金總覽報表.pdf`, url: doc.output('bloburl') });
+    setPreview({ kind: 'pdf', name: `${year}年度基金總覽報表_${fileTimestampSuffix()}.pdf`, url: doc.output('bloburl') });
   });
   const openExcelPreview = () => runAuthorized(() => authorizeModule('report'), async () => {
     const wb = buildOverviewWorkbook(report, { selectedModules });
     const html = XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]]);
-    setPreview({ kind: 'excel', name: `${year}年度議會報表.xlsx`, html });
+    setPreview({ kind: 'excel', name: `${year}年度議會報表_${fileTimestampSuffix()}.xlsx`, html });
   });
   const confirmPreview = async () => {
     const kind = preview?.kind;

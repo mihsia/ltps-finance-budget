@@ -75,23 +75,21 @@ describe('Report export authorization', () => {
     await harness.exportExcel(true);
     await harness.exportPdf();
 
-    expect(harness.downloadExcel).toHaveBeenCalledExactlyOnceWith(
-      '115年度議會報表（議會格式）.xlsx',
-    );
-    expect(harness.downloadPdf).toHaveBeenCalledExactlyOnceWith(
-      '115年度基金總覽報表.pdf',
-    );
+    // Filenames carry a trailing _YYYYMMDD-HHmm timestamp (fileTimestampSuffix
+    // in Report.jsx) so a re-export doesn't collide with/overwrite an
+    // earlier one — matched loosely here since the exact minute isn't
+    // deterministic.
+    const excelNamePattern = /^115年度議會報表（議會格式）_\d{8}-\d{4}\.xlsx$/;
+    const pdfNamePattern = /^115年度基金總覽報表_\d{8}-\d{4}\.pdf$/;
+    expect(harness.downloadExcel).toHaveBeenCalledOnce();
+    expect(harness.downloadExcel.mock.calls[0][0]).toMatch(excelNamePattern);
+    expect(harness.downloadPdf).toHaveBeenCalledOnce();
+    expect(harness.downloadPdf.mock.calls[0][0]).toMatch(pdfNamePattern);
     expect(harness.logExport).toHaveBeenCalledTimes(2);
-    expect(harness.logExport).toHaveBeenNthCalledWith(
-      1,
-      '115年度議會報表（議會格式）.xlsx',
-      '管理者',
-    );
-    expect(harness.logExport).toHaveBeenNthCalledWith(
-      2,
-      '115年度基金總覽報表.pdf',
-      '管理者',
-    );
+    expect(harness.logExport.mock.calls[0][0]).toMatch(excelNamePattern);
+    expect(harness.logExport.mock.calls[0][1]).toBe('管理者');
+    expect(harness.logExport.mock.calls[1][0]).toMatch(pdfNamePattern);
+    expect(harness.logExport.mock.calls[1][1]).toBe('管理者');
   });
 
   it('does not log a successful export when the download fails', async () => {
