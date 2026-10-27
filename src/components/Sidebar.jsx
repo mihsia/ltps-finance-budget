@@ -24,16 +24,23 @@ export default function Sidebar({ nav, setNav, open = false, onClose }) {
                 key={it.key}
                 onClick={() => select(it.key)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px',
-                  borderRadius: 8, cursor: 'pointer', marginBottom: 2,
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '7px 8px',
+                  borderRadius: 9, cursor: 'pointer', marginBottom: 2,
                   font: `${active ? 700 : 500} 13px 'Noto Sans TC', sans-serif`,
-                  color: active ? it.color : '#454B45',
-                  background: active ? `${it.color}18` : 'transparent',
+                  color: active ? it.ink : '#454B45',
+                  background: active ? it.soft : 'transparent',
                 }}
               >
-                <svg width="16" height="16" viewBox="0 0 16 16" style={{ flex: 'none' }} fill={it.color}>
-                  <path d={icons[it.icon]} />
-                </svg>
+                <div style={{
+                  width: 26, height: 26, borderRadius: 8, flex: 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  background: active ? it.ink : it.soft,
+                }}
+                >
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill={active ? '#FFFFFF' : it.ink}>
+                    <path d={icons[it.icon]} />
+                  </svg>
+                </div>
                 <span>{it.label}</span>
               </div>
             );

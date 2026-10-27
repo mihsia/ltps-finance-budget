@@ -1,5 +1,12 @@
-// Left-sidebar navigation structure. One color per item for quick visual ID
-// (colors and icon path data preserved verbatim from the approved design prototype).
+// Left-sidebar navigation structure. Each item carries a `soft`/`ink` pair
+// (same fill-colour recipe as src/lib/overviewReport.js's
+// OPTIONAL_MODULE_TILE_COLORS, used by the 議會報表 page) instead of one
+// flat `color`: `soft` is a resting-state icon-chip fill, `ink` is both the
+// dark text/icon on that chip and the active-state chip's own fill (with a
+// white icon on top) — see src/components/Sidebar.jsx. This keeps every
+// item's own colour (the "多彩" the user asked to keep) while making the
+// *active* item the one that actually stands out, instead of every item
+// being equally saturated all the time (2026-10-27 系統界面設計定案).
 export const icons = {
   grid: 'M1 1H7V7H1ZM9 1H15V7H9ZM1 9H7V15H1ZM9 9H15V15H9Z',
   school: 'M8 1L15 4.5L8 8L1 4.5ZM3.5 6.8L8 9L12.5 6.8V10.3C12.5 11.3 10.5 12.6 8 12.6C5.5 12.6 3.5 11.3 3.5 10.3Z',
@@ -23,32 +30,32 @@ export const icons = {
 
 export const navGroups = [
   { label: '總覽', items: [
-    { key: 'dashboard', label: '總覽儀表', icon: 'grid', color: '#1F5F52', desc: '跨年度總覽儀表板，顯示各項關鍵指標' },
+    { key: 'dashboard', label: '總覽儀表', icon: 'grid', soft: '#E9F1EE', ink: '#0F3A30', desc: '跨年度總覽儀表板，顯示各項關鍵指標' },
   ] },
   { label: '校務與學生', items: [
-    { key: 'basic', label: '基本資料', icon: 'school', color: '#C9832F', desc: '班級數、學生人數、教師人力等學校基本統計資料' },
-    { key: 'specialNeeds', label: '特生統計', icon: 'heart', color: '#A0764A', desc: '原住民、新住民、低收入戶、身障生、單親生等統計人數' },
+    { key: 'basic', label: '基本資料', icon: 'school', soft: '#FFF3DC', ink: '#7A5A0A', desc: '班級數、學生人數、教師人力等學校基本統計資料' },
+    { key: 'specialNeeds', label: '特生統計', icon: 'heart', soft: '#F3E9DE', ink: '#6B4423', desc: '原住民、新住民、低收入戶、身障生、單親生等統計人數' },
   ] },
   { label: '教學與活動', items: [
-    { key: 'library', label: '圖書藏書', icon: 'book', color: '#7D5BA6', desc: '圖書館藏書量統計' },
-    { key: 'language', label: '族語開班', icon: 'chat', color: '#2E7DAF', desc: '本土語言（閩南語、客語）及原住民族語開班班級數與學生人數' },
-    { key: 'languageCert', label: '族語認證', icon: 'certificate', color: '#3E7A8C', desc: '師資與學生族語能力認證統計、通過名冊登錄' },
-    { key: 'club', label: '課後社團', icon: 'star', color: '#4F8C3E', desc: '課後社團開設班別與人數' },
-    { key: 'careSupport', label: '課照學扶', icon: 'clock', color: '#D9714E', desc: '課後照顧、學習扶助等開班情況與人數' },
-    { key: 'awards', label: '獲獎紀錄', icon: 'award', color: '#A1497E', desc: '記錄學生與學校各項競賽獲獎資訊' },
+    { key: 'library', label: '圖書藏書', icon: 'book', soft: '#F1E9F8', ink: '#4A2E66', desc: '圖書館藏書量統計' },
+    { key: 'language', label: '族語開班', icon: 'chat', soft: '#E6F1F8', ink: '#0F4C66', desc: '本土語言（閩南語、客語）及原住民族語開班班級數與學生人數' },
+    { key: 'languageCert', label: '族語認證', icon: 'certificate', soft: '#E3F2F1', ink: '#1C5C5A', desc: '師資與學生族語能力認證統計、通過名冊登錄' },
+    { key: 'club', label: '課後社團', icon: 'star', soft: '#EAF5E6', ink: '#2C5420', desc: '課後社團開設班別與人數' },
+    { key: 'careSupport', label: '課照學扶', icon: 'clock', soft: '#FBEAE2', ink: '#7A3A1E', desc: '課後照顧、學習扶助等開班情況與人數' },
+    { key: 'awards', label: '獲獎紀錄', icon: 'award', soft: '#FBE9F2', ink: '#6B1D44', desc: '記錄學生與學校各項競賽獲獎資訊' },
   ] },
   { label: '財務與行政', items: [
-    { key: 'budget', label: '歲入歲出', icon: 'coin', color: '#B5533E', desc: '年度歲入歲出預算與決算金額、差異原因說明' },
-    { key: 'land', label: '校地概況', icon: 'map', color: '#8C8C3E', desc: '校地總面積（公頃）與各地號公告現值資訊' },
-    { key: 'inquiry', label: '質詢答詢', icon: 'gavel', color: '#B1456B', desc: '議員質詢與學校答詢內容存檔' },
+    { key: 'budget', label: '歲入歲出', icon: 'coin', soft: '#FDEAE6', ink: '#8A2E1E', desc: '年度歲入歲出預算與決算金額、差異原因說明' },
+    { key: 'land', label: '校地概況', icon: 'map', soft: '#F5F0DC', ink: '#5C5420', desc: '校地總面積（公頃）與各地號公告現值資訊' },
+    { key: 'inquiry', label: '質詢答詢', icon: 'gavel', soft: '#FDE8EE', ink: '#85204A', desc: '議員質詢與學校答詢內容存檔' },
   ] },
   { label: '報表與管理', items: [
-    { key: 'budgetbook', label: '預算書表', icon: 'file', color: '#4C5FAB', desc: '基金來源與用途明細表，含預算書 PDF 上傳' },
-    { key: 'report', label: '報表匯出', icon: 'download', color: '#3E8E7E', desc: '產出並匯出議會報表（PDF／Excel）' },
-    { key: 'archive', label: '歷史歸檔', icon: 'archive', color: '#556B8D', desc: '查閱歷年資料歸檔' },
-    { key: 'settings', label: '帳號管理', icon: 'user', color: '#8C4A5B', desc: '新增、編輯、停用系統帳號與權限' },
-    { key: 'manual', label: '操作手冊', icon: 'help', color: '#3E7A6E', desc: '系統操作說明與畫面截圖，含線上版與可下載的 PDF，所有使用者皆可檢視' },
-    { key: 'changelog', label: '更新日誌', icon: 'info', color: '#6B6F76', desc: '系統每次修正或新增功能的紀錄，所有使用者皆可檢視' },
+    { key: 'budgetbook', label: '預算書表', icon: 'file', soft: '#E9EAF8', ink: '#363F80', desc: '基金來源與用途明細表，含預算書 PDF 上傳' },
+    { key: 'report', label: '報表匯出', icon: 'download', soft: '#E3F0EC', ink: '#1C5C4E', desc: '產出並匯出議會報表（PDF／Excel）' },
+    { key: 'archive', label: '歷史歸檔', icon: 'archive', soft: '#E9EDF3', ink: '#30455E', desc: '查閱歷年資料歸檔' },
+    { key: 'settings', label: '帳號管理', icon: 'user', soft: '#F7E9EC', ink: '#5C2430', desc: '新增、編輯、停用系統帳號與權限' },
+    { key: 'manual', label: '操作手冊', icon: 'help', soft: '#E0F3F3', ink: '#0A5C5C', desc: '系統操作說明與畫面截圖，含線上版與可下載的 PDF，所有使用者皆可檢視' },
+    { key: 'changelog', label: '更新日誌', icon: 'info', soft: '#F0EEE6', ink: '#6B6F76', desc: '系統每次修正或新增功能的紀錄，所有使用者皆可檢視' },
   ] },
 ];
 
