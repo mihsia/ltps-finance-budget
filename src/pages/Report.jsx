@@ -651,6 +651,13 @@ export default function Report({ year, years }) {
     () => Object.fromEntries(OPTIONAL_MODULE_CHOICES.map((m) => [m.key, true])),
   );
   const [preview, setPreview] = useState(null);
+  // Chart capture + PDF/Excel generation can take a noticeable moment (more
+  // charts, more modules) with zero visual feedback otherwise, which reads
+  // as "the button didn't work" and invites repeated clicking. Which of the
+  // three export buttons is running — 'excelPreview' | 'excelAligned' |
+  // 'pdf' | null — same 處理中… pattern as Settings.jsx's busyUid; any
+  // non-null value disables all three so two exports never overlap.
+  const [exportBusy, setExportBusy] = useState(null);
   // How many of a module card's itemized detail rows are currently shown
   // (keyed by module key) — a module with many records (e.g. 34 筆獲獎紀錄)
   // used to print every row inline, making that one card (and the whole
@@ -817,16 +824,41 @@ export default function Report({ year, years }) {
     if (preview?.kind === 'pdf' && preview.url) URL.revokeObjectURL(preview.url);
     setPreview(null);
   };
-  const openPdfPreview = () => runAuthorized(() => authorizeModule('report'), async () => {
-    const chartImages = await captureChartImages(chartRefs.current);
-    const doc = await buildOverviewPdf(report, { selectedModules, chartImages, narratives });
-    setPreview({ kind: 'pdf', name: `${year}年度基金總覽報表_${fileTimestampSuffix()}.pdf`, url: doc.output('bloburl') });
-  });
-  const openExcelPreview = () => runAuthorized(() => authorizeModule('report'), async () => {
-    const wb = buildOverviewWorkbook(report, { selectedModules });
-    const html = XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]]);
-    setPreview({ kind: 'excel', name: `${year}年度議會報表_${fileTimestampSuffix()}.xlsx`, html });
-  });
+  const openPdfPreview = async () => {
+    if (exportBusy) return;
+    setExportBusy('pdf');
+    try {
+      await runAuthorized(() => authorizeModule('report'), async () => {
+        const chartImages = await captureChartImages(chartRefs.current);
+        const doc = await buildOverviewPdf(report, { selectedModules, chartImages, narratives });
+        setPreview({ kind: 'pdf', name: `${year}年度基金總覽報表_${fileTimestampSuffix()}.pdf`, url: doc.output('bloburl') });
+      });
+    } finally {
+      setExportBusy(null);
+    }
+  };
+  const openExcelPreview = async () => {
+    if (exportBusy) return;
+    setExportBusy('excelPreview');
+    try {
+      await runAuthorized(() => authorizeModule('report'), async () => {
+        const wb = buildOverviewWorkbook(report, { selectedModules });
+        const html = XLSX.utils.sheet_to_html(wb.Sheets[wb.SheetNames[0]]);
+        setPreview({ kind: 'excel', name: `${year}年度議會報表_${fileTimestampSuffix()}.xlsx`, html });
+      });
+    } finally {
+      setExportBusy(null);
+    }
+  };
+  const exportAlignedExcel = async () => {
+    if (exportBusy) return;
+    setExportBusy('excelAligned');
+    try {
+      await exportExcel(true);
+    } finally {
+      setExportBusy(null);
+    }
+  };
   const confirmPreview = async () => {
     const kind = preview?.kind;
     closePreview();
@@ -862,8 +894,12 @@ export default function Report({ year, years }) {
       }}
       >
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <div style={btnOutline} onClick={openExcelPreview}>匯出 Excel</div>
-          <div style={btnPrimary} onClick={openPdfPreview}>匯出 PDF（全貌總覽）</div>
+          <div style={{ ...btnOutline, opacity: exportBusy ? .6 : 1 }} onClick={exportBusy ? undefined : openExcelPreview}>
+            {exportBusy === 'excelPreview' ? '處理中…' : '匯出 Excel'}
+          </div>
+          <div style={{ ...btnPrimary, opacity: exportBusy ? .6 : 1 }} onClick={exportBusy ? undefined : openPdfPreview}>
+            {exportBusy === 'pdf' ? '處理中…' : '匯出 PDF（全貌總覽）'}
+          </div>
         </div>
         <div style={{ font: "400 11px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>將依目前「選擇涵蓋模組」與「文字說明」設定匯出</div>
       </div>
@@ -1111,9 +1147,15 @@ export default function Report({ year, years }) {
       <ZoneHeader>匯出與紀錄</ZoneHeader>
       <div style={sectionLabel}>匯出格式</div>
       <div style={{ display: 'flex', gap: 8, marginBottom: 24, flexWrap: 'wrap' }}>
-        <div style={btnOutline} onClick={openExcelPreview}>匯出 Excel（全貌總覽）</div>
-        <div style={btnOutline} onClick={() => exportExcel(true)}>對齊議會既有格式（.xls 範本）</div>
-        <div style={btnPrimary} onClick={openPdfPreview}>匯出 PDF（全貌總覽）</div>
+        <div style={{ ...btnOutline, opacity: exportBusy ? .6 : 1 }} onClick={exportBusy ? undefined : openExcelPreview}>
+          {exportBusy === 'excelPreview' ? '處理中…' : '匯出 Excel（全貌總覽）'}
+        </div>
+        <div style={{ ...btnOutline, opacity: exportBusy ? .6 : 1 }} onClick={exportBusy ? undefined : exportAlignedExcel}>
+          {exportBusy === 'excelAligned' ? '處理中…' : '對齊議會既有格式（.xls 範本）'}
+        </div>
+        <div style={{ ...btnPrimary, opacity: exportBusy ? .6 : 1 }} onClick={exportBusy ? undefined : openPdfPreview}>
+          {exportBusy === 'pdf' ? '處理中…' : '匯出 PDF（全貌總覽）'}
+        </div>
       </div>
 
       <div style={sectionLabel}>匯出紀錄</div>
@@ -1141,6 +1183,24 @@ export default function Report({ year, years }) {
               <div style={{ font: "700 14px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>預覽：{preview.name}</div>
               <div style={{ font: "400 11.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>確認內容無誤後再下載</div>
             </div>
+            {preview.kind === 'pdf' && (
+              // iPad／iPhone Safari 內嵌 PDF 檢視器常只能正確捲動第一頁
+              // （尤其是像這裡 iframe 又包在另一層會捲動的容器裡），不是
+              // 單純調整高度能穩定解決的相容性限制，所以另外提供「在新分
+              // 頁開啟」——那會用系統原生、支援完整多頁捲動的 PDF 檢視器
+              // （2026-10-27 設計定案）。下方 iframe 仍保留做快速預覽。
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '8px 18px', background: '#FDF6DC', borderBottom: '1px solid #E3DFD3', flexWrap: 'wrap' }}>
+                <div style={{ font: "400 11.5px 'Noto Sans TC', sans-serif", color: '#6B5A0A' }}>
+                  若在 iPad／iPhone 上僅看得到第一頁，請改用右側按鈕在新分頁開啟完整報表
+                </div>
+                <div
+                  style={{ ...btnOutline, padding: '6px 12px', font: "700 11.5px 'Noto Sans TC', sans-serif" }}
+                  onClick={() => window.open(preview.url, '_blank', 'noopener')}
+                >
+                  在新分頁開啟完整報表
+                </div>
+              </div>
+            )}
             <div style={{ flex: 1, overflow: 'auto', background: '#F5F3EE' }} className="table-scroll">
               {preview.kind === 'pdf' ? (
                 <iframe title="PDF 預覽" src={preview.url} style={{ width: '100%', height: '70vh', border: 0, display: 'block' }} />
