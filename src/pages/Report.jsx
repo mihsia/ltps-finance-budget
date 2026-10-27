@@ -983,7 +983,17 @@ export default function Report({ year, years }) {
           </div>
         ))}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 12, marginBottom: 24, maxWidth: 1100 }}>
+      {/* minmax(320px, 460px), not (320px, 1fr): with 1fr, a row holding
+          just one or two cards (e.g. 特生統計 alone, since it's the only
+          selected module that still counts as "校務與學生") stretched that
+          lone card to the row's full width — on a wide screen that's 700px+
+          — and every fixed-size piece inside it (donut, legend text) stayed
+          exactly as designed for ~420px, so it read as tiny against all
+          that surrounding card. Capping the column's max width keeps every
+          card close to the width this content was actually designed and
+          tested at, leaving blank row space on wide screens instead of
+          stretching cards into it (2026-10-27 設計定案). */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 460px))', gap: 12, marginBottom: 24, maxWidth: 1100 }}>
         {OPTIONAL_MODULE_CHOICES.filter((m) => selected[m.key] && report.modules[m.key]).map((m) => {
           const tile = OPTIONAL_MODULE_TILE_COLORS[m.key] || { soft: '#E9F1EE', ink: '#0F3A30' };
           const fields = OPTIONAL_MODULE_DETAIL_FIELDS[m.key] || [];
