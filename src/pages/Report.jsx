@@ -10,6 +10,7 @@ import { buildOverviewPdf, buildOverviewWorkbook } from '../lib/overviewExport';
 import {
   buildOverviewReport, OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_COLORS, OPTIONAL_MODULE_TILE_COLORS,
   moduleValueText as sharedModuleValueText,
+  AWARD_CATEGORY_COLORS, SPECIAL_NEEDS_CATEGORY_COLORS, SPECIAL_NEEDS_OTHER_COLOR, CARE_SUPPORT_CATEGORY_COLORS,
 } from '../lib/overviewReport';
 import { buildDefaultNarratives, resolveNarratives } from '../lib/overviewNarrative';
 import NarrativeField from '../components/NarrativeField';
@@ -28,18 +29,6 @@ import NoModuleAccess from '../components/NoModuleAccess';
 import {
   pageTitle, sectionLabel, card, btnOutline, btnPrimary, btnSecondary, chip, progressBar,
 } from '../styles';
-
-// Validated against the dataviz skill's CVD-safety checks for an all-pairs
-// (every slice visually adjacent to every other) categorical context — see
-// AWARD_CATEGORY_COLORS usage below. "其他" (legacy data outside the fixed
-// category list) stays neutral gray rather than taking a 5th hue.
-const AWARD_CATEGORY_COLORS = {
-  語文類: '#2a78d6',
-  藝文類: '#eda100',
-  體育類: '#e87ba4',
-  科學類: '#008300',
-  其他: '#8A9089',
-};
 
 /** A donut chart of 獲獎紀錄 by 類別, with a direct-labeled legend (name, count, and share) so identity never rests on color alone. */
 export function AwardCategoryDonut({ data }) {
@@ -162,22 +151,6 @@ export function AwardLevelBars({ data }) {
   );
 }
 
-// Fixed SPECIAL_NEEDS_CATEGORIES order (原住民/新住民/低收入戶/身障生/單親生);
-// a ring-adjacent (not all-pairs) CVD check is the right standard here since
-// the donut always renders these 5 in this same fixed order, so only true
-// neighbors — including the wrap from 單親生 back to 原住民 — ever touch.
-// All 5 ring-adjacent pairs, in both light and dark steps, clear the CVD and
-// normal-vision floors. A category outside the fixed 5 (custom 其他自訂)
-// falls back to neutral gray rather than a 6th hue.
-const SPECIAL_NEEDS_CATEGORY_COLORS = {
-  原住民: '#2a78d6',
-  新住民: '#eb6834',
-  低收入戶: '#1baf7a',
-  身障生: '#eda100',
-  單親生: '#e87ba4',
-};
-const SPECIAL_NEEDS_OTHER_COLOR = '#8A9089';
-
 /** A donut chart of 特生統計 by 類別, sized to each category's share of the whole student body (not of the displayed counts, since a student can belong to more than one category) — the unfilled ring is the rest of the student body. */
 export function SpecialNeedsDonut({ data, totalStudents }) {
   if (data.length === 0) {
@@ -278,18 +251,6 @@ export function ClubParticipationMeter({ stats }) {
     </div>
   );
 }
-
-// Same fixed-order-then-gray-其他 pattern as AWARD_CATEGORY_COLORS above,
-// continuing the app's categorical hue order (blue, amber, pink, …) rather
-// than reusing award's own 3 hues out of order. CARE_SUPPORT_CATEGORIES'
-// 3 fixed options cover 課照班／特教課照／學扶班; a custom-entered 班別類別
-// (the field allows free text) folds into the same 其他 gray as elsewhere.
-const CARE_SUPPORT_CATEGORY_COLORS = {
-  課照班: '#2a78d6',
-  特教課照: '#eda100',
-  學扶班: '#e87ba4',
-  其他: '#8A9089',
-};
 
 /** A donut chart of 課照學扶 by 班別類別, mirroring AwardCategoryDonut above (same slice math, direct-labeled legend) with this module's own colors and wording. */
 export function CareSupportCategoryDonut({ data }) {
@@ -729,18 +690,27 @@ export default function Report({ year, years }) {
     language: [
       { heading: '各語系開班數', node: <RankedBarChart data={languageClassStats} color={OPTIONAL_MODULE_COLORS.language} unit=" 班" emptyMessage="尚無族語開班資料可供統計。" /> },
     ],
+    // skipCapture: true marks a chart section the PDF export draws itself
+    // natively (overviewExport.js's own donut-drawing code, from the same
+    // report data + the shared color maps in overviewReport.js) instead of
+    // embedding an html2canvas screenshot of it — these 3 donuts are what
+    // was still reading too small in the PDF even after the card-width fix,
+    // since a raster screenshot's legend text can only ever be as large as
+    // whatever the screenshot was captured at, then scaled down to fit the
+    // PDF card (方向 B2，2026-10-28 設計定案). Marked sections still render
+    // normally here on the live page; only the PDF capture skips them.
     specialNeeds: [
-      { heading: '佔全體學生比例', node: <SpecialNeedsDonut data={specialNeedsStats} totalStudents={totalStudents} /> },
+      { heading: '佔全體學生比例', node: <SpecialNeedsDonut data={specialNeedsStats} totalStudents={totalStudents} />, skipCapture: true },
     ],
     awards: [
-      { heading: '依類別分布', node: <AwardCategoryDonut data={awardCategoryStats} /> },
+      { heading: '依類別分布', node: <AwardCategoryDonut data={awardCategoryStats} />, skipCapture: true },
       { heading: '依等級分布', node: <AwardLevelBars data={awardLevelStats} /> },
     ],
     club: [
       { heading: '參與比例', node: <ClubParticipationMeter stats={clubParticipationStats} /> },
     ],
     careSupport: [
-      { heading: '依班別類別分布', node: <CareSupportCategoryDonut data={careSupportCategoryStats} /> },
+      { heading: '依班別類別分布', node: <CareSupportCategoryDonut data={careSupportCategoryStats} />, skipCapture: true },
       { heading: '參與比例', node: <CareSupportParticipationMeter stats={careSupportParticipationStats} /> },
     ],
     land: [
@@ -1044,13 +1014,30 @@ export default function Report({ year, years }) {
                 <div style={{ font: '800 17px Inter, sans-serif', color: tile.ink }}>{moduleValueText(m.key)}</div>
               </div>
               {charts && (
-                <div ref={setChartRef(`module.${m.key}`)} style={{ padding: '4px 14px 14px', borderTop: '1px solid #EEEBE2', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  {charts.map(({ heading, node }) => (
+                <div style={{ padding: '4px 14px 14px', borderTop: '1px solid #EEEBE2', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {charts.filter((c) => c.skipCapture).map(({ heading, node }) => (
                     <div key={heading}>
                       <div style={{ ...analysisCardHeading, marginBottom: 8 }}>{heading}</div>
                       {node}
                     </div>
                   ))}
+                  {/* Only the non-skipCapture sections go inside the captured
+                      ref — html2canvas screenshots whatever DOM node it's
+                      given, so a donut marked skipCapture above renders on
+                      the page as normal but simply isn't part of what gets
+                      captured for the PDF (that donut is instead drawn
+                      natively by overviewExport.js — see skipCapture's note
+                      on MODULE_CHARTS above). */}
+                  {charts.some((c) => !c.skipCapture) && (
+                    <div ref={setChartRef(`module.${m.key}`)} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                      {charts.filter((c) => !c.skipCapture).map(({ heading, node }) => (
+                        <div key={heading}>
+                          <div style={{ ...analysisCardHeading, marginBottom: 8 }}>{heading}</div>
+                          {node}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
               {detailRows.length > 0 && (() => {

@@ -34,6 +34,45 @@ export const OPTIONAL_MODULE_TILE_COLORS = {
   inquiry: { soft: '#FDE8EE', ink: '#85204A' },
 };
 
+// Donut-slice colors for the 3 modules Report.jsx charts as a category
+// breakdown — moved here (from being Report.jsx-local) so overviewExport.js
+// can draw the exact same colors natively in the PDF (方向 B2，2026-10-28
+// 設計定案) instead of drifting from whatever the web page uses. Validated
+// against the dataviz skill's CVD-safety checks for an all-pairs (every
+// slice visually adjacent to every other) categorical context; "其他"
+// (legacy/custom data outside the fixed category list) stays neutral gray
+// rather than taking another hue.
+export const AWARD_CATEGORY_COLORS = {
+  語文類: '#2a78d6',
+  藝文類: '#eda100',
+  體育類: '#e87ba4',
+  科學類: '#008300',
+  其他: '#8A9089',
+};
+
+// Fixed SPECIAL_NEEDS_CATEGORIES order (原住民/新住民/低收入戶/身障生/單親生);
+// a ring-adjacent (not all-pairs) CVD check is the right standard here since
+// the donut always renders these 5 in this same fixed order, so only true
+// neighbors — including the wrap from 單親生 back to 原住民 — ever touch.
+export const SPECIAL_NEEDS_CATEGORY_COLORS = {
+  原住民: '#2a78d6',
+  新住民: '#eb6834',
+  低收入戶: '#1baf7a',
+  身障生: '#eda100',
+  單親生: '#e87ba4',
+};
+export const SPECIAL_NEEDS_OTHER_COLOR = '#8A9089';
+
+// Same fixed-order-then-gray-其他 pattern as AWARD_CATEGORY_COLORS above,
+// continuing the app's categorical hue order (blue, amber, pink, …) rather
+// than reusing award's own 3 hues out of order.
+export const CARE_SUPPORT_CATEGORY_COLORS = {
+  課照班: '#2a78d6',
+  特教課照: '#eda100',
+  學扶班: '#e87ba4',
+  其他: '#8A9089',
+};
+
 // Column spec for each optional module's itemized detail table — shared by
 // the live Report.jsx preview and both export builders so the "細項資料"
 // shown on screen, in the PDF, and in the Excel workbook never drift apart.

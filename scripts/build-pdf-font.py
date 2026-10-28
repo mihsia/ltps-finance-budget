@@ -59,7 +59,7 @@ TMP_DIR = os.path.join(ROOT, '.pdf-font-build-tmp')
 # other unit/compatibility symbols).
 CJK_RANGES = [(0x4E00, 0x9FFF), (0x3400, 0x4DBF), (0x3000, 0x303F), (0xFF00, 0xFFEF), (0x3300, 0x33FF)]
 EXTRA_TERMS_PATH = os.path.join(ROOT, 'scripts', 'pdf-font-extra-terms.txt')
-EXTRA_SYMBOLS = '▼▲－–—…•·、。，．：；？！（）「」『』〈〉《》【】〔〕％‰＄／＼＋－×÷＝＜＞'
+EXTRA_SYMBOLS = '▼▲－–—…•·、。，．：；？！（）「」『』〈〉《》【】〔〕％‰＄／＼＋－×÷＝＜＞・'
 
 
 def collect_needed_chars():

@@ -3,8 +3,14 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { registerCjkFont } from './pdfFont';
 import { fmtNum, fmtDate } from './format';
-import { OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_TILE_COLORS, moduleValueText } from './overviewReport';
+import {
+  OPTIONAL_MODULE_DETAIL_FIELDS, OPTIONAL_MODULE_TILE_COLORS, moduleValueText,
+  AWARD_CATEGORY_COLORS, SPECIAL_NEEDS_CATEGORY_COLORS, SPECIAL_NEEDS_OTHER_COLOR, CARE_SUPPORT_CATEGORY_COLORS,
+} from './overviewReport';
 import { buildDefaultNarratives } from './overviewNarrative';
+import { summarizeByCategory } from './awardStats';
+import { summarizeSpecialNeeds } from './specialNeedsStats';
+import { CARE_SUPPORT_CATEGORIES } from './recordSchemas';
 
 const MODULE_LABELS = {
   library: '圖書藏書量',
@@ -152,6 +158,156 @@ function sectionStyles(fontName, tile) {
   };
 }
 
+// 方向 B2（2026-10-28 設計定案）: 特生統計／獲獎紀錄／課照學扶's category-
+// breakdown donut is drawn as a genuine PDF vector shape (jsPDF's own
+// context2d) instead of embedding an html2canvas screenshot of the live
+// SVG donut. A screenshot's legend text can only ever be as large as it was
+// captured, then gets scaled down again to fit the card — which is exactly
+// why these three kept reading as "too small" even after the card-width fix
+// (2026-10-27). Drawn straight from the report's own rows with the SAME
+// stats functions and color maps the live page's donuts use (src/lib/
+// awardStats.js, specialNeedsStats.js, overviewReport.js's color maps), so
+// the PDF never drifts from what the web page shows for the same data.
+const DONUT_CONFIG = {
+  specialNeeds: { heading: '佔全體學生比例', totalLabel: '學生總數', unit: '人', emptyMessage: '尚無特生統計資料可供統計。' },
+  awards: { heading: '依類別分布', totalLabel: '筆獲獎', unit: '筆', emptyMessage: '尚無獲獎資料可供統計。' },
+  careSupport: { heading: '依班別類別分布', totalLabel: '班', unit: '班', emptyMessage: '尚無課照學扶資料可供統計。' },
+};
+
+function buildDonutSpec(key, report) {
+  const config = DONUT_CONFIG[key];
+  if (!config) return null;
+  const rows = report.modules[key]?.rows || [];
+
+  if (key === 'specialNeeds') {
+    const totalStudents = report.kpi.students || 0;
+    const data = summarizeSpecialNeeds(rows, totalStudents);
+    if (!data.length) return { ...config, empty: true };
+    if (!totalStudents) {
+      return { ...config, empty: true, emptyMessage: '尚未填寫學生人數（基本資料），無法計算佔全體學生的百分比。' };
+    }
+    return {
+      ...config,
+      data,
+      total: totalStudents,
+      colorOf: (category) => SPECIAL_NEEDS_CATEGORY_COLORS[category] || SPECIAL_NEEDS_OTHER_COLOR,
+    };
+  }
+
+  const data = key === 'awards'
+    ? summarizeByCategory(rows)
+    : summarizeByCategory(rows, CARE_SUPPORT_CATEGORIES);
+  if (!data.length) return { ...config, empty: true };
+  const colors = key === 'awards' ? AWARD_CATEGORY_COLORS : CARE_SUPPORT_CATEGORY_COLORS;
+  return {
+    ...config,
+    data,
+    total: data.reduce((sum, d) => sum + d.count, 0),
+    colorOf: (category) => colors[category] || colors.其他,
+  };
+}
+
+const DONUT_OUTER_R = 11;
+const DONUT_INNER_R = 6.3;
+const DONUT_LEGEND_ROW_H = 4.3;
+const DONUT_LEGEND_SWATCH = 2.2;
+const DONUT_LEGEND_GAP = 4;
+
+// Measures a donut block's height (heading + ring + 2-column legend, or a
+// heading + one muted line when there's no data), so it folds into
+// measureModuleCard()'s own height math the same way chartImg already does.
+function measureDonutBlock(doc, fontName, innerWidth, donut) {
+  let height = 5; // heading line
+  if (donut.empty) {
+    doc.setFont(fontName, 'normal');
+    doc.setFontSize(8.5);
+    const emptyLines = doc.splitTextToSize(donut.emptyMessage, innerWidth);
+    height += emptyLines.length * 3.6;
+    return { height, emptyLines };
+  }
+  const legendRows = Math.ceil(donut.data.length / 2);
+  height += DONUT_OUTER_R * 2 + 3 + legendRows * DONUT_LEGEND_ROW_H;
+  return { height, legendRows };
+}
+
+// Draws the donut `measureDonutBlock()` already measured, at (x, y) — same
+// measure/draw pairing convention as measureModuleCard/drawModuleCard.
+function drawDonutBlock(doc, fontName, x, y, innerWidth, donut, measured) {
+  doc.setFont(fontName, 'bold');
+  doc.setFontSize(8.5);
+  doc.setTextColor(69, 75, 69);
+  doc.text(donut.heading, x, y + 3.2);
+
+  if (donut.empty) {
+    doc.setFont(fontName, 'normal');
+    doc.setFontSize(8.5);
+    doc.setTextColor(138, 144, 137);
+    doc.text(measured.emptyLines, x, y + 5 + 3.2);
+    return;
+  }
+
+  const cx = x + DONUT_OUTER_R;
+  const donutCy = y + 5 + DONUT_OUTER_R;
+  const ctx = doc.context2d;
+
+  // Base ring first — for 特生統計 (categories can overlap, so their shares
+  // don't sum to a full circle) this stays visible as "the rest of the
+  // student body"; for 獲獎紀錄／課照學扶 (mutually-exclusive categories
+  // summing to ~100%) it's fully covered except for the small gaps between
+  // slices, same as the live SVG donuts.
+  ctx.beginPath();
+  ctx.arc(cx, donutCy, DONUT_OUTER_R, 0, Math.PI * 2);
+  ctx.arc(cx, donutCy, DONUT_INNER_R, 0, Math.PI * 2, true);
+  ctx.closePath();
+  ctx.fillStyle = '#EEEBE2';
+  ctx.fill();
+
+  let angle = -Math.PI / 2;
+  let drawnFraction = 0;
+  const gapRad = 0.025;
+  for (const d of donut.data) {
+    const rawFraction = d.pct / 100;
+    const fraction = Math.max(Math.min(rawFraction, 1 - drawnFraction), 0);
+    const sweep = fraction * Math.PI * 2;
+    if (sweep > gapRad) {
+      const a0 = angle + gapRad / 2;
+      const a1 = angle + sweep - gapRad / 2;
+      ctx.beginPath();
+      ctx.arc(cx, donutCy, DONUT_OUTER_R, a0, a1, false);
+      ctx.arc(cx, donutCy, DONUT_INNER_R, a1, a0, true);
+      ctx.closePath();
+      ctx.fillStyle = donut.colorOf(d.category);
+      ctx.fill();
+    }
+    angle += sweep;
+    drawnFraction += fraction;
+  }
+
+  doc.setFont(fontName, 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(30, 36, 32);
+  doc.text(String(donut.total), cx, donutCy - 0.3, { align: 'center' });
+  doc.setFont(fontName, 'normal');
+  doc.setFontSize(5.3);
+  doc.setTextColor(138, 144, 137);
+  doc.text(donut.totalLabel, cx, donutCy + 3.3, { align: 'center' });
+
+  const legendTop = y + 5 + DONUT_OUTER_R * 2 + 3;
+  const colW = (innerWidth - DONUT_LEGEND_GAP) / 2;
+  doc.setFont(fontName, 'normal');
+  doc.setFontSize(7);
+  donut.data.forEach((d, i) => {
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    const lx = x + col * (colW + DONUT_LEGEND_GAP);
+    const ly = legendTop + row * DONUT_LEGEND_ROW_H + 3;
+    doc.setFillColor(...hexToRgb(donut.colorOf(d.category)));
+    doc.rect(lx, ly - DONUT_LEGEND_SWATCH, DONUT_LEGEND_SWATCH, DONUT_LEGEND_SWATCH, 'F');
+    doc.setTextColor(30, 36, 32);
+    doc.text(`${d.category}　${d.count}${donut.unit}・${d.pct}%`, lx + DONUT_LEGEND_SWATCH + 1.5, ly);
+  });
+}
+
 // Measures one 各模組現況 card's content (so the caller can learn its height
 // — and therefore a row's height, the taller of its two cards — before
 // anything is drawn, which is what lets a row that won't fit the remaining
@@ -167,6 +323,11 @@ function measureModuleCard(doc, fontName, width, card) {
   const narrativeLines = card.narrativeText ? doc.splitTextToSize(card.narrativeText, innerWidth).slice(0, 3) : [];
   let height = headerH + 5 + 7; // header + top padding + the bold value line
   if (narrativeLines.length) height += narrativeLines.length * 3.6 + 3;
+  let donutMeasured = null;
+  if (card.donut) {
+    donutMeasured = measureDonutBlock(doc, fontName, innerWidth, card.donut);
+    height += donutMeasured.height + 4;
+  }
   let chartW = 0;
   let chartH = 0;
   if (card.chartImg) {
@@ -180,19 +341,23 @@ function measureModuleCard(doc, fontName, width, card) {
     height += chartH + 4;
   }
   height += 4; // bottom padding
-  return { height, narrativeLines, chartW, chartH };
+  return { height, narrativeLines, chartW, chartH, donutMeasured };
 }
 
 // Draws one 各模組現況 card at (x, y): a soft-fill header strip with the
 // module's label, a large bold headline number (the same value already
 // shown in the 網頁版 module card's header — src/pages/Report.jsx's own
 // moduleValueText — so the PDF and the live page agree on the number), up
-// to 3 lines of its narrative, then its chart image if one was captured.
+// to 3 lines of its narrative, its native donut block if one was built
+// (buildDonutSpec — 方向 B2), then its chart image if one was captured.
 // `measured` must be measureModuleCard()'s own return value for this card.
 function drawModuleCard(doc, fontName, x, y, width, card, measured) {
-  const { height, narrativeLines, chartW, chartH } = measured;
+  const {
+    height, narrativeLines, chartW, chartH, donutMeasured,
+  } = measured;
   const padX = 4;
   const headerH = 9;
+  const innerWidth = width - padX * 2;
   doc.setFillColor(255, 255, 255);
   doc.roundedRect(x, y, width, height, 2, 2, 'F');
   doc.setDrawColor(227, 223, 211);
@@ -218,6 +383,12 @@ function drawModuleCard(doc, fontName, x, y, width, card, measured) {
     doc.setTextColor(107, 114, 106);
     doc.text(narrativeLines, x + padX, cy);
     cy += narrativeLines.length * 3.6;
+  }
+
+  if (card.donut) {
+    cy += 3;
+    drawDonutBlock(doc, fontName, x + padX, cy, innerWidth, card.donut, donutMeasured);
+    cy += donutMeasured.height;
   }
 
   if (card.chartImg && chartW > 0) {
@@ -396,6 +567,15 @@ export async function buildOverviewPdf(report, {
     const usableWidth = doc.internal.pageSize.getWidth() - 28;
     const cardWidth = (usableWidth - CARD_GAP) / 2;
 
+    const cardSpecFor = (key) => ({
+      label: MODULE_LABELS[key],
+      valueText: moduleValueText(key, report.modules[key]),
+      narrativeText: narratives.modules[key],
+      donut: buildDonutSpec(key, report),
+      chartImg: chartImages[`module.${key}`],
+      tile: SECTION_TILE_COLORS[key] || SECTION_TILE_COLORS.kpi,
+    });
+
     for (const category of MODULE_CATEGORIES) {
       const keysInCat = category.keys.filter((key) => moduleKeys.includes(key));
       if (!keysInCat.length) continue;
@@ -404,10 +584,7 @@ export async function buildOverviewPdf(report, {
       // needs a fresh page, so the label never ends up alone at the bottom
       // of a page with its own first card stranded on the next one.
       const firstRowKeys = [keysInCat[0], keysInCat[1]].filter(Boolean);
-      const firstRowHeight = Math.max(...firstRowKeys.map((key) => measureModuleCard(doc, fontName, cardWidth, {
-        narrativeText: narratives.modules[key],
-        chartImg: chartImages[`module.${key}`],
-      }).height));
+      const firstRowHeight = Math.max(...firstRowKeys.map((key) => measureModuleCard(doc, fontName, cardWidth, cardSpecFor(key)).height));
 
       if (y + 6 + firstRowHeight > doc.internal.pageSize.getHeight() - 20) {
         doc.addPage();
@@ -423,13 +600,7 @@ export async function buildOverviewPdf(report, {
 
       for (let i = 0; i < keysInCat.length; i += 2) {
         const rowKeys = [keysInCat[i], keysInCat[i + 1]].filter(Boolean);
-        const cards = rowKeys.map((key) => ({
-          label: MODULE_LABELS[key],
-          valueText: moduleValueText(key, report.modules[key]),
-          narrativeText: narratives.modules[key],
-          chartImg: chartImages[`module.${key}`],
-          tile: SECTION_TILE_COLORS[key] || SECTION_TILE_COLORS.kpi,
-        }));
+        const cards = rowKeys.map((key) => cardSpecFor(key));
         const measures = cards.map((card) => measureModuleCard(doc, fontName, cardWidth, card));
         const rowHeight = Math.max(...measures.map((m) => m.height));
 
