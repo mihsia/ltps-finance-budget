@@ -252,7 +252,7 @@ export function ClubParticipationMeter({ stats }) {
   );
 }
 
-/** A donut chart of 課照學扶 by 班別類別, mirroring AwardCategoryDonut above (same slice math, direct-labeled legend) with this module's own colors and wording. */
+/** A donut chart of 課照學扶 by 班別類別, mirroring AwardCategoryDonut above (same slice math, direct-labeled legend, legend below the donut in a 2-column grid) with this module's own colors and wording. */
 export function CareSupportCategoryDonut({ data }) {
   if (data.length === 0) {
     return <div style={{ font: "400 12.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>尚無課照學扶資料可供統計。</div>;
@@ -265,44 +265,53 @@ export function CareSupportCategoryDonut({ data }) {
   let drawn = 0;
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="課照學扶依班別類別分布圓環圖">
-        <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
-          <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#EEEBE2" strokeWidth={ringWidth} />
-          {data.map((d) => {
-            const length = (d.count / total) * circumference;
-            const visibleLength = Math.max(length - 2, 0);
-            const dashoffset = -drawn;
-            drawn += length;
-            return (
-              <circle
-                key={d.category}
-                cx={size / 2}
-                cy={size / 2}
-                r={radius}
-                fill="none"
-                stroke={CARE_SUPPORT_CATEGORY_COLORS[d.category] || CARE_SUPPORT_CATEGORY_COLORS.其他}
-                strokeWidth={ringWidth}
-                strokeDasharray={`${visibleLength} ${circumference - visibleLength}`}
-                strokeDashoffset={dashoffset}
-              />
-            );
-          })}
-        </g>
-        <text x={size / 2} y={size / 2 - 4} textAnchor="middle" style={{ font: '800 20px Inter, sans-serif', fill: '#1E2420' }}>{total}</text>
-        <text x={size / 2} y={size / 2 + 14} textAnchor="middle" style={{ font: "500 10.5px 'Noto Sans TC', sans-serif", fill: '#8A9089' }}>班</text>
-      </svg>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div>
+      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="課照學扶依班別類別分布圓環圖">
+          <g transform={`rotate(-90 ${size / 2} ${size / 2})`}>
+            <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="#EEEBE2" strokeWidth={ringWidth} />
+            {data.map((d) => {
+              const length = (d.count / total) * circumference;
+              const visibleLength = Math.max(length - 2, 0);
+              const dashoffset = -drawn;
+              drawn += length;
+              return (
+                <circle
+                  key={d.category}
+                  cx={size / 2}
+                  cy={size / 2}
+                  r={radius}
+                  fill="none"
+                  stroke={CARE_SUPPORT_CATEGORY_COLORS[d.category] || CARE_SUPPORT_CATEGORY_COLORS.其他}
+                  strokeWidth={ringWidth}
+                  strokeDasharray={`${visibleLength} ${circumference - visibleLength}`}
+                  strokeDashoffset={dashoffset}
+                />
+              );
+            })}
+          </g>
+          <text x={size / 2} y={size / 2 - 4} textAnchor="middle" style={{ font: '800 20px Inter, sans-serif', fill: '#1E2420' }}>{total}</text>
+          <text x={size / 2} y={size / 2 + 14} textAnchor="middle" style={{ font: "500 10.5px 'Noto Sans TC', sans-serif", fill: '#8A9089' }}>班</text>
+        </svg>
+      </div>
+      {/* Legend below the donut in a 2-column grid, full card width — see
+          AwardCategoryDonut above for why (same fix, same reason; this
+          component was missed in that round — 2026-10-28 補修正). */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 14px' }}>
         {data.map((d) => (
-          <div key={d.category} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div key={d.category} style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
             <span style={{
-              width: 10, height: 10, borderRadius: 3, flex: 'none',
+              width: 8, height: 8, borderRadius: 2, flex: 'none',
               background: CARE_SUPPORT_CATEGORY_COLORS[d.category] || CARE_SUPPORT_CATEGORY_COLORS.其他,
             }}
             />
-            <span style={{ font: "600 12.5px 'Noto Sans TC', sans-serif", color: '#1E2420' }}>{d.category}</span>
-            <span style={{ font: '700 12px Inter, sans-serif', color: '#454B45' }}>{d.count} 班</span>
-            <span style={{ font: "500 11.5px 'Noto Sans TC', sans-serif", color: '#8A9089' }}>（{d.pct}%）</span>
+            <span style={{
+              font: "600 11px 'Noto Sans TC', sans-serif", color: '#1E2420',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}
+            >
+              {`${d.category}　`}{d.count} 班<span style={{ color: '#8A9089', fontWeight: 500 }}>・{d.pct}%</span>
+            </span>
           </div>
         ))}
       </div>

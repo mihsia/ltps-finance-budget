@@ -204,7 +204,7 @@ describe('CareSupportCategoryDonut', () => {
     const text = textOf(renderer.root);
     expect(text).toContain('課照班');
     expect(text).toContain('3 班');
-    expect(text).toContain('（60%）');
+    expect(text).toContain('・60%');
     expect(text).toContain('5'); // total shown in the donut's center
 
     const circles = renderer.root.findAllByType('circle');
