@@ -14,6 +14,15 @@ function pctWord(value) {
   return `${value >= 0 ? '增加' : '減少'} ${Math.abs(value).toFixed(2)}%`;
 }
 
+// "（占全校 X%）", or '' when there's no student total to divide by — used
+// by reviewSummaryNarrative's 原住民／新住民學生 clauses (2026-10-29 補充：
+// 分組審查口頭報告原本只唸人數，沒有占比，比對校長實際使用的講稿後加上）.
+function pctClause(count, totalStudents) {
+  if (!totalStudents) return '';
+  const pct = Math.round((count / totalStudents) * 1000) / 10;
+  return `（占全校 ${pct}%）`;
+}
+
 function financeNarrative(report) {
   const { kpi, trend, expenseVariance } = report;
   const deltaPct = trend.length ? trend[trend.length - 1].deltaPct : null;
@@ -170,7 +179,13 @@ function reviewSummaryNarrative(report) {
     const indigenous = specialNeedsCategoryCount(specialNeedsRows, '原住民');
     const newResident = specialNeedsCategoryCount(specialNeedsRows, '新住民');
     let sentence = `全校 ${basic.classes ?? '—'} 班、${basic.students ?? '—'} 位學生`;
-    if (indigenous || newResident) sentence += `（其中原住民學生 ${indigenous} 人、新住民學生 ${newResident} 人）`;
+    if (indigenous || newResident) {
+      const totalStudents = Number(basic.students) || 0;
+      const subClauses = [];
+      if (indigenous) subClauses.push(`原住民學生 ${indigenous} 人${pctClause(indigenous, totalStudents)}`);
+      if (newResident) subClauses.push(`新住民學生 ${newResident} 人${pctClause(newResident, totalStudents)}`);
+      sentence += `，其中${subClauses.join('、')}`;
+    }
     part1.push(sentence);
   }
   if (language) {
@@ -193,7 +208,12 @@ function reviewSummaryNarrative(report) {
     part1.push(sentence);
   }
   if (club) part1.push(`特色社團共 ${fmtNum(club.count)} 個`);
-  const paragraph1 = part1.length ? `${part1.join('；')}。` : '';
+  // 「各位議座好，」起手式——比對校長實際議會分組審查口頭報告講稿後加上
+  // 的開場問候語，讓這段唸起來像一段完整報告的開頭，而不是從「校長服務
+  // 年資…」這句中途開始（2026-10-29 補充）。沒有任何其他資料可唸時（見
+  // 下方「omits every clause…」的空字串情形）不附加問候語，維持原本的
+  // 空字串語意。
+  const paragraph1 = part1.length ? `各位議座好，${part1.join('；')}。` : '';
 
   const part2 = [];
   const deltaPct = report.trend.length ? report.trend[report.trend.length - 1].deltaPct : null;

@@ -131,8 +131,8 @@ describe('reviewSummaryNarrative via buildDefaultNarratives', () => {
 
   it('compiles a 校務現況 paragraph and a 預算與人力 paragraph purely from already-tracked data', () => {
     const { reviewSummary } = buildDefaultNarratives(reviewReport());
-    expect(reviewSummary).toContain('校長服務總年資 12 年（擔任校長 3 年）');
-    expect(reviewSummary).toContain('全校 13 班、262 位學生（其中原住民學生 17 人、新住民學生 5 人）');
+    expect(reviewSummary).toContain('各位議座好，校長服務總年資 12 年（擔任校長 3 年）');
+    expect(reviewSummary).toContain('全校 13 班、262 位學生，其中原住民學生 17 人（占全校 6.5%）、新住民學生 5 人（占全校 1.9%）');
     expect(reviewSummary).toContain('開設原住民族語班（阿美語）');
     expect(reviewSummary).toContain('開設本土語班（閩南語）');
     expect(reviewSummary).toContain('學生通過族語認證 1 人');
