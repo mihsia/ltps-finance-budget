@@ -259,7 +259,12 @@ export function buildOverviewReport({
         ],
       } : null,
       language: (language.classRows.length || language.rosterRows?.length)
-        ? { classTotal: languageClassTotal, certifiedStudents: language.rosterRows?.length || 0, rows: language.classRows }
+        ? {
+          classTotal: languageClassTotal,
+          certifiedStudents: language.rosterRows?.length || 0,
+          certifiedRows: language.rosterRows || [],
+          rows: language.classRows,
+        }
         : null,
       specialNeeds: specialNeedsRows.length ? { total: specialNeedsTotal, rows: specialNeedsRows } : null,
       awards: awardsRows.length ? { count: awardsRows.length, rows: awardsRows } : null,

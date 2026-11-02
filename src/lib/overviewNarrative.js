@@ -23,6 +23,23 @@ function pctClause(count, totalStudents) {
   return `（占全校 ${pct}%）`;
 }
 
+// Formats a 千元-denominated amount (the unit every budget figure in this
+// app is stored and tabulated in) as spoken 中文萬／千 grouping — "5,608
+// 萬 9 千元" — instead of "56,089 千元", which is how every table in the
+// report shows the same number but reads awkwardly aloud (the "千元" unit
+// label doubling up against a number already grouped in thousands). Only
+// used inside 分組審查摘要's own sentences below; every table and chart
+// elsewhere keeps its existing fmtNum(...) + "千元" convention unchanged
+// (2026-11-02 比對校長實際議會報告講稿後新增).
+function fmtWan(thousandYuanAmount) {
+  const yuan = Math.round(Number(thousandYuanAmount) || 0) * 1000;
+  const wan = Math.trunc(yuan / 10000);
+  const qian = Math.round((yuan - wan * 10000) / 1000);
+  if (wan === 0) return `${qian} 千元`;
+  if (qian === 0) return `${fmtNum(wan)} 萬元`;
+  return `${fmtNum(wan)} 萬 ${qian} 千元`;
+}
+
 function financeNarrative(report) {
   const { kpi, trend, expenseVariance } = report;
   const deltaPct = trend.length ? trend[trend.length - 1].deltaPct : null;
@@ -189,13 +206,36 @@ function reviewSummaryNarrative(report) {
     part1.push(sentence);
   }
   if (language) {
+    // Per-language 班／人數 instead of just the language names — the
+    // counts were already sitting in language.rows (classRows), just not
+    // surfaced in this clause's wording (2026-11-02 比對校長實際講稿後
+    // 加上，講稿裡每個語言都報了開班數跟學生數，不是只唸語言名稱清單).
+    const langDetail = (lang) => {
+      const row = (language.rows || []).find((r) => r.lang === lang);
+      return `${lang} ${row?.classes ?? 0} 班、${row?.students ?? 0} 人`;
+    };
     const langs = [...new Set((language.rows || []).map((row) => row.lang).filter(Boolean))];
     const indigenousLangs = langs.filter((lang) => !LOCAL_LANGUAGES.has(lang));
     const localLangs = langs.filter((lang) => LOCAL_LANGUAGES.has(lang));
     const clauses = [];
-    if (indigenousLangs.length) clauses.push(`開設原住民族語班（${indigenousLangs.join('、')}）`);
-    if (localLangs.length) clauses.push(`開設本土語班（${localLangs.join('、')}）`);
-    if (language.certifiedStudents) clauses.push(`學生通過族語認證 ${language.certifiedStudents} 人`);
+    if (indigenousLangs.length) clauses.push(`開設原住民族語班（${indigenousLangs.map(langDetail).join('；')}）`);
+    if (localLangs.length) clauses.push(`開設本土語班（${localLangs.map(langDetail).join('；')}）`);
+    // 通過人數同樣改為按語系／級別細分，而非只報一個總數——這份細節其實
+    // 早就存在「族語認證」通過名冊裡（language.certifiedRows），只是這段
+    // 文字原本沒有拿來用，只用了總筆數（2026-11-02）。
+    if (language.certifiedRows?.length) {
+      const counts = new Map();
+      for (const row of language.certifiedRows) {
+        const key = `${row.lang}\u0000${row.level}`;
+        const entry = counts.get(key) || { lang: row.lang, level: row.level, count: 0 };
+        entry.count += 1;
+        counts.set(key, entry);
+      }
+      const detail = [...counts.values()].map((c) => `${c.lang}${c.level} ${c.count} 位`).join('；');
+      clauses.push(`學生通過族語認證共 ${language.certifiedStudents} 人（${detail}）`);
+    } else if (language.certifiedStudents) {
+      clauses.push(`學生通過族語認證 ${language.certifiedStudents} 人`);
+    }
     if (clauses.length) part1.push(clauses.join('，'));
   }
   if (awards) {
@@ -216,8 +256,20 @@ function reviewSummaryNarrative(report) {
   const paragraph1 = part1.length ? `各位議座好，${part1.join('；')}。` : '';
 
   const part2 = [];
-  const deltaPct = report.trend.length ? report.trend[report.trend.length - 1].deltaPct : null;
-  if (deltaPct != null) part2.push(`本年度歲出預算較上年度${pctWord(deltaPct)}`);
+  // 金額唸法改用「5,608 萬 9 千元」中文萬／千分組，比對校長實際講稿後
+  // 發現「56,089 千元」這種純千元逗號分組唸起來不自然；同時把「增加多
+  // 少金額」也唸出來，不是只有百分比（2026-11-02）。只在有上一年度可
+  // 比較時才顯示，沒有比較基準時維持原本整句省略（不是只省略百分比）。
+  if (report.trend.length) {
+    const last = report.trend[report.trend.length - 1];
+    if (last.deltaPct != null) {
+      const prev = report.trend[report.trend.length - 2];
+      const delta = last.expenseTotal - prev.expenseTotal;
+      const verb = delta >= 0 ? '增加' : '減少';
+      const magnitudeWord = delta >= 0 ? '增幅' : '減幅';
+      part2.push(`${report.meta.year} 年度預算編列為 ${fmtWan(last.expenseTotal)}，較上年度的 ${fmtWan(prev.expenseTotal)}，${verb} ${fmtWan(Math.abs(delta))}，${magnitudeWord}約 ${Math.abs(last.deltaPct).toFixed(2)}%`);
+    }
+  }
   if (basic) {
     const staffing = [];
     if (basic.substituteTotal != null) staffing.push(`代理教師 ${basic.substituteTotal} 人`);
@@ -229,7 +281,7 @@ function reviewSummaryNarrative(report) {
     }
   }
   if (library?.budget) {
-    let sentence = `圖書經費規劃 ${fmtNum(Number(library.budget))} 千元`;
+    let sentence = `圖書經費規劃 ${fmtWan(Number(library.budget))}`;
     if (library.plan) sentence += `（${library.plan}）`;
     part2.push(sentence);
   }

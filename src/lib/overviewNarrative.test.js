@@ -133,20 +133,38 @@ describe('reviewSummaryNarrative via buildDefaultNarratives', () => {
     const { reviewSummary } = buildDefaultNarratives(reviewReport());
     expect(reviewSummary).toContain('各位議座好，校長服務總年資 12 年（擔任校長 3 年）');
     expect(reviewSummary).toContain('全校 13 班、262 位學生，其中原住民學生 17 人（占全校 6.5%）、新住民學生 5 人（占全校 1.9%）');
-    expect(reviewSummary).toContain('開設原住民族語班（阿美語）');
-    expect(reviewSummary).toContain('開設本土語班（閩南語）');
-    expect(reviewSummary).toContain('學生通過族語認證 1 人');
+    expect(reviewSummary).toContain('開設原住民族語班（阿美語 1 班、10 人）');
+    expect(reviewSummary).toContain('開設本土語班（閩南語 3 班、60 人）');
+    expect(reviewSummary).toContain('學生通過族語認證共 1 人（閩南語中級 1 位）');
     expect(reviewSummary).toContain('本年度獲獎紀錄共 2 筆，以「語文類」類別最多');
     expect(reviewSummary).toContain('特色社團共 2 個');
-    expect(reviewSummary).toContain('本年度歲出預算較上年度增加 4.62%');
+    expect(reviewSummary).toContain('115 年度預算編列為 680 萬元，較上年度的 650 萬元，增加 30 萬元，增幅約 4.62%');
     expect(reviewSummary).toContain('代理教師 0 人、運動教練 2 人、校護 1 人');
     expect(reviewSummary).toContain('AED 3 台，有證照可操作教師 8 人');
-    expect(reviewSummary).toContain('圖書經費規劃 50 千元（充實低年級繪本）');
+    expect(reviewSummary).toContain('圖書經費規劃 5 萬元（充實低年級繪本）');
   });
 
   it('omits every clause that has no underlying data, rather than showing a placeholder', () => {
     const report = buildOverviewReport({ year: '115', expenseRows: [], revenueRows: [] });
     expect(buildDefaultNarratives(report).reviewSummary).toBe('');
+  });
+
+  it('groups 族語認證 pass counts by 語系／級別 instead of one flat total, and words a budget decrease as 減少／減幅', () => {
+    const report = reviewReport({
+      trend: [{ year: '114', expenseTotal: 6800 }, { year: '115', expenseTotal: 6500 }],
+      language: {
+        classRows: [{ lang: '閩南語', classes: 3, students: 60 }],
+        teacherRows: [],
+        rosterRows: [
+          { lang: '泰雅語', level: '初級', name: 'A' },
+          { lang: '泰雅語', level: '初級', name: 'B' },
+          { lang: '阿美語', level: '中級', name: 'C' },
+        ],
+      },
+    });
+    const { reviewSummary } = buildDefaultNarratives(report);
+    expect(reviewSummary).toContain('學生通過族語認證共 3 人（泰雅語初級 2 位；阿美語中級 1 位）');
+    expect(reviewSummary).toContain('115 年度預算編列為 650 萬元，較上年度的 680 萬元，減少 30 萬元，減幅約 4.41%');
   });
 });
 

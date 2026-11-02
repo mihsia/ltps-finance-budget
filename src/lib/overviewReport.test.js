@@ -159,7 +159,9 @@ describe('buildOverviewReport', () => {
       ],
     });
     const languageRows = [{ lang: '閩南語', classes: 13, students: 264 }, { lang: '客語', classes: 1, students: 4 }];
-    expect(report.modules.language).toEqual({ classTotal: 14, certifiedStudents: 0, rows: languageRows });
+    expect(report.modules.language).toEqual({
+      classTotal: 14, certifiedStudents: 0, certifiedRows: [], rows: languageRows,
+    });
     expect(report.modules.specialNeeds).toEqual({
       total: 42,
       rows: [{ category: '原住民', count: 17 }, { category: '新住民', count: 25 }],
@@ -193,6 +195,7 @@ describe('buildOverviewReport', () => {
     expect(report.modules.language).toEqual({
       classTotal: 3,
       certifiedStudents: 2,
+      certifiedRows: [{ lang: '閩南語', level: '中級', name: '陳○安' }, { lang: '閩南語', level: '初級', name: '林○華' }],
       rows: [{ lang: '閩南語', classes: 3, students: 60 }],
     });
 
@@ -200,6 +203,8 @@ describe('buildOverviewReport', () => {
       year: '115', expenseRows: [], revenueRows: [],
       language: { classRows: [], teacherRows: [], rosterRows: [{ lang: '阿美語', level: '初級', name: '王○明' }] },
     });
-    expect(rosterOnly.modules.language).toEqual({ classTotal: 0, certifiedStudents: 1, rows: [] });
+    expect(rosterOnly.modules.language).toEqual({
+      classTotal: 0, certifiedStudents: 1, certifiedRows: [{ lang: '阿美語', level: '初級', name: '王○明' }], rows: [],
+    });
   });
 });
