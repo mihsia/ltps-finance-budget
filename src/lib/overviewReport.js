@@ -250,6 +250,10 @@ export function buildOverviewReport({
       principalTotalTenure: basic.principalTotalTenure ?? null, principalTenure: basic.principalTenure ?? null,
       sportsCoaches: basic.sportsCoaches ?? null, schoolNurses: basic.schoolNurses ?? null,
       aedCount: basic.aedCount ?? null, aedCertifiedTeachers: basic.aedCertifiedTeachers ?? null,
+      indigenousTeachers: basic.indigenousTeachers ?? null,
+      indigenousTeacherEthnicities: basic.indigenousTeacherEthnicities || null,
+      expenseChangeReason: basic.expenseChangeReason || null,
+      schoolVision: basic.schoolVision || null,
     } : null,
     modules: {
       library: library ? {
@@ -265,6 +269,7 @@ export function buildOverviewReport({
           classTotal: languageClassTotal,
           certifiedStudents: language.rosterRows?.length || 0,
           certifiedRows: language.rosterRows || [],
+          registrationRows: language.registrationRows || [],
           rows: language.classRows,
         }
         : null,

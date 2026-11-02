@@ -50,6 +50,8 @@ describe('buildOverviewReport', () => {
         principalTotalTenure: '12', principalTenure: '3',
         sportsCoaches: '2', schoolNurses: '1',
         aedCount: '3', aedCertifiedTeachers: '8',
+        indigenousTeachers: '2', indigenousTeacherEthnicities: '阿美族、泰雅族',
+        expenseChangeReason: '主要原因為用人費用增加', schoolVision: '以閱讀立校，培養終身學習者。',
       },
       library: { generalBooks: 100, indigenousBooks: 10, libraryBudget: '50', libraryPlan: '充實低年級繪本' },
       expenseRows: [], revenueRows: [],
@@ -58,11 +60,13 @@ describe('buildOverviewReport', () => {
       principalTotalTenure: '12', principalTenure: '3',
       sportsCoaches: '2', schoolNurses: '1',
       aedCount: '3', aedCertifiedTeachers: '8',
+      indigenousTeachers: '2', indigenousTeacherEthnicities: '阿美族、泰雅族',
+      expenseChangeReason: '主要原因為用人費用增加', schoolVision: '以閱讀立校，培養終身學習者。',
     });
     expect(report.modules.library).toMatchObject({ budget: '50', plan: '充實低年級繪本' });
   });
 
-  it('leaves the personnel fields and 圖書經費／規劃用途 null when unfilled', () => {
+  it('leaves the personnel fields, 圖書經費／規劃用途, and the 分組審查講稿比對 text fields null when unfilled', () => {
     const report = buildOverviewReport({
       year: '115', basic: BASIC, library: { generalBooks: 1, indigenousBooks: 0 },
       expenseRows: [], revenueRows: [],
@@ -71,6 +75,8 @@ describe('buildOverviewReport', () => {
       principalTotalTenure: null, principalTenure: null,
       sportsCoaches: null, schoolNurses: null,
       aedCount: null, aedCertifiedTeachers: null,
+      indigenousTeachers: null, indigenousTeacherEthnicities: null,
+      expenseChangeReason: null, schoolVision: null,
     });
     expect(report.modules.library).toMatchObject({ budget: null, plan: null });
   });
@@ -160,7 +166,7 @@ describe('buildOverviewReport', () => {
     });
     const languageRows = [{ lang: '閩南語', classes: 13, students: 264 }, { lang: '客語', classes: 1, students: 4 }];
     expect(report.modules.language).toEqual({
-      classTotal: 14, certifiedStudents: 0, certifiedRows: [], rows: languageRows,
+      classTotal: 14, certifiedStudents: 0, certifiedRows: [], registrationRows: [], rows: languageRows,
     });
     expect(report.modules.specialNeeds).toEqual({
       total: 42,
@@ -196,6 +202,7 @@ describe('buildOverviewReport', () => {
       classTotal: 3,
       certifiedStudents: 2,
       certifiedRows: [{ lang: '閩南語', level: '中級', name: '陳○安' }, { lang: '閩南語', level: '初級', name: '林○華' }],
+      registrationRows: [],
       rows: [{ lang: '閩南語', classes: 3, students: 60 }],
     });
 
@@ -204,7 +211,27 @@ describe('buildOverviewReport', () => {
       language: { classRows: [], teacherRows: [], rosterRows: [{ lang: '阿美語', level: '初級', name: '王○明' }] },
     });
     expect(rosterOnly.modules.language).toEqual({
-      classTotal: 0, certifiedStudents: 1, certifiedRows: [{ lang: '阿美語', level: '初級', name: '王○明' }], rows: [],
+      classTotal: 0, certifiedStudents: 1, certifiedRows: [{ lang: '阿美語', level: '初級', name: '王○明' }], registrationRows: [], rows: [],
     });
+  });
+
+  it('passes through 族語認證報名名冊 rows as modules.language.registrationRows', () => {
+    const report = buildOverviewReport({
+      year: '115', expenseRows: [], revenueRows: [],
+      language: {
+        classRows: [{ lang: '泰雅語', classes: 1, students: 10 }],
+        teacherRows: [],
+        registrationRows: [
+          {
+            lang: '泰雅語', level: '初級', name: '王○明', examDate: '2027-01-10',
+          },
+        ],
+      },
+    });
+    expect(report.modules.language.registrationRows).toEqual([
+      {
+        lang: '泰雅語', level: '初級', name: '王○明', examDate: '2027-01-10',
+      },
+    ]);
   });
 });

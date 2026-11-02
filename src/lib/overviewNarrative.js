@@ -15,12 +15,22 @@ function pctWord(value) {
 }
 
 // "（占全校 X%）", or '' when there's no student total to divide by — used
-// by reviewSummaryNarrative's 原住民／新住民學生 clauses (2026-10-29 補充：
-// 分組審查口頭報告原本只唸人數，沒有占比，比對校長實際使用的講稿後加上）.
+// by reviewSummaryNarrative's 新住民學生 clause (2026-10-29 補充：分組審查
+// 口頭報告原本只唸人數，沒有占比，比對校長實際使用的講稿後加上）.
 function pctClause(count, totalStudents) {
   if (!totalStudents) return '';
   const pct = Math.round((count / totalStudents) * 1000) / 10;
   return `（占全校 ${pct}%）`;
+}
+
+// "（占全校 X%，阿美族 10 人、泰雅族 7 人）" — combines the 占全校 X% figure
+// with the optional 原住民學生族別 breakdown into one parenthetical instead
+// of two back-to-back ones, which read awkwardly aloud (2026-11-02 分組審查
+// 講稿比對收尾階段).
+function pctAndEthnicityClause(count, totalStudents, breakdown) {
+  const pct = totalStudents ? `占全校 ${Math.round((count / totalStudents) * 1000) / 10}%` : '';
+  const parts = [pct, breakdown].filter(Boolean);
+  return parts.length ? `（${parts.join('，')}）` : '';
 }
 
 // Formats a 千元-denominated amount (the unit every budget figure in this
@@ -169,16 +179,30 @@ function specialNeedsCategoryCount(rows, category) {
     .reduce((sum, row) => sum + (Number(row.count) || 0), 0);
 }
 
+// "阿美族 10 人、泰雅族 7 人" — 原住民學生按族別分組加總人數，只用在類別
+// 為「原住民」且有填族別（ethnicity）的列；沒有填族別的列仍計入原住民學
+// 生總數（見上方 specialNeedsCategoryCount），只是不會出現在這個細分裡
+// （2026-11-02 分組審查講稿比對收尾階段新增）。
+function specialNeedsEthnicityBreakdown(rows, category) {
+  const counts = new Map();
+  for (const row of rows || []) {
+    if (row.category !== category || !row.ethnicity) continue;
+    counts.set(row.ethnicity, (counts.get(row.ethnicity) || 0) + (Number(row.count) || 0));
+  }
+  return [...counts.entries()].map(([ethnicity, count]) => `${ethnicity} ${count} 人`).join('、');
+}
+
 /**
- * Compiles the two paragraphs a校長 reads aloud for 議會分組預算審查（小組
- * 審查以每校不超過 1 分鐘為原則）— one 校務現況段落 covering 校長服務年
- * 資／班級學生數（含原住民、新住民）／族語認證／族語與本土語開課／競賽
- * 成績／特色社團, one 預算與人力段落 covering 歲出年增減／代理教師／運
- * 動教練／校護／AED／圖書經費規劃. Everything here is read straight off
- * buildOverviewReport()'s own result — no separate data entry — so a
+ * Compiles the paragraphs a校長 reads aloud for 議會分組預算審查——one 校務
+ * 現況段落 covering 校長服務年資／班級學生數（含原住民、新住民及原住民學
+ * 生族別）／族語認證與報名／族語與本土語開課（含授課方式）／競賽成績／
+ * 特色社團, one 預算與人力段落 covering 歲出年增減（含主要原因）／代理
+ * 教師／原住民籍教師／運動教練／校護／AED／圖書經費規劃, and an optional
+ * closing 學校願景／辦學特色 paragraph. Everything here is read straight
+ * off buildOverviewReport()'s own result — no separate data entry — so a
  * missing figure just drops its clause instead of showing a placeholder.
- * 補辦預算之情形與族語認證報名人數目前系統沒有對應資料，不在此自動產
- * 生；需要時可由管理者在這段文字後手動補上一句，儲存即成為自訂版本。
+ * （原本的「不超過 1 分鐘」原則已於 2026-11-02 放寬，見 README；本函式
+ * 現在涵蓋校長實際講稿的每一項內容。）
  */
 function reviewSummaryNarrative(report) {
   const basic = report.basicProfile;
@@ -199,7 +223,10 @@ function reviewSummaryNarrative(report) {
     if (indigenous || newResident) {
       const totalStudents = Number(basic.students) || 0;
       const subClauses = [];
-      if (indigenous) subClauses.push(`原住民學生 ${indigenous} 人${pctClause(indigenous, totalStudents)}`);
+      if (indigenous) {
+        const ethnicityDetail = specialNeedsEthnicityBreakdown(specialNeedsRows, '原住民');
+        subClauses.push(`原住民學生 ${indigenous} 人${pctAndEthnicityClause(indigenous, totalStudents, ethnicityDetail)}`);
+      }
       if (newResident) subClauses.push(`新住民學生 ${newResident} 人${pctClause(newResident, totalStudents)}`);
       sentence += `，其中${subClauses.join('、')}`;
     }
@@ -210,9 +237,16 @@ function reviewSummaryNarrative(report) {
     // counts were already sitting in language.rows (classRows), just not
     // surfaced in this clause's wording (2026-11-02 比對校長實際講稿後
     // 加上，講稿裡每個語言都報了開班數跟學生數，不是只唸語言名稱清單).
+    // 同一語系可能分成好幾列登記（例如同一語系的實體授課跟直播共學各一
+    // 列），所以用加總而不是只取第一列；授課方式有登記的話一併附註，同一
+    // 語系出現超過一種授課方式就全部列出（2026-11-02 分組審查講稿比對收
+    // 尾階段：族語開班新增「授課方式」欄位後，這段文字才開始使用它）。
     const langDetail = (lang) => {
-      const row = (language.rows || []).find((r) => r.lang === lang);
-      return `${lang} ${row?.classes ?? 0} 班、${row?.students ?? 0} 人`;
+      const rows = (language.rows || []).filter((r) => r.lang === lang);
+      const classes = rows.reduce((sum, r) => sum + (Number(r.classes) || 0), 0);
+      const students = rows.reduce((sum, r) => sum + (Number(r.students) || 0), 0);
+      const modes = [...new Set(rows.map((r) => r.deliveryMode).filter(Boolean))];
+      return `${lang} ${classes} 班、${students} 人${modes.length ? `（${modes.join('、')}）` : ''}`;
     };
     const langs = [...new Set((language.rows || []).map((row) => row.lang).filter(Boolean))];
     const indigenousLangs = langs.filter((lang) => !LOCAL_LANGUAGES.has(lang));
@@ -235,6 +269,20 @@ function reviewSummaryNarrative(report) {
       clauses.push(`學生通過族語認證共 ${language.certifiedStudents} 人（${detail}）`);
     } else if (language.certifiedStudents) {
       clauses.push(`學生通過族語認證 ${language.certifiedStudents} 人`);
+    }
+    // 預計報名下一場族語認證考試、還不確定會不會通過的學生——跟上面已經
+    // 通過的 certifiedRows 是分開的兩份名冊（見「族語認證」頁的「族語認
+    // 證報名名冊」，2026-11-02 分組審查講稿比對收尾階段新增）。
+    if (language.registrationRows?.length) {
+      const counts = new Map();
+      for (const row of language.registrationRows) {
+        const key = `${row.lang}\u0000${row.level}`;
+        const entry = counts.get(key) || { lang: row.lang, level: row.level, count: 0 };
+        entry.count += 1;
+        counts.set(key, entry);
+      }
+      const detail = [...counts.values()].map((c) => `${c.lang}${c.level} ${c.count} 位`).join('；');
+      clauses.push(`預計報名族語認證共 ${language.registrationRows.length} 人（${detail}）`);
     }
     if (clauses.length) part1.push(clauses.join('，'));
   }
@@ -267,12 +315,20 @@ function reviewSummaryNarrative(report) {
       const delta = last.expenseTotal - prev.expenseTotal;
       const verb = delta >= 0 ? '增加' : '減少';
       const magnitudeWord = delta >= 0 ? '增幅' : '減幅';
-      part2.push(`${report.meta.year} 年度預算編列為 ${fmtWan(last.expenseTotal)}，較上年度的 ${fmtWan(prev.expenseTotal)}，${verb} ${fmtWan(Math.abs(delta))}，${magnitudeWord}約 ${Math.abs(last.deltaPct).toFixed(2)}%`);
+      let sentence = `${report.meta.year} 年度預算編列為 ${fmtWan(last.expenseTotal)}，較上年度的 ${fmtWan(prev.expenseTotal)}，${verb} ${fmtWan(Math.abs(delta))}，${magnitudeWord}約 ${Math.abs(last.deltaPct).toFixed(2)}%`;
+      // 歲出增減主要原因——校長在基本資料頁填寫的一句話說明（2026-11-02
+      // 分組審查講稿比對收尾階段新增，見 Basic.jsx 的 expenseChangeReason）。
+      if (basic?.expenseChangeReason) sentence += `，${basic.expenseChangeReason}`;
+      part2.push(sentence);
     }
   }
   if (basic) {
     const staffing = [];
     if (basic.substituteTotal != null) staffing.push(`代理教師 ${basic.substituteTotal} 人`);
+    if (basic.indigenousTeachers) {
+      const ethnicityNote = basic.indigenousTeacherEthnicities ? `（${basic.indigenousTeacherEthnicities}）` : '';
+      staffing.push(`原住民籍教師 ${basic.indigenousTeachers} 人${ethnicityNote}`);
+    }
     if (basic.sportsCoaches) staffing.push(`運動教練 ${basic.sportsCoaches} 人`);
     if (basic.schoolNurses) staffing.push(`校護 ${basic.schoolNurses} 人`);
     if (staffing.length) part2.push(staffing.join('、'));
@@ -287,7 +343,12 @@ function reviewSummaryNarrative(report) {
   }
   const paragraph2 = part2.length ? `${part2.join('；')}。` : '';
 
-  return [paragraph1, paragraph2].filter(Boolean).join('\n\n');
+  // 學校願景／辦學特色——校長在基本資料頁填寫的一段自由文字，原樣當作
+  // 收尾段落（不加其他措辭），管理者填的就是要唸的（2026-11-02 分組審查
+  // 講稿比對收尾階段新增，見 Basic.jsx 的 schoolVision）。
+  const paragraph3 = basic?.schoolVision ? basic.schoolVision.trim() : '';
+
+  return [paragraph1, paragraph2, paragraph3].filter(Boolean).join('\n\n');
 }
 
 const MODULE_NARRATIVE_BUILDERS = {

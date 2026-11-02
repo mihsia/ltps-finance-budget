@@ -166,6 +166,73 @@ describe('reviewSummaryNarrative via buildDefaultNarratives', () => {
     expect(reviewSummary).toContain('學生通過族語認證共 3 人（泰雅語初級 2 位；阿美語中級 1 位）');
     expect(reviewSummary).toContain('115 年度預算編列為 650 萬元，較上年度的 680 萬元，減少 30 萬元，減幅約 4.41%');
   });
+
+  it('breaks 原住民學生 down by 族別, sums classes/students across multiple rows of the same 語系, and notes each 授課方式', () => {
+    const report = reviewReport({
+      specialNeedsRows: [
+        { category: '原住民', count: 10, ethnicity: '阿美族' },
+        { category: '原住民', count: 7, ethnicity: '泰雅族' },
+        { category: '新住民', count: 5 },
+      ],
+      language: {
+        classRows: [
+          { lang: '阿美語', classes: 1, students: 10, deliveryMode: '實體授課' },
+          { lang: '阿美語', classes: 1, students: 8, deliveryMode: '直播共學' },
+        ],
+        teacherRows: [],
+      },
+    });
+    const { reviewSummary } = buildDefaultNarratives(report);
+    expect(reviewSummary).toContain('原住民學生 17 人（占全校 6.5%，阿美族 10 人、泰雅族 7 人）');
+    expect(reviewSummary).toContain('開設原住民族語班（阿美語 2 班、18 人（實體授課、直播共學））');
+  });
+
+  it('counts 族語認證報名名冊 rows grouped by 語系／級別', () => {
+    const report = reviewReport({
+      language: {
+        classRows: [{ lang: '閩南語', classes: 3, students: 60 }],
+        teacherRows: [],
+        registrationRows: [
+          { lang: '泰雅語', level: '初級', name: 'A', examDate: '2027-01-10' },
+          { lang: '泰雅語', level: '初級', name: 'B', examDate: '2027-01-10' },
+          { lang: '阿美語', level: '中級', name: 'C', examDate: '2027-02-01' },
+        ],
+      },
+    });
+    const { reviewSummary } = buildDefaultNarratives(report);
+    expect(reviewSummary).toContain('預計報名族語認證共 3 人（泰雅語初級 2 位；阿美語中級 1 位）');
+  });
+
+  it('states 歲出增減主要原因 right after the delta it explains, and 原住民籍教師人數／族別 among the staffing clause', () => {
+    const report = reviewReport({
+      basic: {
+        classes: 13, students: 262,
+        principalTotalTenure: 12, principalTenure: 3,
+        sportsCoaches: 2, schoolNurses: 1,
+        aedCount: 3, aedCertifiedTeachers: 8,
+        indigenousTeachers: 2, indigenousTeacherEthnicities: '阿美族、泰雅族',
+        expenseChangeReason: '主要原因為用人費用增加',
+      },
+    });
+    const { reviewSummary } = buildDefaultNarratives(report);
+    expect(reviewSummary).toContain('增幅約 4.62%，主要原因為用人費用增加');
+    expect(reviewSummary).toContain('代理教師 0 人、原住民籍教師 2 人（阿美族、泰雅族）、運動教練 2 人、校護 1 人');
+  });
+
+  it('appends 學校願景 as its own closing paragraph, verbatim, only when filled in', () => {
+    const withVision = reviewReport({
+      basic: {
+        classes: 13, students: 262, schoolVision: '以閱讀立校，培養終身學習者。',
+      },
+    });
+    const { reviewSummary: withVisionText } = buildDefaultNarratives(withVision);
+    expect(withVisionText.endsWith('以閱讀立校，培養終身學習者。')).toBe(true);
+    expect(withVisionText.split('\n\n')).toHaveLength(3);
+
+    const withoutVision = reviewReport({ basic: { classes: 13, students: 262 } });
+    const { reviewSummary: withoutVisionText } = buildDefaultNarratives(withoutVision);
+    expect(withoutVisionText).not.toContain('以閱讀立校');
+  });
 });
 
 describe('resolveNarratives', () => {
