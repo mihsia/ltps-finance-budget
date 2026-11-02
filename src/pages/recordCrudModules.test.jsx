@@ -431,6 +431,49 @@ describe('LanguageCert variant records CRUD page', () => {
     expect(recovery.restore).toHaveBeenCalledWith('teacher-old', authMocks.actor);
     mounted.unmount();
   });
+
+  it('creates, edits, soft-deletes, and restores 認證報名名冊 rows with a date field', async () => {
+    const records = readyRecords([]);
+    installRecords('languageCert', records);
+    const mounted = mount(LanguageCert);
+
+    await act(async () => control(mounted.renderer, '＋ 新增認證報名名冊').props.onClick());
+    change(mounted.renderer, '語系', '泰雅語');
+    change(mounted.renderer, '報名級別', '初級');
+    change(mounted.renderer, '學生姓名', ' 王○明 ');
+    change(mounted.renderer, '預計考試日期', '2027-01-10');
+    await act(async () => control(mounted.renderer, '新增').props.onClick());
+    expect(records.create).toHaveBeenLastCalledWith({
+      recordType: 'registration', lang: '泰雅語', level: '初級', name: '王○明', examDate: '2027-01-10',
+    }, authMocks.actor);
+    mounted.unmount();
+
+    const active = readyRecords([
+      {
+        id: 'reg-1', recordType: 'registration', lang: '泰雅語', level: '初級', name: '王○明', examDate: '2027-01-10', deletedAt: null,
+      },
+    ]);
+    const recovery = readyRecords([
+      {
+        id: 'reg-old', recordType: 'registration', lang: '阿美語', level: '中級', name: '陳○安', examDate: '2026-12-01', deletedAt: { seconds: 1 },
+      },
+    ]);
+    installRecords('languageCert', active, recovery);
+    const editMounted = mount(LanguageCert);
+    await act(async () => control(editMounted.renderer, '編輯報名名冊').props.onClick());
+    change(editMounted.renderer, '預計考試日期', '2027-02-01');
+    await act(async () => control(editMounted.renderer, '儲存').props.onClick());
+    expect(active.update).toHaveBeenCalledWith('reg-1', {
+      lang: '泰雅語', level: '初級', name: '王○明', examDate: '2027-02-01',
+    }, authMocks.actor);
+
+    await act(async () => control(editMounted.renderer, '停用報名名冊').props.onClick());
+    expect(active.delete).toHaveBeenCalledWith('reg-1', authMocks.actor);
+    await act(async () => control(editMounted.renderer, '顯示已停用資料').props.onClick());
+    await act(async () => control(editMounted.renderer, '復原').props.onClick());
+    expect(recovery.restore).toHaveBeenCalledWith('reg-old', authMocks.actor);
+    editMounted.unmount();
+  });
 });
 
 describe('schema-driven Generic records CRUD page', () => {

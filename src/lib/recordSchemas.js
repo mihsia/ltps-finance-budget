@@ -169,6 +169,18 @@ export const LANGUAGE_RECORD_SCHEMAS = {
       { key: 'name', label: '學生姓名', kind: 'text', maxLength: 60 },
     ],
   },
+  // 即將報名下一場族語認證考試的學生，與「學生通過名冊」（roster，已通過
+  // 的名冊）分開登錄——報名時還不知道會不會通過，考完才會知道要不要移到
+  // roster；這裡的 examDate 只是「預計考試日期」，不是通過日期。
+  registration: {
+    label: '認證報名名冊',
+    fields: [
+      { key: 'lang', label: '語系', kind: 'text', maxLength: 60 },
+      { key: 'level', label: '報名級別', kind: 'text', maxLength: 40 },
+      { key: 'name', label: '學生姓名', kind: 'text', maxLength: 60 },
+      { key: 'examDate', label: '預計考試日期', kind: 'date' },
+    ],
+  },
 };
 
 export function validateLanguageRecord(recordType, source) {

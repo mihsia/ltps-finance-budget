@@ -101,6 +101,17 @@ describe('record CRUD schemas', () => {
     expect(schemas.validateLanguageRecord('teacher', {
       lang: '客語', name: '', certified: '是',
     })).toMatchObject({ valid: false, error: '教師姓名不得留白。' });
+    expect(schemas.validateLanguageRecord('registration', {
+      lang: '泰雅語', level: ' 初級 ', name: ' 王○明 ', examDate: '2027-01-10',
+    })).toMatchObject({
+      valid: true,
+      data: {
+        recordType: 'registration', lang: '泰雅語', level: '初級', name: '王○明', examDate: '2027-01-10',
+      },
+    });
+    expect(schemas.validateLanguageRecord('registration', {
+      lang: '泰雅語', level: '初級', name: '王○明', examDate: '2027-02-30',
+    })).toMatchObject({ valid: false, error: '預計考試日期必須是有效的 YYYY-MM-DD。' });
   });
 
   it('uses field-specific Generic schemas and validates real calendar dates', () => {

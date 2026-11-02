@@ -43,5 +43,6 @@ export function languageRecordSummary(records) {
     classRows: activeTypedRecords(records, 'class'),
     teacherRows: activeTypedRecords(records, 'teacher'),
     rosterRows: activeTypedRecords(records, 'roster'),
+    registrationRows: activeTypedRecords(records, 'registration'),
   };
 }
