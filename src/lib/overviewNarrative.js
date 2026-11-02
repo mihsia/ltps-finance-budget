@@ -3,12 +3,13 @@ import { summarizeByCategory } from './awardStats';
 import { summarizeSpecialNeeds } from './specialNeedsStats';
 import { summarizeClubParticipation } from './clubStats';
 import { summarizeParcelValues, SCHOOL_LAND_TOTAL_AREA_HECTARES } from './landStats';
-import { LANGUAGE_OPTIONS } from './recordSchemas';
+import { LOCAL_LANGUAGES, NEW_RESIDENT_LANGUAGES } from './recordSchemas';
 
-// LANGUAGE_OPTIONS lists 本土語（閩南語、客語）first, then every 原住民族語
-// — reused here to split a school's open 族語班 into those two groups for
-// 分組審查摘要, without a second hardcoded language list to keep in sync.
-const LOCAL_LANGUAGES = new Set(LANGUAGE_OPTIONS.slice(0, 2));
+// 本土語（閩南語、客語）跟新住民語的固定清單，用來把一校開的族語班分成
+// 本土語／原住民族語／新住民語三組——原住民族語是「兩組都不是」的其餘語
+// 系，不需要再維護第三份清單（2026-11-02 語言三分類）。
+const LOCAL_LANGUAGE_SET = new Set(LOCAL_LANGUAGES);
+const NEW_RESIDENT_LANGUAGE_SET = new Set(NEW_RESIDENT_LANGUAGES);
 
 function pctWord(value) {
   return `${value >= 0 ? '增加' : '減少'} ${Math.abs(value).toFixed(2)}%`;
@@ -259,11 +260,15 @@ function reviewSummaryNarrative(report) {
       return `${lang} ${classes} 班、${students} 人${modes.length ? `（${modes.join('、')}）` : ''}`;
     };
     const langs = [...new Set((language.rows || []).map((row) => row.lang).filter(Boolean))];
-    const indigenousLangs = langs.filter((lang) => !LOCAL_LANGUAGES.has(lang));
-    const localLangs = langs.filter((lang) => LOCAL_LANGUAGES.has(lang));
+    // 本土語／原住民族語／新住民語三分類——原住民族語是前兩組都不是的其餘
+    // 語系，所以不需要自己的固定清單（2026-11-02 語言三分類）。
+    const localLangs = langs.filter((lang) => LOCAL_LANGUAGE_SET.has(lang));
+    const newResidentLangs = langs.filter((lang) => NEW_RESIDENT_LANGUAGE_SET.has(lang));
+    const indigenousLangs = langs.filter((lang) => !LOCAL_LANGUAGE_SET.has(lang) && !NEW_RESIDENT_LANGUAGE_SET.has(lang));
     const clauses = [];
     if (indigenousLangs.length) clauses.push(`開設原住民族語班（${indigenousLangs.map(langDetail).join('；')}）`);
     if (localLangs.length) clauses.push(`開設本土語班（${localLangs.map(langDetail).join('；')}）`);
+    if (newResidentLangs.length) clauses.push(`開設新住民語班（${newResidentLangs.map(langDetail).join('；')}）`);
     // 通過人數同樣改為按語系／級別細分，而非只報一個總數——這份細節其實
     // 早就存在「族語認證」通過名冊裡（language.certifiedRows），只是這段
     // 文字原本沒有拿來用，只用了總筆數（2026-11-02）。

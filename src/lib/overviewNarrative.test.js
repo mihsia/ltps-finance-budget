@@ -196,6 +196,24 @@ describe('reviewSummaryNarrative via buildDefaultNarratives', () => {
     expect(reviewSummary).toContain('開設原住民族語班（阿美語 2 班、18 人（實體授課、直播共學））');
   });
 
+  it('splits 族語班 into 本土語／原住民族語／新住民語 three groups, each its own clause', () => {
+    const report = reviewReport({
+      language: {
+        classRows: [
+          { lang: '閩南語', classes: 3, students: 60 },
+          { lang: '泰雅語', classes: 1, students: 10 },
+          { lang: '越南語', classes: 2, students: 25 },
+          { lang: '印尼語', classes: 1, students: 8 },
+        ],
+        teacherRows: [],
+      },
+    });
+    const { reviewSummary } = buildDefaultNarratives(report);
+    expect(reviewSummary).toContain('開設原住民族語班（泰雅語 1 班、10 人）');
+    expect(reviewSummary).toContain('開設本土語班（閩南語 3 班、60 人）');
+    expect(reviewSummary).toContain('開設新住民語班（越南語 2 班、25 人；印尼語 1 班、8 人）');
+  });
+
   it('counts 族語認證報名名冊 rows grouped by 語系／級別', () => {
     const report = reviewReport({
       language: {

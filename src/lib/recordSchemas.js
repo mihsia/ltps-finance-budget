@@ -117,16 +117,24 @@ export function validateBudgetRecord(recordType, source) {
 }
 
 // 語系 dropdown shared by 族語開班 (class offerings) and 族語認證
-// (certification/roster): 閩南語、客語 plus each of the 16 centrally
-// recognized indigenous peoples' languages (原住民族委員會公告16族), at the
-// tribe level rather than individual sub-dialects, so the list stays short
-// enough to pick from.
-export const LANGUAGE_OPTIONS = [
-  '閩南語', '客語',
+// (certification/roster), split into the三 groups 議會分組審查常問的「本
+// 土語／原住民族語／新住民語」三分類（2026-11-02 新增）——分組審查摘要的
+// 敘述文字會分別用到每一組，所以各自匯出成獨立常數，而不只是切 LANGUAGE_
+// OPTIONS 的前幾筆（原本的寫法）。LANGUAGE_OPTIONS（下拉選單用的完整清單）
+// 則是這三組接起來，各模組頁面不需要另外改。
+export const LOCAL_LANGUAGES = ['閩南語', '客語'];
+
+// 原住民族委員會公告16族，族語層級而非各方言，清單長度才方便挑選。
+export const INDIGENOUS_LANGUAGES = [
   '阿美語', '泰雅語', '排灣語', '布農語', '卑南語', '魯凱語', '鄒語', '賽夏語',
   '雅美語（達悟語）', '邵語', '噶瑪蘭語', '太魯閣語', '撒奇萊雅語', '賽德克語',
   '拉阿魯哇語', '卡那卡那富語',
 ];
+
+// 教育部「新住民語文」課綱公告的7個語別。
+export const NEW_RESIDENT_LANGUAGES = ['越南語', '印尼語', '泰語', '緬甸語', '柬埔寨語', '馬來語', '菲律賓語'];
+
+export const LANGUAGE_OPTIONS = [...LOCAL_LANGUAGES, ...INDIGENOUS_LANGUAGES, ...NEW_RESIDENT_LANGUAGES];
 
 // Official 原住民族語言能力認證 tiers (初級、中級、中高級、高級、優級) —
 // also used for 閩南語／客語認證, which follow the same five-tier scheme.

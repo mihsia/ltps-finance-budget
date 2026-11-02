@@ -78,6 +78,15 @@ describe('record CRUD schemas', () => {
     })).toMatchObject({ valid: false, error: '決算金額必須是非負有限數值。' });
   });
 
+  it('composes LANGUAGE_OPTIONS from the 本土語／原住民族語／新住民語 three groups, in that order', () => {
+    expect(schemas.LOCAL_LANGUAGES).toEqual(['閩南語', '客語']);
+    expect(schemas.INDIGENOUS_LANGUAGES).toHaveLength(16);
+    expect(schemas.NEW_RESIDENT_LANGUAGES).toEqual(['越南語', '印尼語', '泰語', '緬甸語', '柬埔寨語', '馬來語', '菲律賓語']);
+    expect(schemas.LANGUAGE_OPTIONS).toEqual([
+      ...schemas.LOCAL_LANGUAGES, ...schemas.INDIGENOUS_LANGUAGES, ...schemas.NEW_RESIDENT_LANGUAGES,
+    ]);
+  });
+
   it('normalizes language variants and rejects invalid integer or aggregate relationships', () => {
     expect(schemas.validateLanguageRecord).toBeTypeOf('function');
     expect(schemas.validateLanguageRecord('class', {
