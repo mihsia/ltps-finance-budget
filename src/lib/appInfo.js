@@ -309,6 +309,11 @@ export const CHANGELOG = [
     date: '2026-11-02',
     notes: '「族語開班」語系清單改採本土語／原住民族語／新住民語三分類：新增「新住民語」7 個語別（越南語、印尼語、泰語、緬甸語、柬埔寨語、馬來語、菲律賓語），族語開班與族語認證頁的語系下拉選單自動多出這個選項。「分組審查摘要」的族語開班子句從「本土語／原住民族語」兩組改成三組，各自一句，沒有資料的那組就省略。',
   },
+  {
+    version: '1.61',
+    date: '2026-11-02',
+    notes: '修正帳號管理頁指派「校舍概況」模組時顯示「負責模組不存在：building」的錯誤——伺服器端模組白名單（functions/accountAdmin.cjs 的 ACCOUNT_MODULE_KEYS）新增「校舍概況」模組時沒有同步更新，跟先前「族語認證」模組曾發生過的同一類問題一樣。',
+  },
 ];
 
 export const APP_VERSION = CHANGELOG[CHANGELOG.length - 1].version;

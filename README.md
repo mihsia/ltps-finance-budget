@@ -98,7 +98,7 @@ Storage：`budget-books/{year}/{fileName}`（公開讀取，僅能透過 `upload
 ## 族語開班與族語認證
 
 - **拆分為兩個獨立模組**：「族語開班」（開班資料：語系、班級數、學生人數，`src/pages/Language.jsx`，Firestore moduleKey `language`）與「族語認證」（認證統計、學生通過名冊，`src/pages/LanguageCert.jsx`，Firestore moduleKey `languageCert`）原本合併在同一頁、同一個 Firestore 子集合，容易讓填報人員搞混兩種性質不同的資料，現已拆成左方選單兩個獨立項目，帳號管理頁的「負責模組」也可分別授權（模組清單直接取自 `src/lib/nav.js` 的 `navGroups`，新增項目會自動出現在帳號管理頁，不需另外維護）。
-- **`languageCert` 也需要加入 Cloud Functions 的帳號模組白名單**：帳號新增／編輯（含 xlsx 批次匯入）由 `functions/accountAdmin.cjs` 的 `ACCOUNT_MODULE_KEYS`／`MODULE_LABELS` 在伺服器端驗證「負責模組」是否為已知模組，這份清單與 `src/lib/nav.js` 是分開維護的兩份清單，新增模組時兩邊都要同步更新（已修正並加入 `languageCert`／「族語認證」）。這個檔案屬於 Cloud Functions，**同樣需要執行 `firebase deploy --only functions` 才會在正式環境生效**，否則帳號管理頁指派「族語認證」模組時仍會收到「負責模組不存在：languageCert」的錯誤。
+- **新增模組時也要加入 Cloud Functions 的帳號模組白名單**：帳號新增／編輯（含 xlsx 批次匯入）由 `functions/accountAdmin.cjs` 的 `ACCOUNT_MODULE_KEYS`／`MODULE_LABELS` 在伺服器端驗證「負責模組」是否為已知模組，這份清單與 `src/lib/nav.js` 是分開維護的兩份清單，新增模組時兩邊都要同步更新——這件事已經忘記同步過兩次：`languageCert`／「族語認證」（已修正），以及 `building`／「校舍概況」（2026-11-02 已修正）。這個檔案屬於 Cloud Functions，**同樣需要執行 `firebase deploy --only functions` 才會在正式環境生效**，否則帳號管理頁指派該模組時仍會收到「負責模組不存在：xxx」的錯誤——GitHub Actions 的自動部署只會建置並部署網站本身，不會部署 Cloud Functions。
 - **既有認證／名冊資料需手動搬移一次**：這個拆分只影響「之後新增的資料」存放位置；若系統先前已透過「族語開班」頁輸入過認證統計或名冊資料，那些紀錄仍留在舊的 `language` 子集合中，不會自動出現在新的「族語認證」頁。請在取得 Firebase 服務帳戶金鑰（`scripts/serviceAccountKey.json`，流程同 `npm run seed` 所需的金鑰）後，執行一次搬移腳本：
   ```
   npm run migrate:language-cert:dry-run   # 預覽會搬移哪些紀錄，不會寫入

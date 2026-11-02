@@ -65,6 +65,10 @@ describe('validateAccountProfile', () => {
     expect(ACCOUNT_MODULE_KEYS).toContain('specialNeeds');
   });
 
+  it('includes building (校舍概況), added after the module keys list was first written', () => {
+    expect(ACCOUNT_MODULE_KEYS).toContain('building');
+  });
+
   it('clears module scope for admins so role and scope cannot disagree', () => {
     const result = validateAccountProfile({ ...validInput, role: 'admin', modules: ['budget'] });
     expect(result.valid).toBe(true);
