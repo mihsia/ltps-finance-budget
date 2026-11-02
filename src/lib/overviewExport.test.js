@@ -49,10 +49,10 @@ describe('buildOverviewWorkbook', () => {
     expect(flat).toContain('族語開班（班級數總和）|13 班');
     expect(flat).toContain('特生統計（總人數）|17 人');
     // Itemized detail rows, not just the aggregate line.
-    expect(flat).toContain('|語系|班級數|學生人數');
-    expect(flat).toContain('|閩南語|13|264');
-    expect(flat).toContain('|類別|人數|說明');
-    expect(flat).toContain('|原住民|17|—');
+    expect(flat).toContain('|語系|班級數|學生人數|授課方式');
+    expect(flat).toContain('|閩南語|13|264|—');
+    expect(flat).toContain('|類別|族別|人數|說明');
+    expect(flat).toContain('|原住民|—|17|—');
   });
 
   it('omits the 各模組現況 section entirely when no optional module has data', () => {

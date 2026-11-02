@@ -313,19 +313,20 @@ describe('Language class records CRUD page', () => {
     change(mounted.renderer, '語系', ' 客語 ');
     change(mounted.renderer, '班級數', '2');
     change(mounted.renderer, '學生人數', '7');
+    change(mounted.renderer, '授課方式', '實體授課');
     await act(async () => control(mounted.renderer, '新增').props.onClick());
     expect(records.create).toHaveBeenLastCalledWith({
-      recordType: 'class', lang: '客語', classes: 2, students: 7,
+      recordType: 'class', lang: '客語', classes: 2, students: 7, deliveryMode: '實體授課',
     }, authMocks.actor);
     mounted.unmount();
   });
 
   it('edits, soft-deletes, and restores class rows without changing recordType', async () => {
     const active = readyRecords([
-      { id: 'class-1', recordType: 'class', lang: '客語', classes: 1, students: 4, deletedAt: null },
+      { id: 'class-1', recordType: 'class', lang: '客語', classes: 1, students: 4, deliveryMode: '實體授課', deletedAt: null },
     ]);
     const recovery = readyRecords([
-      { id: 'class-old', recordType: 'class', lang: '太魯閣語', classes: 1, students: 2, deletedAt: { seconds: 1 } },
+      { id: 'class-old', recordType: 'class', lang: '太魯閣語', classes: 1, students: 2, deliveryMode: '直播共學', deletedAt: { seconds: 1 } },
     ]);
     installRecords('language', active, recovery);
     const mounted = mount(Language);
@@ -334,7 +335,7 @@ describe('Language class records CRUD page', () => {
     change(mounted.renderer, '學生人數', '5');
     await act(async () => control(mounted.renderer, '儲存').props.onClick());
     expect(active.update).toHaveBeenCalledWith('class-1', {
-      lang: '客語', classes: 1, students: 5,
+      lang: '客語', classes: 1, students: 5, deliveryMode: '實體授課',
     }, authMocks.actor);
 
     await act(async () => control(mounted.renderer, '停用開班資料').props.onClick());
@@ -342,6 +343,23 @@ describe('Language class records CRUD page', () => {
     await act(async () => control(mounted.renderer, '顯示已停用資料').props.onClick());
     await act(async () => control(mounted.renderer, '復原').props.onClick());
     expect(recovery.restore).toHaveBeenCalledWith('class-old', authMocks.actor);
+    mounted.unmount();
+  });
+
+  it('offers only the two 授課方式 options, rejecting a blank selection', async () => {
+    const records = readyRecords([]);
+    installRecords('language', records);
+    const mounted = mount(Language);
+    await act(async () => control(mounted.renderer, '＋ 新增開班資料').props.onClick());
+
+    const options = field(mounted.renderer, '授課方式').findAllByType('option').map((o) => o.props.value);
+    expect(options).toEqual(['', '實體授課', '直播共學']);
+
+    change(mounted.renderer, '語系', '阿美語');
+    change(mounted.renderer, '班級數', '1');
+    change(mounted.renderer, '學生人數', '20');
+    await act(async () => control(mounted.renderer, '新增').props.onClick());
+    expect(records.create).not.toHaveBeenCalled();
     mounted.unmount();
   });
 });
@@ -505,7 +523,7 @@ describe('schema-driven Generic records CRUD page', () => {
     change(mounted.renderer, '人數', '17');
     await act(async () => control(mounted.renderer, '新增').props.onClick());
     expect(records.create).toHaveBeenCalledWith({
-      recordType: 'specialNeeds', category: '原住民', count: 17, note: null,
+      recordType: 'specialNeeds', category: '原住民', count: 17, ethnicity: null, note: null,
     }, authMocks.actor);
     mounted.unmount();
 
@@ -518,7 +536,36 @@ describe('schema-driven Generic records CRUD page', () => {
     change(customMounted.renderer, '人數', '3');
     await act(async () => control(customMounted.renderer, '新增').props.onClick());
     expect(customRecords.create).toHaveBeenCalledWith({
-      recordType: 'specialNeeds', category: '外籍配偶子女', count: 3, note: null,
+      recordType: 'specialNeeds', category: '外籍配偶子女', count: 3, ethnicity: null, note: null,
+    }, authMocks.actor);
+    customMounted.unmount();
+  });
+
+  it('lets a 特生統計 row record which 原住民族 ethnicity it is, from the dropdown or typed as a custom value', async () => {
+    const records = readyRecords([]);
+    installRecords('specialNeeds', records);
+    const mounted = mount(Generic, { moduleKey: 'specialNeeds' });
+    await act(async () => control(mounted.renderer, '＋ 新增一筆').props.onClick());
+    change(mounted.renderer, '類別', '原住民');
+    change(mounted.renderer, '人數', '11');
+    change(mounted.renderer, '族別（類別為原住民時填寫）', '泰雅族');
+    await act(async () => control(mounted.renderer, '新增').props.onClick());
+    expect(records.create).toHaveBeenCalledWith({
+      recordType: 'specialNeeds', category: '原住民', count: 11, ethnicity: '泰雅族', note: null,
+    }, authMocks.actor);
+    mounted.unmount();
+
+    const customRecords = readyRecords([]);
+    installRecords('specialNeeds', customRecords);
+    const customMounted = mount(Generic, { moduleKey: 'specialNeeds' });
+    await act(async () => control(customMounted.renderer, '＋ 新增一筆').props.onClick());
+    change(customMounted.renderer, '類別', '原住民');
+    change(customMounted.renderer, '人數', '2');
+    change(customMounted.renderer, '族別（類別為原住民時填寫）', '__custom__');
+    change(customMounted.renderer, '族別（類別為原住民時填寫）（自訂）', '平埔族');
+    await act(async () => control(customMounted.renderer, '新增').props.onClick());
+    expect(customRecords.create).toHaveBeenCalledWith({
+      recordType: 'specialNeeds', category: '原住民', count: 2, ethnicity: '平埔族', note: null,
     }, authMocks.actor);
     customMounted.unmount();
   });

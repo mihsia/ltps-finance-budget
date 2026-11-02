@@ -85,9 +85,11 @@ export const OPTIONAL_MODULE_DETAIL_FIELDS = {
     { key: 'lang', label: '語系' },
     { key: 'classes', label: '班級數' },
     { key: 'students', label: '學生人數' },
+    { key: 'deliveryMode', label: '授課方式' },
   ],
   specialNeeds: [
     { key: 'category', label: '類別' },
+    { key: 'ethnicity', label: '族別' },
     { key: 'count', label: '人數' },
     { key: 'note', label: '說明' },
   ],

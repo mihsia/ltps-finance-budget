@@ -32,6 +32,12 @@ function numericInput(field) {
   return field.kind === 'integer';
 }
 
+// 'lang' picks from LANGUAGE_OPTIONS; any other select-kind field (currently
+// just 'deliveryMode') uses its own schema-declared options list.
+function selectOptionsFor(fieldSchema) {
+  return fieldSchema.key === 'lang' ? LANGUAGE_OPTIONS : (fieldSchema.options || []);
+}
+
 export default function Language({
   year,
   latestYear,
@@ -158,12 +164,12 @@ export default function Language({
       </div>
 
       {!includeDeleted && (
-        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 720 }}>
-          <div style={tableHeadRow(writeVisible ? '2fr 1fr 1fr 150px' : '2fr 1fr 1fr')}><span>語系</span><span>班級數</span><span>人數</span>{writeVisible && <span>操作</span>}</div>
+        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 860 }}>
+          <div style={tableHeadRow(writeVisible ? '2fr 1fr 1fr 1fr 150px' : '2fr 1fr 1fr 1fr')}><span>語系</span><span>班級數</span><span>人數</span><span>授課方式</span>{writeVisible && <span>操作</span>}</div>
           {classRows.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無開班資料</div>}
           {classRows.map((record) => (
-            <div key={record.id} style={{ ...tableRow(writeVisible ? '2fr 1fr 1fr 150px' : '2fr 1fr 1fr'), alignItems: 'center' }}>
-              <span>{record.lang}</span><span>{record.classes}</span><span>{record.students}</span>
+            <div key={record.id} style={{ ...tableRow(writeVisible ? '2fr 1fr 1fr 1fr 150px' : '2fr 1fr 1fr 1fr'), alignItems: 'center' }}>
+              <span>{record.lang}</span><span>{record.classes}</span><span>{record.students}</span><span>{record.deliveryMode}</span>
               {writeVisible && <span><button type="button" disabled={actions.pending} onClick={() => startEdit(record)}>編輯開班資料</button> <button type="button" disabled={actions.pending} onClick={() => softDelete(record.id)}>{actions.isRowPending(record.id) ? `${softDeleteVerb(record)}開班資料中…` : `${softDeleteVerb(record)}開班資料`}</button></span>}
             </div>
           ))}
@@ -171,12 +177,12 @@ export default function Language({
       )}
 
       {includeDeleted && (
-        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 720 }}>
-          <div style={tableHeadRow('2fr 1fr 1fr 72px')}><span>語系</span><span>班級數</span><span>人數</span><span>操作</span></div>
+        <div style={{ ...card, padding: 0, overflow: 'hidden', maxWidth: 860 }}>
+          <div style={tableHeadRow('2fr 1fr 1fr 1fr 72px')}><span>語系</span><span>班級數</span><span>人數</span><span>授課方式</span><span>操作</span></div>
           {deletedRecords.length === 0 && <div style={{ padding: '12px 18px', color: '#8A9089' }}>尚無已停用資料</div>}
           {deletedRecords.map((record) => (
-            <div key={record.id} style={{ ...tableRow('2fr 1fr 1fr 72px'), opacity: 0.72 }}>
-              <span>{record.lang}</span><span>{record.classes}</span><span>{record.students}</span>
+            <div key={record.id} style={{ ...tableRow('2fr 1fr 1fr 1fr 72px'), opacity: 0.72 }}>
+              <span>{record.lang}</span><span>{record.classes}</span><span>{record.students}</span><span>{record.deliveryMode}</span>
               <button type="button" disabled={actions.pending} onClick={() => restore(record.id)}>{actions.isRowPending(record.id) ? '復原中…' : '復原'}</button>
             </div>
           ))}
@@ -190,7 +196,7 @@ export default function Language({
             {CLASS_SCHEMA.fields.map((fieldSchema) => (
               <label key={fieldSchema.key}>
                 {fieldSchema.label}
-                {fieldSchema.key === 'lang' ? (
+                {fieldSchema.kind === 'select' ? (
                   <select
                     aria-label={fieldSchema.label}
                     disabled={actions.pending}
@@ -202,7 +208,7 @@ export default function Language({
                     }))}
                   >
                     <option value="">請選擇</option>
-                    {LANGUAGE_OPTIONS.map((option) => (
+                    {selectOptionsFor(fieldSchema).map((option) => (
                       <option key={option} value={option}>{option}</option>
                     ))}
                   </select>

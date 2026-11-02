@@ -81,14 +81,17 @@ describe('record CRUD schemas', () => {
   it('normalizes language variants and rejects invalid integer or aggregate relationships', () => {
     expect(schemas.validateLanguageRecord).toBeTypeOf('function');
     expect(schemas.validateLanguageRecord('class', {
-      lang: ' 客語 ', classes: '2', students: '7',
+      lang: ' 客語 ', classes: '2', students: '7', deliveryMode: '實體授課',
     })).toMatchObject({
       valid: true,
-      data: { recordType: 'class', lang: '客語', classes: 2, students: 7 },
+      data: { recordType: 'class', lang: '客語', classes: 2, students: 7, deliveryMode: '實體授課' },
     });
     expect(schemas.validateLanguageRecord('class', {
-      lang: '客語', classes: '1.5', students: '7',
+      lang: '客語', classes: '1.5', students: '7', deliveryMode: '實體授課',
     })).toMatchObject({ valid: false, error: '班級數必須是非負整數。' });
+    expect(schemas.validateLanguageRecord('class', {
+      lang: '客語', classes: '2', students: '7', deliveryMode: '',
+    })).toMatchObject({ valid: false, error: '授課方式不得留白。' });
     expect(schemas.validateLanguageRecord('teacher', {
       lang: '客語', name: ' 黃老師 ', certified: '是',
     })).toMatchObject({
@@ -142,31 +145,31 @@ describe('record CRUD schemas', () => {
 
   it('records special-needs student counts with a categorized dropdown that still allows a custom category, plus an optional note', () => {
     expect(schemas.genericRecordSchemas.specialNeeds.fields.map((field) => field.label))
-      .toEqual(['類別', '人數', '說明']);
+      .toEqual(['類別', '人數', '族別（類別為原住民時填寫）', '說明']);
     expect(schemas.genericRecordSchemas.specialNeeds.fields[0]).toMatchObject({
       kind: 'select', options: schemas.SPECIAL_NEEDS_CATEGORIES, allowCustom: true,
     });
     expect(schemas.SPECIAL_NEEDS_CATEGORIES).toEqual(['原住民', '新住民', '低收入戶', '身障生', '單親生']);
     expect(schemas.validateGenericRecord('specialNeeds', {
-      category: '原住民', count: '17', note: '',
+      category: '原住民', count: '17', ethnicity: '', note: '',
     })).toEqual({
       valid: true,
-      data: { recordType: 'specialNeeds', category: '原住民', count: 17, note: null },
+      data: { recordType: 'specialNeeds', category: '原住民', count: 17, ethnicity: null, note: null },
       error: null,
     });
     expect(schemas.validateGenericRecord('specialNeeds', {
-      category: '原住民', count: '17', note: '泰雅：11，阿美：3，太魯閣：2',
+      category: '原住民', count: '11', ethnicity: '泰雅族', note: '',
     })).toMatchObject({
       valid: true,
-      data: { category: '原住民', count: 17, note: '泰雅：11，阿美：3，太魯閣：2' },
+      data: { category: '原住民', count: 11, ethnicity: '泰雅族' },
     });
     expect(schemas.validateGenericRecord('specialNeeds', {
-      category: '原住民', count: '-1', note: '',
+      category: '原住民', count: '-1', ethnicity: '', note: '',
     })).toMatchObject({ valid: false, error: '人數必須是非負整數。' });
     // A category outside the fixed option list is still accepted — the
     // dropdown's "其他（自訂）" choice falls back to free text.
     expect(schemas.validateGenericRecord('specialNeeds', {
-      category: '外籍配偶子女', count: '3', note: '',
+      category: '外籍配偶子女', count: '3', ethnicity: '', note: '',
     })).toMatchObject({ valid: true, data: { category: '外籍配偶子女', count: 3 } });
   });
 });

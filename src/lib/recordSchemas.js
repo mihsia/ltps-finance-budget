@@ -132,6 +132,9 @@ export const LANGUAGE_OPTIONS = [
 // also used for 閩南語／客語認證, which follow the same five-tier scheme.
 export const LANGUAGE_CERT_LEVELS = ['初級', '中級', '中高級', '高級', '優級'];
 
+// 族語開班的授課方式 — 原住民族語開班常見的兩種授課模式。
+export const LANGUAGE_DELIVERY_MODES = ['實體授課', '直播共學'];
+
 // 師資名冊's 是否已通過認證 field — a plain roster of named teachers, not a
 // typed-in aggregate, so "授課教師取得認證比例" on the 族語認證 page is always
 // derived by counting these rows and can't drift out of sync with a
@@ -145,6 +148,9 @@ export const LANGUAGE_RECORD_SCHEMAS = {
       { key: 'lang', label: '語系', kind: 'text', maxLength: 60 },
       { key: 'classes', label: '班級數', kind: 'integer' },
       { key: 'students', label: '學生人數', kind: 'integer' },
+      {
+        key: 'deliveryMode', label: '授課方式', kind: 'select', options: LANGUAGE_DELIVERY_MODES, maxLength: 20,
+      },
     ],
   },
   teacher: {
@@ -178,6 +184,17 @@ export function validateLanguageRecord(recordType, source) {
 // Generic.jsx to render a dropdown, optionally with a custom-entry fallback.
 export const AWARD_CATEGORIES = ['語文類', '藝文類', '體育類', '科學類'];
 export const SPECIAL_NEEDS_CATEGORIES = ['原住民', '新住民', '低收入戶', '身障生', '單親生'];
+
+// 原住民族委員會公告16族，與 LANGUAGE_OPTIONS 的族語對應同一16族，改用
+// 「族」結尾命名，供特生統計裡類別為「原住民」時填寫族別——同一族別的學生
+// 另立一列（而非在單列上疊加子欄位），summarizeSpecialNeeds() 既有的
+// 「依類別加總人數」邏輯就會自動把同族別、同類別的多列加總起來，不需要另外
+// 改統計邏輯。
+export const INDIGENOUS_ETHNICITIES = [
+  '阿美族', '泰雅族', '排灣族', '布農族', '卑南族', '魯凱族', '鄒族', '賽夏族',
+  '雅美族（達悟族）', '邵族', '噶瑪蘭族', '太魯閣族', '撒奇萊雅族', '賽德克族',
+  '拉阿魯哇族', '卡那卡那富族',
+];
 
 // 獲獎項目 options, grouped by 類別 so the dropdown only offers items that make
 // sense for whichever category was picked. Kept to 宜蘭縣／全縣層級賽事 —
@@ -289,6 +306,15 @@ export const genericRecordSchemas = {
         maxLength: 60,
       },
       { key: 'count', label: '人數', kind: 'integer' },
+      {
+        key: 'ethnicity',
+        label: '族別（類別為原住民時填寫）',
+        kind: 'select',
+        options: INDIGENOUS_ETHNICITIES,
+        allowCustom: true,
+        maxLength: 60,
+        optional: true,
+      },
       { key: 'note', label: '說明', kind: 'text', maxLength: 200, optional: true },
     ],
   },
