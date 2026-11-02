@@ -143,7 +143,7 @@ describe('buildOverviewReport', () => {
       specialNeedsRows: [], awardsRows: [], clubRows: [], landRows: [], inquiryRows: [],
     });
     expect(report.modules).toEqual({
-      library: null, language: null, specialNeeds: null, awards: null, club: null, careSupport: null, land: null, inquiry: null,
+      library: null, language: null, specialNeeds: null, awards: null, club: null, careSupport: null, land: null, building: null, inquiry: null,
     });
   });
 
@@ -179,6 +179,7 @@ describe('buildOverviewReport', () => {
     });
     expect(report.modules.careSupport).toEqual({ count: 1, rows: [{ name: '課照班A' }] });
     expect(report.modules.land).toBeNull();
+    expect(report.modules.building).toBeNull();
     expect(report.modules.inquiry).toEqual({
       total: 2,
       resolved: 1,
@@ -233,5 +234,33 @@ describe('buildOverviewReport', () => {
         lang: '泰雅語', level: '初級', name: '王○明', examDate: '2027-01-10',
       },
     ]);
+  });
+
+  it('summarizes 校舍概況 rows into modules.building, and omits it when there are none', () => {
+    const report = buildOverviewReport({
+      year: '115', expenseRows: [], revenueRows: [],
+      buildingRows: [
+        {
+          name: '行政大樓', floors: 4, floorArea: 1200, builtYear: 75, seismicStatus: '已完成耐震補強',
+        },
+        {
+          name: '教學大樓A棟', floors: 3, floorArea: 900, builtYear: 88, seismicStatus: '尚未進行耐震能力評估',
+        },
+      ],
+    });
+    expect(report.modules.building).toEqual({
+      count: 2,
+      rows: [
+        {
+          name: '行政大樓', floors: 4, floorArea: 1200, builtYear: 75, seismicStatus: '已完成耐震補強',
+        },
+        {
+          name: '教學大樓A棟', floors: 3, floorArea: 900, builtYear: 88, seismicStatus: '尚未進行耐震能力評估',
+        },
+      ],
+    });
+
+    const empty = buildOverviewReport({ year: '115', expenseRows: [], revenueRows: [] });
+    expect(empty.modules.building).toBeNull();
   });
 });

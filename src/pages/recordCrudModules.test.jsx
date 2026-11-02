@@ -482,6 +482,7 @@ describe('schema-driven Generic records CRUD page', () => {
     ['club', ['社團名稱', '指導老師', '人數', '上課星期', '開始時間', '結束時間', '上課場地', '每生費用（元）']],
     ['careSupport', ['班別類別', '班別名稱', '任課老師', '學生人數', '開課時段', '上課地點']],
     ['land', ['地號', '面積(㎡)', '公告現值(元/㎡)']],
+    ['building', ['建築物名稱', '樓層數', '總樓地板面積(㎡)', '興建年度(民國)', '耐震能力現況']],
     ['inquiry', ['日期', '議員', '題目', '答案', '答詢狀態']],
   ])('preserves %s column semantics from its record schema', (moduleKey, labels) => {
     installRecords(moduleKey, readyRecords([]));
@@ -620,6 +621,11 @@ describe('schema-driven Generic records CRUD page', () => {
       recordType: 'club', name: '桌球社', instructor: '陳老師', participants: 18, weekday: '週二', startTime: '16:00', endTime: '17:00', venue: '活動中心', feePerStudent: 200,
     }],
     ['land', { '地號': '五結段123地號', '面積(㎡)': '8450.5', '公告現值(元/㎡)': '12800' }, { recordType: 'land', parcel: '五結段123地號', area: 8450.5, announcedValue: 12800 }],
+    ['building', {
+      '建築物名稱': '行政大樓', '樓層數': '4', '總樓地板面積(㎡)': '1200.5', '興建年度(民國)': '75', '耐震能力現況': '已完成耐震補強',
+    }, {
+      recordType: 'building', name: '行政大樓', floors: 4, floorArea: 1200.5, builtYear: 75, seismicStatus: '已完成耐震補強',
+    }],
     ['inquiry', {
       '日期': '2026-05-20', '議員': '陳議員', '題目': '課後社團經費', '答詢狀態': '待答詢',
     }, {

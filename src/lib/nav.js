@@ -26,6 +26,7 @@ export const icons = {
   help: 'M8 1.5C4.4 1.5 1.5 4.4 1.5 8C1.5 11.6 4.4 14.5 8 14.5C11.6 14.5 14.5 11.6 14.5 8C14.5 4.4 11.6 1.5 8 1.5ZM5.8 5.9C5.8 4.5 6.7 3.6 8.1 3.6C9.4 3.6 10.3 4.5 10.3 5.6C10.3 6.5 9.8 7 9.1 7.5C8.4 7.9 8.1 8.2 8.1 8.9V9.2H6.9V8.8C6.9 7.8 7.4 7.3 8.1 6.8C8.7 6.4 9 6.1 9 5.6C9 5 8.6 4.6 8 4.6C7.3 4.6 6.9 5.1 6.9 5.9ZM7.3 10.3H8.8V11.7H7.3Z',
   certificate: 'M8 1.5C10.2 1.5 12 3.3 12 5.5C12 7.1 11.1 8.4 9.8 9V8.9L11 14.5L8 12.6L5 14.5L6.2 8.9V9C4.9 8.4 4 7.1 4 5.5C4 3.3 5.8 1.5 8 1.5ZM8 3.3C6.8 3.3 5.8 4.3 5.8 5.5C5.8 6.7 6.8 7.7 8 7.7C9.2 7.7 10.2 6.7 10.2 5.5C10.2 4.3 9.2 3.3 8 3.3Z',
   clock: 'M8 1.5C4.4 1.5 1.5 4.4 1.5 8C1.5 11.6 4.4 14.5 8 14.5C11.6 14.5 14.5 11.6 14.5 8C14.5 4.4 11.6 1.5 8 1.5ZM8 3.3C10.6 3.3 12.7 5.4 12.7 8C12.7 10.6 10.6 12.7 8 12.7C5.4 12.7 3.3 10.6 3.3 8C3.3 5.4 5.4 3.3 8 3.3ZM7.3 4.5H8.7V8.3L11 9.8L10.3 11L7.3 9.1Z',
+  building: 'M2.5 2H13.5V14.5H2.5ZM4.3 4H6.3V6H4.3ZM9.7 4H11.7V6H9.7ZM4.3 7.8H6.3V9.8H4.3ZM9.7 7.8H11.7V9.8H9.7ZM6.8 11.5H9.2V14.5H6.8',
 };
 
 export const navGroups = [
@@ -47,6 +48,7 @@ export const navGroups = [
   { label: '財務與行政', items: [
     { key: 'budget', label: '歲入歲出', icon: 'coin', soft: '#FDEAE6', ink: '#8A2E1E', desc: '年度歲入歲出預算與決算金額、差異原因說明' },
     { key: 'land', label: '校地概況', icon: 'map', soft: '#F5F0DC', ink: '#5C5420', desc: '校地總面積（公頃）與各地號公告現值資訊' },
+    { key: 'building', label: '校舍概況', icon: 'archive', soft: '#EFE6D8', ink: '#6B4A1E', desc: '校舍建築物樓層、樓地板面積、興建年度與耐震能力現況' },
     { key: 'inquiry', label: '質詢答詢', icon: 'gavel', soft: '#FDE8EE', ink: '#85204A', desc: '議員質詢與學校答詢內容存檔' },
   ] },
   { label: '報表與管理', items: [
@@ -59,13 +61,14 @@ export const navGroups = [
   ] },
 ];
 
-export const genericModuleKeys = ['awards', 'club', 'careSupport', 'land', 'inquiry', 'specialNeeds'];
+export const genericModuleKeys = ['awards', 'club', 'careSupport', 'land', 'building', 'inquiry', 'specialNeeds'];
 
 export const genericModuleMeta = {
   awards: { title: '獲獎紀錄', desc: '記錄學生與學校各項競賽獲獎資訊', columns: ['類別', '獲獎項目', '等級', '日期'] },
   club: { title: '課後社團', desc: '課後社團開設班別與人數', columns: ['社團名稱', '指導老師', '人數', '上課時間'] },
   careSupport: { title: '課照學扶', desc: '課後照顧、學習扶助等開班情況與人數', columns: ['班別類別', '班別名稱', '任課老師', '學生人數', '開課時段', '上課地點'] },
   land: { title: '校地概況', desc: '校地總面積（公頃，依教育部校務資訊公告數字固定）與各地號公告現值資訊', columns: ['地號', '面積(㎡)', '公告現值(元/㎡)'] },
+  building: { title: '校舍概況', desc: '校舍建築物樓層、樓地板面積、興建年度與耐震能力現況', columns: ['建築物名稱', '樓層數', '總樓地板面積(㎡)', '興建年度(民國)', '耐震能力現況'] },
   inquiry: { title: '議會質詢／答詢紀錄', desc: '議員質詢與學校答詢內容存檔', columns: ['日期', '議員', '題目', '答案', '答詢狀態'] },
   specialNeeds: { title: '特生統計', desc: '原住民、新住民、低收入戶、身障生、單親生等統計人數', columns: ['類別', '人數', '說明'] },
 };

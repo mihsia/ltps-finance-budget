@@ -31,6 +31,14 @@ function sampleReport(overrides = {}) {
     clubRows: [{ name: '桌遊社', participants: 20 }, { name: '直笛社', participants: 15 }],
     careSupportRows: [{ category: '課照班', name: 'A班', participants: 18 }],
     landRows: [{ parcel: 'A-1', area: 100, announcedValue: 500 }],
+    buildingRows: [
+      {
+        name: '行政大樓', floors: 4, floorArea: 1200, builtYear: 75, seismicStatus: '已完成耐震補強',
+      },
+      {
+        name: '教學大樓A棟', floors: 3, floorArea: 900, builtYear: 88, seismicStatus: '尚未進行耐震能力評估',
+      },
+    ],
     inquiryRows: [{ status: '已答詢' }, { status: '已答詢' }, { status: '待答詢' }],
     generatedAt: new Date('2026-08-11T09:30:00'),
     ...overrides,
@@ -95,6 +103,7 @@ describe('buildDefaultNarratives', () => {
     expect(modules.club).toBe('開設課後社團共 2 個，參與學生 35 人，占全校學生 13.4%。');
     expect(modules.careSupport).toBe('開設課照／學扶班共 1 班，參與學生 18 人，占全校學生 6.9%。');
     expect(modules.land).toBe('校地總面積 2.14 公頃，列管土地共 1 筆，總公告現值合計 50,000 元。');
+    expect(modules.building).toBe('校舍共 2 棟，總樓地板面積 2,100 ㎡，其中 1 棟已完成耐震補強。');
     expect(modules.inquiry).toBe('議會質詢／答詢共 3 案，已結案 2 案，結案率 66.7%。');
   });
 

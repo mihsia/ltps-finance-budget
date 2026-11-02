@@ -522,6 +522,7 @@ const OPTIONAL_MODULE_CHOICES = [
   { key: 'club', label: '課後社團' },
   { key: 'careSupport', label: '課照學扶' },
   { key: 'land', label: '校地概況' },
+  { key: 'building', label: '校舍概況' },
   { key: 'inquiry', label: '議會質詢答詢' },
 ];
 
@@ -592,6 +593,7 @@ export default function Report({ year, years }) {
   const clubState = useYearRecords(year, 'club');
   const careSupportState = useYearRecords(year, 'careSupport');
   const landState = useYearRecords(year, 'land');
+  const buildingState = useYearRecords(year, 'building');
   const inquiryState = useYearRecords(year, 'inquiry');
   const { entries, logExport } = useExportHistory(year);
   const { profile, user, canEditModule, authorizeModule, isAdmin, authorizeAdmin } = useAuth();
@@ -645,7 +647,7 @@ export default function Report({ year, years }) {
 
   const sourceStates = [
     basicState, libraryState, budgetState, languageState, languageCertState, specialNeedsState,
-    awardsState, clubState, careSupportState, landState, inquiryState, yA, yB, yC, yearMetaState,
+    awardsState, clubState, careSupportState, landState, buildingState, inquiryState, yA, yB, yC, yearMetaState,
   ];
   if (!canEditModule('report')) {
     return <NoModuleAccess title="議會報表匯出" />;
@@ -682,6 +684,10 @@ export default function Report({ year, years }) {
   const activeLand = (landState.data || []).filter((r) => !r.deletedAt);
   const landValueStats = summarizeParcelValues(activeLand)
     .map((d) => ({ label: d.parcel, value: d.value, valueText: `${fmtNum(d.value)} 元` }));
+  const activeBuilding = (buildingState.data || []).filter((r) => !r.deletedAt);
+  const buildingAreaStats = activeBuilding
+    .map((r) => ({ label: r.name, value: Number(r.floorArea) || 0, valueText: `${fmtNum(Number(r.floorArea) || 0)} ㎡` }))
+    .sort((a, b) => b.value - a.value);
   const activeInquiry = (inquiryState.data || []).filter((r) => !r.deletedAt);
   const inquiryResolutionStats = summarizeInquiryResolution(activeInquiry);
 
@@ -725,6 +731,9 @@ export default function Report({ year, years }) {
     land: [
       { heading: '各地號現值', node: <RankedBarChart data={landValueStats} color={OPTIONAL_MODULE_COLORS.land} emptyMessage="尚無土地現值資料可供統計。" /> },
     ],
+    building: [
+      { heading: '各建築物樓地板面積', node: <RankedBarChart data={buildingAreaStats} color={OPTIONAL_MODULE_COLORS.building} emptyMessage="尚無校舍概況資料可供統計。" /> },
+    ],
     inquiry: [
       { heading: '答詢完成率', node: <InquiryResolutionMeter stats={inquiryResolutionStats} /> },
     ],
@@ -753,6 +762,7 @@ export default function Report({ year, years }) {
     clubRows: activeClubs,
     careSupportRows: activeCareSupport,
     landRows: (landState.data || []).filter((r) => !r.deletedAt),
+    buildingRows: activeBuilding,
     inquiryRows: (inquiryState.data || []).filter((r) => !r.deletedAt),
   });
 

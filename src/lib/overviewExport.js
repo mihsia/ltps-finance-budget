@@ -20,6 +20,7 @@ const MODULE_LABELS = {
   club: '課後社團（社團數）',
   careSupport: '課照學扶（班別數）',
   land: '校地概況（地號數）',
+  building: '校舍概況（棟數）',
   inquiry: '議會質詢答詢（已結案／總數）',
 };
 
@@ -31,7 +32,7 @@ const MODULE_LABELS = {
 const MODULE_CATEGORIES = [
   { label: '校務與學生', keys: ['specialNeeds'] },
   { label: '教學與活動', keys: ['library', 'language', 'club', 'careSupport', 'awards'] },
-  { label: '財務與行政', keys: ['land', 'inquiry'] },
+  { label: '財務與行政', keys: ['land', 'building', 'inquiry'] },
 ];
 
 // A pale fill + its own dark ink per section — the 議會報表 PDF's 模版 D

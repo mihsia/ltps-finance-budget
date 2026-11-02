@@ -13,6 +13,7 @@ export const OPTIONAL_MODULE_COLORS = {
   club: '#4F8C3E',
   careSupport: '#D9714E',
   land: '#8C8C3E',
+  building: '#6B4A1E',
   inquiry: '#B1456B',
 };
 
@@ -31,6 +32,7 @@ export const OPTIONAL_MODULE_TILE_COLORS = {
   club: { soft: '#EAF5E6', ink: '#2C5420' },
   careSupport: { soft: '#FBEAE2', ink: '#7A3A1E' },
   land: { soft: '#F5F0DC', ink: '#5C5420' },
+  building: { soft: '#EFE6D8', ink: '#6B4A1E' },
   inquiry: { soft: '#FDE8EE', ink: '#85204A' },
 };
 
@@ -124,6 +126,13 @@ export const OPTIONAL_MODULE_DETAIL_FIELDS = {
     { key: 'area', label: '面積(㎡)' },
     { key: 'announcedValue', label: '公告現值(元/㎡)' },
   ],
+  building: [
+    { key: 'name', label: '建築物名稱' },
+    { key: 'floors', label: '樓層數' },
+    { key: 'floorArea', label: '總樓地板面積(㎡)' },
+    { key: 'builtYear', label: '興建年度(民國)' },
+    { key: 'seismicStatus', label: '耐震能力現況' },
+  ],
   // 答案內容不列入議會報表的精簡明細表（可能很長，會撐爆表格寬度）；
   // 完整答案請到「議會質詢／答詢紀錄」模組頁面查看。
   inquiry: [
@@ -147,6 +156,7 @@ export function moduleValueText(key, summary) {
   if (key === 'club') return `${summary.count} 個`;
   if (key === 'careSupport') return `${summary.count} 班`;
   if (key === 'land') return `${summary.count} 筆`;
+  if (key === 'building') return `${summary.count} 棟`;
   if (key === 'inquiry') return `${summary.resolved} / ${summary.total} 已結案`;
   return '—';
 }
@@ -180,6 +190,7 @@ export function buildOverviewReport({
   clubRows = [],
   careSupportRows = [],
   landRows = [],
+  buildingRows = [],
   inquiryRows = [],
   generatedAt = new Date(),
 }) {
@@ -278,6 +289,7 @@ export function buildOverviewReport({
       club: clubRows.length ? { count: clubRows.length, rows: clubRows } : null,
       careSupport: careSupportRows.length ? { count: careSupportRows.length, rows: careSupportRows } : null,
       land: landRows.length ? { count: landRows.length, rows: landRows } : null,
+      building: buildingRows.length ? { count: buildingRows.length, rows: buildingRows } : null,
       inquiry: inquiryRows.length
         ? { total: inquiryRows.length, resolved: inquiryResolution.resolved, rows: inquiryRows }
         : null,

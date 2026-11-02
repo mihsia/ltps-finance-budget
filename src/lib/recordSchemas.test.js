@@ -183,4 +183,27 @@ describe('record CRUD schemas', () => {
       category: '外籍配偶子女', count: '3', ethnicity: '', note: '',
     })).toMatchObject({ valid: true, data: { category: '外籍配偶子女', count: 3 } });
   });
+
+  it('records 校舍概況 with a 耐震能力現況 dropdown that still allows a custom value', () => {
+    expect(schemas.genericRecordSchemas.building.fields.map((field) => field.label))
+      .toEqual(['建築物名稱', '樓層數', '總樓地板面積(㎡)', '興建年度(民國)', '耐震能力現況']);
+    expect(schemas.genericRecordSchemas.building.fields[4]).toMatchObject({
+      kind: 'select', options: schemas.BUILDING_SEISMIC_STATUS, allowCustom: true,
+    });
+    expect(schemas.validateGenericRecord('building', {
+      name: ' 行政大樓 ', floors: '4', floorArea: '1200.5', builtYear: '75', seismicStatus: '已完成耐震補強',
+    })).toEqual({
+      valid: true,
+      data: {
+        recordType: 'building', name: '行政大樓', floors: 4, floorArea: 1200.5, builtYear: 75, seismicStatus: '已完成耐震補強',
+      },
+      error: null,
+    });
+    expect(schemas.validateGenericRecord('building', {
+      name: '教學大樓A棟', floors: '-1', floorArea: '900', builtYear: '88', seismicStatus: '尚未進行耐震能力評估',
+    })).toMatchObject({ valid: false, error: '樓層數必須是非負整數。' });
+    expect(schemas.validateGenericRecord('building', {
+      name: '活動中心', floors: '1', floorArea: '500', builtYear: '60', seismicStatus: '921後補強完成',
+    })).toMatchObject({ valid: true, data: { seismicStatus: '921後補強完成' } });
+  });
 });

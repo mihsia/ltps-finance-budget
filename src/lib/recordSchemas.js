@@ -242,6 +242,11 @@ export const CLUB_WEEKDAYS = ['週一', '週二', '週三', '週四', '週五'];
 
 export const CARE_SUPPORT_CATEGORIES = ['課照班', '特教課照', '學扶班'];
 
+// 校舍耐震能力現況——議會分組審查常見提問，跟「已完成耐震補強」是不同的
+// 兩回事（還沒補強不代表耐震能力不足，要看評估結果），所以用四種互斥狀態
+// 而不是單純的是／否。
+export const BUILDING_SEISMIC_STATUS = ['已完成耐震補強', '耐震能力詳細評估中', '尚未進行耐震能力評估', '無須補強（新建或已達標準）'];
+
 export const genericRecordSchemas = {
   awards: {
     recordType: 'award',
@@ -344,6 +349,18 @@ export const genericRecordSchemas = {
       { key: 'participants', label: '學生人數', kind: 'integer' },
       { key: 'schedule', label: '開課時段', kind: 'text', maxLength: 60 },
       { key: 'venue', label: '上課地點', kind: 'text', maxLength: 60 },
+    ],
+  },
+  building: {
+    recordType: 'building',
+    fields: [
+      { key: 'name', label: '建築物名稱', kind: 'text', maxLength: 60 },
+      { key: 'floors', label: '樓層數', kind: 'integer' },
+      { key: 'floorArea', label: '總樓地板面積(㎡)', kind: 'number' },
+      { key: 'builtYear', label: '興建年度(民國)', kind: 'integer' },
+      {
+        key: 'seismicStatus', label: '耐震能力現況', kind: 'select', options: BUILDING_SEISMIC_STATUS, allowCustom: true, maxLength: 60,
+      },
     ],
   },
 };

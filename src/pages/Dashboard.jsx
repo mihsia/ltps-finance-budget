@@ -13,7 +13,7 @@ const LANGUAGE_CERT_TILE = { soft: '#E3F2F1', ink: '#1C5C5A' };
 // 各模組現況: the 7 選填模組 not already covered by a dashboard KPI tile or
 // chart (圖書藏書量 and 族語開班 have their own spot above), each paired
 // with the module key its headline number is keyed under in `moduleValueText`.
-const MODULE_SUMMARY_KEYS = ['specialNeeds', 'awards', 'club', 'careSupport', 'land', 'inquiry'];
+const MODULE_SUMMARY_KEYS = ['specialNeeds', 'awards', 'club', 'careSupport', 'land', 'building', 'inquiry'];
 
 export default function Dashboard({ years, latestYear }) {
   const trendYears = years.length >= 3 ? years.slice(-3) : [...Array(3 - years.length).fill(years[0]), ...years];
@@ -29,6 +29,7 @@ export default function Dashboard({ years, latestYear }) {
     club: useYearRecords(latestYear, 'club'),
     careSupport: useYearRecords(latestYear, 'careSupport'),
     land: useYearRecords(latestYear, 'land'),
+    building: useYearRecords(latestYear, 'building'),
     inquiry: useYearRecords(latestYear, 'inquiry'),
     specialNeeds: useYearRecords(latestYear, 'specialNeeds'),
   };
@@ -84,6 +85,9 @@ export default function Dashboard({ years, latestYear }) {
   const landRows = activeOf('land');
   const landAreaTotal = landRows.reduce((sum, r) => sum + Number(r.area || 0), 0);
 
+  const buildingRows = activeOf('building');
+  const buildingAreaTotal = buildingRows.reduce((sum, r) => sum + Number(r.floorArea || 0), 0);
+
   const inquiryRows = activeOf('inquiry');
   const inquiryResolution = summarizeInquiryResolution(inquiryRows);
   const inquiryUnresolved = inquiryResolution.total - inquiryResolution.resolved;
@@ -97,6 +101,7 @@ export default function Dashboard({ years, latestYear }) {
     club: { count: clubRows.length },
     careSupport: { count: careSupportRows.length },
     land: { count: landRows.length },
+    building: { count: buildingRows.length },
     inquiry: inquiryResolution,
   };
   const moduleSubtext = {
@@ -105,11 +110,12 @@ export default function Dashboard({ years, latestYear }) {
     club: clubParticipants ? `參與 ${fmtNum(clubParticipants)} 人` : null,
     careSupport: careSupportParticipants ? `共 ${fmtNum(careSupportParticipants)} 人` : null,
     land: landAreaTotal ? `總面積 ${fmtNum(landAreaTotal)} ㎡` : null,
+    building: buildingAreaTotal ? `總樓地板面積 ${fmtNum(buildingAreaTotal)} ㎡` : null,
     inquiry: inquiryResolution.total === 0 ? null : (inquiryUnresolved > 0 ? `尚有 ${inquiryUnresolved} 筆待回覆` : '本年度已全部結案'),
   };
   const moduleLabels = {
     specialNeeds: '特生統計', awards: '獲獎紀錄', club: '課後社團',
-    careSupport: '課照學扶', land: '校地概況', inquiry: '議會質詢',
+    careSupport: '課照學扶', land: '校地概況', building: '校舍概況', inquiry: '議會質詢',
   };
 
   const revenueTotal = budgetC.loading || budgetC.error ? null : budgetRecordSummary(budgetC.data).revenueTotal;

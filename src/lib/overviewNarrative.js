@@ -165,6 +165,16 @@ function landNarrative(summary) {
   return `${sentence}。`;
 }
 
+function buildingNarrative(summary) {
+  if (!summary) return '';
+  const totalArea = summary.rows.reduce((sum, row) => sum + (Number(row.floorArea) || 0), 0);
+  const retrofitted = summary.rows.filter((row) => row.seismicStatus === '已完成耐震補強').length;
+  let sentence = `校舍共 ${fmtNum(summary.count)} 棟`;
+  if (totalArea > 0) sentence += `，總樓地板面積 ${fmtNum(totalArea)} ㎡`;
+  if (retrofitted > 0) sentence += `，其中 ${fmtNum(retrofitted)} 棟已完成耐震補強`;
+  return `${sentence}。`;
+}
+
 function inquiryNarrative(summary) {
   if (!summary) return '';
   const pct = summary.total > 0 ? Math.round((summary.resolved / summary.total) * 1000) / 10 : null;
@@ -359,6 +369,7 @@ const MODULE_NARRATIVE_BUILDERS = {
   club: (summary, students) => clubNarrative(summary, students),
   careSupport: (summary, students) => careSupportNarrative(summary, students),
   land: (summary) => landNarrative(summary),
+  building: (summary) => buildingNarrative(summary),
   inquiry: (summary) => inquiryNarrative(summary),
 };
 
