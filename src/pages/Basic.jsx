@@ -30,9 +30,20 @@ const PERSONNEL_FIELDS = [
   'schoolNurses',
   'aedCount',
   'aedCertifiedTeachers',
+  'indigenousTeachers',
+];
+// 自由文字欄位——跟上面兩組「非負整數」欄位分開驗證（見 commit() 裡各自
+// 的 trim()＋長度檢查，而不是套用 validateFixedFields 的整數規則），讓
+// 這幾項能直接供「分組審查摘要」自動產生文字使用，不用每年重新輸入
+// （2026-11-02 規劃，比對校長議會報告講稿後新增：原住民籍教師族別、歲
+// 出增減主要原因、學校願景／辦學特色）。
+const TEXT_FIELDS = [
+  'indigenousTeacherEthnicities',
+  'expenseChangeReason',
+  'schoolVision',
 ];
 const ALL_FIELDS = [...COUNT_FIELDS, ...PERSONNEL_FIELDS];
-const AUDIT_FIELDS = [...ALL_FIELDS, 'status'];
+const AUDIT_FIELDS = [...ALL_FIELDS, ...TEXT_FIELDS, 'status'];
 const FIELD_LABELS = {
   classes: '班級數',
   students: '學生人數',
@@ -49,6 +60,15 @@ const FIELD_LABELS = {
   schoolNurses: '校護人數',
   aedCount: 'AED 數量',
   aedCertifiedTeachers: '有證照使用 AED 的老師人數',
+  indigenousTeachers: '原住民籍教師人數',
+  indigenousTeacherEthnicities: '原住民籍教師族別',
+  expenseChangeReason: '歲出增減主要原因',
+  schoolVision: '學校願景／辦學特色',
+};
+const TEXT_FIELD_MAX_LENGTH = {
+  indigenousTeacherEthnicities: 100,
+  expenseChangeReason: 100,
+  schoolVision: 200,
 };
 
 function messageStyle(message) {
@@ -144,7 +164,15 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
         const names = validation.invalidFields.map((field) => FIELD_LABELS[field]).join('、');
         return { allowed: false, reason: `「${names}」必須是非負整數，或留白。` };
       }
-      const payload = { ...editor.form, status };
+      const trimmedText = Object.fromEntries(
+        TEXT_FIELDS.map((field) => [field, (editor.form[field] || '').trim()]),
+      );
+      const overLength = TEXT_FIELDS.filter((field) => trimmedText[field].length > TEXT_FIELD_MAX_LENGTH[field]);
+      if (overLength.length) {
+        const names = overLength.map((field) => `「${FIELD_LABELS[field]}」不得超過 ${TEXT_FIELD_MAX_LENGTH[field]} 個字`).join('、');
+        return { allowed: false, reason: `${names}。` };
+      }
+      const payload = { ...editor.form, ...trimmedText, status };
       const token = editor.beginSave(payload);
       if (!token) return { allowed: true };
       try {
@@ -248,6 +276,28 @@ export default function Basic({ year, hasCurrentYear = () => false }) {
               />
             ) : (
               <div style={{ font: '700 18px Inter, sans-serif', color: '#1E2420' }}>{editor.form[field] || '—'}</div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <div style={sectionLabel}>學校願景與補充說明</div>
+      <div style={{ font: "400 12px 'Noto Sans TC', sans-serif", color: '#8A9089', marginBottom: 10 }}>供「議會報表匯出」的分組審查摘要自動引用，選填</div>
+      <div style={{ ...card, maxWidth: 640, display: 'grid', gridTemplateColumns: '1fr', gap: 18, marginBottom: 16 }}>
+        {TEXT_FIELDS.map((field) => (
+          <div key={field}>
+            <label style={label}>{FIELD_LABELS[field]}</label>
+            {editor.editing ? (
+              <textarea
+                aria-label={FIELD_LABELS[field]}
+                disabled={editor.pending}
+                value={editor.form[field]}
+                onChange={(event) => editor.updateField(field, event.target.value)}
+                rows={field === 'schoolVision' ? 3 : 2}
+                style={{ ...input, resize: 'vertical' }}
+              />
+            ) : (
+              <div style={{ font: "400 14px 'Noto Sans TC', sans-serif", color: '#1E2420', whiteSpace: 'pre-wrap' }}>{editor.form[field] || '—'}</div>
             )}
           </div>
         ))}

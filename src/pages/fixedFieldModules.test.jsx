@@ -283,12 +283,17 @@ describe('Basic fixed-field module', () => {
       schoolNurses: '',
       aedCount: '',
       aedCertifiedTeachers: '',
+      indigenousTeachers: '',
+      indigenousTeacherEthnicities: '',
+      expenseChangeReason: '',
+      schoolVision: '',
       status: 'submitted',
     }, {
       actor: { uid: 'admin-fixed', name: '校務管理員' },
       fields: [
         'classes', 'students', 'staff', 'regularTeachers', 'substituteVacancy', 'substituteAdditional', 'partTimeTeachers', 'tuitionFeeAvg', 'lunchSubsidyTotal',
-        'principalTotalTenure', 'principalTenure', 'sportsCoaches', 'schoolNurses', 'aedCount', 'aedCertifiedTeachers', 'status',
+        'principalTotalTenure', 'principalTenure', 'sportsCoaches', 'schoolNurses', 'aedCount', 'aedCertifiedTeachers', 'indigenousTeachers',
+        'indigenousTeacherEthnicities', 'expenseChangeReason', 'schoolVision', 'status',
       ],
     });
     expect(mounted.renderer.root.findAllByType('input').every((field) => field.props.disabled)).toBe(true);
@@ -336,13 +341,54 @@ describe('Basic fixed-field module', () => {
     mounted.unmount();
   });
 
+  it('trims and saves 學校願景與補充說明 (族別／歲出增減原因／學校願景) alongside the other fields', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    hookMocks.modules.basic = { ...hookMocks.modules.basic, save };
+    const mounted = mount(Basic);
+
+    await act(async () => control(mounted.renderer, '編輯資料').props.onClick());
+    const [ethnicityArea, reasonArea, visionArea] = mounted.renderer.root.findAllByType('textarea');
+    act(() => {
+      ethnicityArea.props.onChange({ target: { value: '  阿美族  ' } });
+      reasonArea.props.onChange({ target: { value: '  主要是用人費用增加  ' } });
+      visionArea.props.onChange({ target: { value: '  擁抱奇力港、創造新利澤、遨遊ｅ世界  ' } });
+    });
+    await act(async () => control(mounted.renderer, '儲存草稿').props.onClick());
+
+    expect(save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        indigenousTeacherEthnicities: '阿美族',
+        expenseChangeReason: '主要是用人費用增加',
+        schoolVision: '擁抱奇力港、創造新利澤、遨遊ｅ世界',
+      }),
+      expect.anything(),
+    );
+    mounted.unmount();
+  });
+
+  it('rejects any of 學校願景與補充說明 over its own character limit without calling save', async () => {
+    const save = vi.fn().mockResolvedValue(undefined);
+    hookMocks.modules.basic = { ...hookMocks.modules.basic, save };
+    const mounted = mount(Basic);
+
+    await act(async () => control(mounted.renderer, '編輯資料').props.onClick());
+    const [, , visionArea] = mounted.renderer.root.findAllByType('textarea');
+    act(() => visionArea.props.onChange({ target: { value: 'A'.repeat(201) } }));
+    await act(async () => control(mounted.renderer, '儲存草稿').props.onClick());
+
+    expect(pageText(mounted.renderer)).toContain('「學校願景／辦學特色」不得超過 200 個字');
+    expect(save).not.toHaveBeenCalled();
+    mounted.unmount();
+  });
+
   it('accepts an exact submitted-status echo but rejects genuinely unrelated changes', async () => {
     const firstWrite = deferred();
     const save = vi.fn(() => firstWrite.promise);
     const source = {
       classes: '13', students: '262', staff: '28', regularTeachers: '19', substituteVacancy: '6', substituteAdditional: '3', partTimeTeachers: '2',
       tuitionFeeAvg: '827', lunchSubsidyTotal: '236',
-      principalTotalTenure: '', principalTenure: '', sportsCoaches: '', schoolNurses: '', aedCount: '', aedCertifiedTeachers: '',
+      principalTotalTenure: '', principalTenure: '', sportsCoaches: '', schoolNurses: '', aedCount: '', aedCertifiedTeachers: '', indigenousTeachers: '',
+      indigenousTeacherEthnicities: '', expenseChangeReason: '', schoolVision: '',
       status: 'draft', unrelated: { keep: true }, updatedAt: { seconds: 1 },
     };
     hookMocks.modules.basic = readyModule(source, save);
@@ -399,7 +445,7 @@ describe('Basic fixed-field module', () => {
     hookMocks.meta.meta = { locked: false, deadline: false };
     await act(async () => retainedCancel());
 
-    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(15);
+    expect(mounted.renderer.root.findAllByType('input')).toHaveLength(16);
     expect(pageText(mounted.renderer)).toContain('填報截止日格式錯誤');
     expect(control(mounted.renderer, '編輯資料')).toBeUndefined();
     expect(save).not.toHaveBeenCalled();
