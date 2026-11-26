@@ -46,7 +46,7 @@ export default defineConfig({
         // Firebase Hosting reserves /__/auth/** for the Google-sign-in popup
         // handler (see signInWithPopup in src/contexts/AuthContext.jsx) —
         // never let the SPA-fallback intercept it.
-        navigateFallbackDenylist: [/^\/__\//],
+        navigateFallbackDenylist: [/^\/__\//, /^\/board(\.html)?(\?|#|$)/],
         // Deliberately no runtimeCaching entries: the service worker only
         // precaches the app shell (JS/CSS/HTML/icons) for fast reload and
         // installability. Firestore's onSnapshot channel and Firebase Auth
@@ -60,6 +60,16 @@ export default defineConfig({
       devOptions: { enabled: false },
     }),
   ],
+  // 兩個入口：基金預算管理系統（index.html）與校長儀表板（board.html，/board）。
+  // 儀表板共用 src/firebase.js 與同一個網域的登入狀態，但不載入財務系統的 React 程式。
+  build: {
+    rollupOptions: {
+      input: {
+        main: 'index.html',
+        board: 'board.html',
+      },
+    },
+  },
   server: {
     port: 5173,
   },

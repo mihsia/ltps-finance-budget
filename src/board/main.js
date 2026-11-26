@@ -1,0 +1,176 @@
+// 校長儀表板（/board.html）的進入點：登入、權限確認、即時讀取 principalBoard 集合。
+// 與財務預算系統共用同一個 Firebase 專案、同一個網域與登入狀態，所以在財務系統登入過，
+// 打開這一頁就不必再登入。權限規則見 firestore.rules 的 principalBoard 段落。
+import './board.css';
+import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import { collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
+import { auth, db, isFirebaseConfigured } from '../firebase.js';
+import { evaluateProfileAccess } from '../lib/accessPolicy.js';
+import {
+  TITLE, esc, headerTime, renderBand, renderCards, renderDetail, renderNotices,
+} from './render.js';
+
+const $ = (s) => document.querySelector(s);
+const ORDER = ['sch', 'att', 'fill', 'stu', 'menu', 'lib'];
+const ROLE_LABEL = { admin: '管理者', editor: '主任' };
+
+let data = {};
+let openId = null;
+let stopBoard = null;
+
+function show(view) {
+  for (const v of ['loading', 'login', 'denied', 'dash']) $(`#v-${v}`).hidden = v !== view;
+}
+
+/** 讀者是否可看儀表板：與 firestore.rules 相同 —— active 的管理者，或 modules 含 principalBoard。 */
+function canViewBoard(profile) {
+  const access = evaluateProfileAccess({ profileState: profile ? 'ready' : 'missing', profile });
+  if (!access.allowed) return { ok: false, reason: access.reason };
+  if (access.role === 'admin' || access.modules.includes('principalBoard')) return { ok: true };
+  return { ok: false, reason: '此帳號沒有「校長儀表板」的檢視權限，請聯絡系統管理員。' };
+}
+
+function render() {
+  const now = new Date();
+  $('#when').textContent = headerTime(now);
+  const cards = renderCards(data, now);
+  $('#grid').innerHTML = ORDER.map((id) => `<div class="card k-${id}" id="c-${id}" role="button" tabindex="0" data-id="${id}" aria-label="${TITLE[id]}，開啟明細">${cards[id]}</div>`).join('');
+  const { band, light } = renderBand(data, now);
+  $('#band').innerHTML = band;
+  $('#light').innerHTML = light;
+  $('#notices').innerHTML = renderNotices(data, now);
+  if (openId) $('#db').innerHTML = renderDetail(openId, data, now);
+}
+
+function openDrawer(id) {
+  openId = id;
+  $('#dt').textContent = TITLE[id];
+  $('#db').innerHTML = renderDetail(id, data, new Date());
+  $('#drawer').removeAttribute('inert');
+  $('#drawer').classList.add('open');
+  $('#scrim').classList.add('open');
+  $('#close').focus();
+}
+function closeDrawer() {
+  openId = null;
+  $('#drawer').setAttribute('inert', '');
+  $('#drawer').classList.remove('open');
+  $('#scrim').classList.remove('open');
+}
+
+function startBoard() {
+  if (stopBoard) return;
+  stopBoard = onSnapshot(
+    collection(db, 'principalBoard'),
+    (snap) => {
+      const next = {};
+      snap.forEach((d) => { next[d.id] = d.data(); });
+      data = next;
+      render();
+    },
+    (err) => {
+      $('#notices').innerHTML = `<div class="notice">讀取儀表板資料失敗：${esc(err.code || err.message)}。請重新整理，或確認帳號權限。</div>`;
+    },
+  );
+}
+function stopListening() {
+  if (stopBoard) { stopBoard(); stopBoard = null; }
+  data = {};
+}
+
+async function signIn() {
+  $('#login-err').textContent = '';
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
+  try {
+    await signInWithPopup(auth, provider);
+  } catch (e) {
+    if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+      $('#login-err').textContent = `登入失敗：${e.code || e.message}`;
+    }
+  }
+}
+
+function avatar(user, name) {
+  const first = esc((name || user.email || '?').trim().slice(0, 1));
+  return user.photoURL ? `<img src="${esc(user.photoURL)}" alt="" referrerpolicy="no-referrer" data-fallback="${first}">` : first;
+}
+
+function wire() {
+  $('#g-in').onclick = signIn;
+  $('#g-other').onclick = async () => { await signOut(auth); signIn(); };
+  $('#go-logout').onclick = () => signOut(auth);
+  $('#src-btn').onclick = () => openDrawer('src');
+  $('#go-src').onclick = () => { $('#menu').classList.remove('open'); openDrawer('src'); };
+  $('#me-btn').onclick = () => {
+    const o = $('#menu').classList.toggle('open');
+    $('#me-btn').setAttribute('aria-expanded', String(o));
+  };
+  $('#close').onclick = closeDrawer;
+  $('#scrim').onclick = closeDrawer;
+  document.addEventListener('click', (e) => {
+    const c = e.target.closest('[data-id]');
+    if (c && !e.target.closest('.drawer')) openDrawer(c.dataset.id);
+    if (!e.target.closest('#menu') && !e.target.closest('#me-btn')) {
+      $('#menu').classList.remove('open');
+      $('#me-btn').setAttribute('aria-expanded', 'false');
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset?.id && e.target.getAttribute('role') === 'button') {
+      e.preventDefault();
+      openDrawer(e.target.dataset.id);
+    }
+    if (e.key === 'Escape') closeDrawer();
+  });
+  // 頭像載入失敗時改顯示姓名首字
+  document.addEventListener('error', (e) => {
+    const img = e.target;
+    if (img instanceof HTMLImageElement && img.dataset.fallback !== undefined) img.replaceWith(document.createTextNode(img.dataset.fallback));
+  }, true);
+  // 每分鐘重畫一次：時鐘、「下一件」行程、資料逾時判斷都跟著時間走
+  setInterval(() => { if (!$('#v-dash').hidden) render(); }, 60000);
+}
+
+function main() {
+  wire();
+  if (!isFirebaseConfigured) {
+    show('login');
+    $('#login-err').textContent = '此網站尚未設定 Firebase 連線。';
+    $('#g-in').disabled = true;
+    return;
+  }
+  onAuthStateChanged(auth, async (user) => {
+    stopListening();
+    closeDrawer();
+    if (!user) { show('login'); return; }
+    show('loading');
+    let profile = null;
+    try {
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      profile = snap.exists() ? snap.data() : null;
+    } catch {
+      profile = null;
+    }
+    const verdict = canViewBoard(profile);
+    if (!verdict.ok) {
+      $('#denied-email').textContent = user.email || '';
+      $('#denied-reason').textContent = verdict.reason;
+      show('denied');
+      return;
+    }
+    const name = profile.name || user.displayName || user.email;
+    const role = ROLE_LABEL[profile.role] || profile.role;
+    $('#me-av').innerHTML = avatar(user, name);
+    $('#menu-av').innerHTML = avatar(user, name);
+    $('#me-name').innerHTML = `${esc(name)}<small>${esc(role)}</small>`;
+    $('#menu-name').textContent = name;
+    $('#menu-email').textContent = user.email || '';
+    $('#menu-role').textContent = `角色：${role}`;
+    show('dash');
+    render();
+    startBoard();
+  });
+}
+
+main();
