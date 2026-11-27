@@ -331,3 +331,42 @@ describe('a request with no /users profile doc at all', () => {
     await expect(ghost.collection('years').doc('115').set({ locked: true }, { merge: true })).rejects.toBeTruthy();
   });
 });
+
+describe('principalBoard/{docId}', () => {
+  beforeEach(async () => {
+    await seedProfiles();
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await db.collection('users').doc('board-viewer-1').set({
+        name: '主任', email: 'director@example.test', dept: '教務處', role: 'editor', status: 'active', modules: ['principalBoard'],
+      });
+      await db.collection('users').doc('board-viewer-off').set({
+        name: '停用主任', email: 'off-director@example.test', dept: '學務處', role: 'editor', status: 'disabled', modules: ['principalBoard'],
+      });
+      await db.collection('principalBoard').doc('students').set({ school: { t: 247 } });
+    });
+  });
+
+  const asBoardViewer = () => testEnv.authenticatedContext('board-viewer-1').firestore();
+  const asDisabledBoardViewer = () => testEnv.authenticatedContext('board-viewer-off').firestore();
+
+  it('lets an active admin read the board', async () => {
+    await assertSucceeds(asAdmin().doc('principalBoard/students').get());
+  });
+
+  it('lets an active user whose modules include principalBoard read it', async () => {
+    await assertSucceeds(asBoardViewer().doc('principalBoard/students').get());
+  });
+
+  it('denies an editor without the principalBoard module, a disabled holder of it, and anonymous users', async () => {
+    await assertFails(asEditor().doc('principalBoard/students').get());
+    await assertFails(asDisabledBoardViewer().doc('principalBoard/students').get());
+    await assertFails(asAnon().doc('principalBoard/students').get());
+  });
+
+  it('denies every client write, even from an active admin', async () => {
+    await assertFails(asAdmin().doc('principalBoard/students').set({ school: { t: 1 } }));
+    await assertFails(asBoardViewer().doc('principalBoard/_status').set({ x: 1 }));
+    await assertFails(asAdmin().doc('principalBoard/students').delete());
+  });
+});

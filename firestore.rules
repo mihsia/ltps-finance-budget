@@ -43,6 +43,18 @@ service cloud.firestore {
       allow write: if isActiveAdmin();
     }
 
+    // 校長儀表板（/board.html）的彙整資料。只由兩支伺服器端程式寫入：辦公室電腦的
+    // 連線程式（服務帳戶 principal-board-connector，僅 Cloud Datastore User）與
+    // Google Apps Script（以校長本人帳號經 IAM 授權）。兩者都走 IAM，不受這份規則
+    // 管轄，所以任何網頁用戶端一律不可寫。讀取限 active admin，或帳號的 modules
+    // 含 'principalBoard'（日後開放給主任時，由帳號管理勾選）。文件只有班級層級的
+    // 統計數字，沒有學生姓名或座號（連線程式上傳前會再檢查一次）。
+    match /principalBoard/{docId} {
+      allow read: if isActiveAdmin()
+        || (isActiveUser() && 'principalBoard' in userProfile().modules);
+      allow write: if false;
+    }
+
     match /years/{year} {
       // Budget data is presented to the county council and is meant to be
       // publicly readable for transparency; only admins manage year metadata.

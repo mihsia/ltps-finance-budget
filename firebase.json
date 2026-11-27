@@ -3,10 +3,12 @@
     "public": "dist",
     "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
     "rewrites": [
+      { "source": "/board", "destination": "/board.html" },
       { "source": "**", "destination": "/index.html" }
     ],
     "headers": [
       { "source": "/index.html", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+      { "source": "/board.html", "headers": [{ "key": "Cache-Control", "value": "no-cache" }, { "key": "X-Robots-Tag", "value": "noindex" }] },
       { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
       { "source": "/manifest.webmanifest", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
       { "source": "/workbox-*.js", "headers": [{ "key": "Cache-Control", "value": "public, max-age=31536000, immutable" }] },
