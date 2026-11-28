@@ -54,8 +54,8 @@ vi.mock('@ltps/account-sdk/core', async (importOriginal) => {
 });
 
 vi.mock('../firebase', () => ({
-  ACCOUNT_HUB_URL: 'https://ltps-accounts.web.app',
-  functions: {},
+  ACCOUNT_HUB_URL: 'https://ltps-account-hub.web.app',
+  hubFunctions: {},
   isFirebaseConfigured: true,
 }));
 

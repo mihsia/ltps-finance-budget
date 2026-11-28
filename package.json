@@ -18,7 +18,7 @@
     "migrate:inquiry-fields:dry-run": "node scripts/migrateInquiryFields.js --dry-run"
   },
   "dependencies": {
-    "@ltps/account-sdk": "file:vendor/ltps-account-sdk-1.0.0.tgz",
+    "@ltps/account-sdk": "file:vendor/ltps-account-sdk-1.1.0.tgz",
     "firebase": "^11.0.2",
     "html2canvas": "^1.4.1",
     "jspdf": "^2.5.2",

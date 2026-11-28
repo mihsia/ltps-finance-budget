@@ -3,13 +3,21 @@ import {
   GoogleAuthProvider,
   linkWithCredential,
   onAuthStateChanged,
+  signInWithCustomToken,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
 } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { evaluateAppAccessFromAccount } from '@ltps/account-sdk/core';
-import { accountsDb, auth, isFirebaseConfigured } from '../firebase';
+import { createAccountHubClient, evaluateAppAccessFromAccount } from '@ltps/account-sdk/core';
+import {
+  auth,
+  hubAuth,
+  hubDb,
+  hubFunctions,
+  isAccountHubConfigured,
+  isFirebaseConfigured,
+} from '../firebase';
 import {
   createAuthorizationSource,
   evaluateProfileAccess,
@@ -37,7 +45,7 @@ function auditActor(user, profile) {
 }
 
 /**
- * 將校級帳號中心（`ltps-accounts/accounts/{uid}`）文件轉成財務系統既有相容格式，
+ * 將校級帳號中心（`ltps-account-hub` 的 `/accounts/{uid}`）文件轉成財務系統既有相容格式，
  * 讓其餘 15 個業務頁面無需修改即可沿用 `profile`、`isAdmin` 與 `canEditModule`。
  */
 export function adaptHubAccountToFinance(accountDoc) {
@@ -93,17 +101,25 @@ export function adaptHubAccountToFinance(accountDoc) {
 }
 
 export function listenToUserAccess({
-  auth: authInstance,
-  accountsDb: accountsDbInstance,
+  hubAuth: hubAuthInstance,
+  appAuth: appAuthInstance = null,
+  hubDb: hubDbInstance,
+  hubFunctions: hubFunctionsInstance = null,
   authorization,
   onState,
   onAuthStateChangedImpl = onAuthStateChanged,
   docImpl = doc,
   onSnapshotImpl = onSnapshot,
+  createHubClientImpl = createAccountHubClient,
+  signInWithCustomTokenImpl = signInWithCustomToken,
+  signOutImpl = signOut,
 }) {
   let generation = 0;
   let profileUnsubscribe = null;
   let stopped = false;
+
+  const isCrossProject = Boolean(appAuthInstance && hubAuthInstance && appAuthInstance !== hubAuthInstance);
+  const hubClient = hubFunctionsInstance ? createHubClientImpl(hubFunctionsInstance) : null;
 
   const publish = (user, profile, profileState, precomputedAccess = null) => {
     const access = precomputedAccess || evaluateProfileAccess({ profileState, profile });
@@ -117,22 +133,8 @@ export function listenToUserAccess({
     });
   };
 
-  const syncTokenIfNeeded = async (fbUser, expectedVersion) => {
-    if (typeof fbUser?.getIdTokenResult !== 'function' || typeof fbUser?.getIdToken !== 'function') {
-      return;
-    }
-    try {
-      const tokenResult = await fbUser.getIdTokenResult();
-      if (tokenResult?.claims?.v !== expectedVersion) {
-        await fbUser.getIdToken(true);
-      }
-    } catch {
-      // Token 刷新失敗不阻塞畫面，下一次請求仍由 Rules 與後端把關
-    }
-  };
-
   const authUnsubscribe = onAuthStateChangedImpl(
-    authInstance,
+    hubAuthInstance,
     (fbUser) => {
       if (stopped) return;
       const listenerGeneration = ++generation;
@@ -140,28 +142,71 @@ export function listenToUserAccess({
       profileUnsubscribe = null;
 
       if (!fbUser) {
+        if (isCrossProject && appAuthInstance?.currentUser) {
+          void signOutImpl(appAuthInstance).catch(() => {});
+        }
         publish(null, null, 'signed-out');
         return;
       }
 
       publish(fbUser, null, 'loading');
-      let lastClaimsVersion = null;
-      const accountRef = docImpl(accountsDbInstance, 'accounts', fbUser.uid);
+      let syncedClaimsVersion = null;
+      const accountRef = docImpl(hubDbInstance, 'accounts', fbUser.uid);
+
       profileUnsubscribe = onSnapshotImpl(
         accountRef,
         (snap) => {
           if (stopped || listenerGeneration !== generation) return;
           if (!snap.exists()) {
+            if (isCrossProject && appAuthInstance?.currentUser) {
+              void signOutImpl(appAuthInstance).catch(() => {});
+            }
             publish(fbUser, null, 'missing');
             return;
           }
+
           const rawAccount = { uid: fbUser.uid, ...snap.data() };
-          const nextVersion = rawAccount.claimsVersion || 1;
-          if (lastClaimsVersion === null || nextVersion !== lastClaimsVersion) {
-            lastClaimsVersion = nextVersion;
-            void syncTokenIfNeeded(fbUser, nextVersion);
-          }
           const { profile, access } = adaptHubAccountToFinance(rawAccount);
+          const nextVersion = rawAccount.claimsVersion || 1;
+
+          if (!access.allowed) {
+            if (isCrossProject && appAuthInstance?.currentUser) {
+              void signOutImpl(appAuthInstance).catch(() => {});
+            }
+            publish(fbUser, profile, 'ready', access);
+            return;
+          }
+
+          // 方案 B 跨專案 SSO：當帳號驗證通過或 claimsVersion 變更時，
+          // 向 ltps-account-hub 換發 ltps-finance-budget 的 Custom Token 並登入業務專案 Auth。
+          if (isCrossProject && hubClient && syncedClaimsVersion !== nextVersion) {
+            syncedClaimsVersion = nextVersion;
+            void (async () => {
+              try {
+                const brokerRes = await hubClient.issueAppToken('finance');
+                if (stopped || listenerGeneration !== generation) return;
+                await signInWithCustomTokenImpl(appAuthInstance, brokerRes.customToken);
+                if (stopped || listenerGeneration !== generation) return;
+                publish(fbUser, profile, 'ready', access);
+              } catch {
+                if (stopped || listenerGeneration !== generation) return;
+                publish(fbUser, null, 'error');
+              }
+            })();
+            return;
+          }
+
+          // 同專案模式回退：必要時強制刷新 ID Token
+          if (!isCrossProject && syncedClaimsVersion !== nextVersion) {
+            syncedClaimsVersion = nextVersion;
+            if (typeof fbUser.getIdTokenResult === 'function' && typeof fbUser.getIdToken === 'function') {
+              void fbUser.getIdTokenResult().then((tokenResult) => {
+                if (tokenResult?.claims?.v !== nextVersion) return fbUser.getIdToken(true);
+                return undefined;
+              }).catch(() => {});
+            }
+          }
+
           publish(fbUser, profile, 'ready', access);
         },
         () => {
@@ -171,10 +216,6 @@ export function listenToUserAccess({
       );
     },
     () => {
-      // The auth-state observer itself failed (bad config, network to
-      // Google blocked, etc.) rather than just the profile lookup. Without
-      // this handler the initial `loading: true` state never resolves and
-      // the app spins on the loading screen forever.
       if (stopped) return;
       generation += 1;
       profileUnsubscribe?.();
@@ -193,17 +234,18 @@ export function listenToUserAccess({
 }
 
 export function AuthProvider({ children }) {
+  const configured = isFirebaseConfigured && isAccountHubConfigured;
   const [authorization] = useState(() => createAuthorizationSource(
     evaluateProfileAccess({
-      profileState: isFirebaseConfigured ? 'loading' : 'signed-out',
+      profileState: configured ? 'loading' : 'signed-out',
     }),
   ));
   const [authState, setAuthState] = useState(() => ({
     user: null,
     profile: null,
-    profileState: isFirebaseConfigured ? 'loading' : 'signed-out',
+    profileState: configured ? 'loading' : 'signed-out',
     access: authorization.current(),
-    loading: isFirebaseConfigured,
+    loading: configured,
   }));
   const [googleLinkState, dispatchGoogleLink] = useReducer(
     reduceGoogleLinkState,
@@ -216,20 +258,22 @@ export function AuthProvider({ children }) {
   } = googleLinkState;
 
   useEffect(() => {
-    if (!isFirebaseConfigured) return;
+    if (!configured) return;
     return listenToUserAccess({
-      auth,
-      accountsDb,
+      hubAuth,
+      appAuth: auth,
+      hubDb,
+      hubFunctions,
       authorization,
       onState: setAuthState,
     });
-  }, [authorization]);
+  }, [authorization, configured]);
 
   const login = async (email, password) => {
     dispatchGoogleLink({ type: 'set-error', error: null });
     try {
       await completePasswordLogin({
-        auth,
+        auth: hubAuth,
         email,
         password,
         pendingCredential: pendingGoogleCredential,
@@ -255,7 +299,7 @@ export function AuthProvider({ children }) {
       const provider = new GoogleAuthProvider();
       provider.setCustomParameters({ prompt: 'select_account' });
       await startGoogleLogin({
-        auth,
+        auth: hubAuth,
         provider,
         signInWithPopup,
         credentialFromError: GoogleAuthProvider.credentialFromError,
@@ -281,7 +325,10 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     dispatchGoogleLink({ type: 'logout' });
-    await signOut(auth);
+    await Promise.all([
+      hubAuth ? signOut(hubAuth) : Promise.resolve(),
+      auth && auth !== hubAuth ? signOut(auth) : Promise.resolve(),
+    ]);
   };
 
   const { user, profile, access, loading } = authState;

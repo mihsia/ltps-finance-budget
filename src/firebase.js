@@ -9,11 +9,12 @@ import {
 } from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
-import { ACCOUNTS_DATABASE_ID, FIRESTORE_DATABASE_ID } from './lib/firestoreConfig.js';
+import { FIRESTORE_DATABASE_ID } from './lib/firestoreConfig.js';
 
-export { ACCOUNTS_DATABASE_ID, FIRESTORE_DATABASE_ID };
+export { FIRESTORE_DATABASE_ID };
 
-export const ACCOUNT_HUB_URL = import.meta.env.VITE_ACCOUNT_HUB_URL || 'https://ltps-accounts.web.app';
+export const ACCOUNT_HUB_APP_NAME = 'ltps-account-hub';
+export const ACCOUNT_HUB_URL = import.meta.env.VITE_ACCOUNT_HUB_URL || 'https://ltps-account-hub.web.app';
 
 const useEmulator = import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true';
 
@@ -29,31 +30,34 @@ const firebaseConfig = useEmulator
     appId: import.meta.env.VITE_FIREBASE_APP_ID,
   };
 
-// Firebase is considered "configured" once projectId/apiKey/authDomain are
-// all present (or the local emulator suite is explicitly requested).
-// authDomain is easy to leave out of a secrets setup and its absence doesn't
-// throw — it just makes Auth hang indefinitely instead of erroring, so it's
-// checked explicitly here rather than surfacing as a stuck loading screen.
-// Until the school's real project credentials are added to .env, the app
-// runs in a disconnected state and Login.jsx shows setup instructions
-// instead of crashing.
+const hubFirebaseConfig = useEmulator
+  ? { apiKey: 'demo-hub-key', authDomain: 'localhost', projectId: 'demo-ltps-hub', appId: 'demo-hub-app' }
+  : {
+    apiKey: import.meta.env.VITE_ACCOUNT_HUB_API_KEY,
+    authDomain: import.meta.env.VITE_ACCOUNT_HUB_AUTH_DOMAIN,
+    projectId: import.meta.env.VITE_ACCOUNT_HUB_PROJECT_ID,
+    appId: import.meta.env.VITE_ACCOUNT_HUB_APP_ID,
+  };
+
 export const isFirebaseConfigured = useEmulator || Boolean(
   firebaseConfig.projectId && firebaseConfig.apiKey && firebaseConfig.authDomain,
 );
 
+export const isAccountHubConfigured = useEmulator || Boolean(
+  hubFirebaseConfig.projectId && hubFirebaseConfig.apiKey && hubFirebaseConfig.authDomain,
+);
+
+const existingApps = getApps();
 const app = isFirebaseConfigured
-  ? (getApps()[0] || initializeApp(firebaseConfig))
+  ? (existingApps.find((a) => a.name === '[DEFAULT]') || existingApps[0] || initializeApp(firebaseConfig))
+  : null;
+
+// 方案 B：第二個具名 Firebase App，連接獨立的校級帳號管理中心專案（ltps-account-hub）
+const hubApp = isAccountHubConfigured
+  ? (existingApps.find((a) => a.name === ACCOUNT_HUB_APP_NAME) || initializeApp(hubFirebaseConfig, ACCOUNT_HUB_APP_NAME))
   : null;
 
 export const auth = app ? getAuth(app) : null;
-// persistentLocalCache gives the app's onSnapshot listeners an IndexedDB-backed
-// read cache, so a flaky connection still shows the last-synced data instead of
-// a blank screen. persistentMultipleTabManager (rather than the single-tab
-// default) is used because a school office user may have this app open in two
-// tabs at once. This only affects reads — writes still go straight through
-// src/lib/yearDataRepository.js's network calls and fail immediately when
-// offline, which is required to preserve its locking/audit invariants; this
-// must not be extended into an offline write queue.
 export const db = app
   ? initializeFirestore(
     app,
@@ -61,16 +65,23 @@ export const db = app
     FIRESTORE_DATABASE_ID,
   )
   : null;
-
-// 獨立的校級帳號管理資料庫（ltps-accounts），用於即時監聽登入者本人的權限與 claimsVersion。
-export const accountsDb = app ? getFirestore(app, ACCOUNTS_DATABASE_ID) : null;
 export const storage = app ? getStorage(app) : null;
 export const functions = app ? getFunctions(app) : null;
+
+// 獨立帳號中心（ltps-account-hub）之 Auth / (default) Firestore / Functions 實例
+export const hubAuth = hubApp ? getAuth(hubApp) : auth;
+export const hubDb = hubApp ? getFirestore(hubApp) : null;
+export const accountsDb = hubDb;
+export const hubFunctions = hubApp ? getFunctions(hubApp) : functions;
 
 if (app && useEmulator) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
   connectFirestoreEmulator(db, '127.0.0.1', 8080);
-  if (accountsDb) connectFirestoreEmulator(accountsDb, '127.0.0.1', 8080);
   connectStorageEmulator(storage, '127.0.0.1', 9199);
   connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+  if (hubApp && hubAuth && hubDb && hubFunctions) {
+    connectAuthEmulator(hubAuth, 'http://127.0.0.1:9099', { disableWarnings: true });
+    connectFirestoreEmulator(hubDb, '127.0.0.1', 8080);
+    connectFunctionsEmulator(hubFunctions, '127.0.0.1', 5001);
+  }
 }

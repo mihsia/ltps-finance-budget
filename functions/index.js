@@ -3,45 +3,60 @@ const { initializeApp } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getStorage } = require('firebase-admin/storage');
 const { getNamedFirestore } = require('./firestore');
-const { ACCOUNTS_DATABASE_ID } = require('./firestoreConfig.cjs');
 const { validateUploadRequest } = require('./pdfStorage.cjs');
 
 initializeApp();
 
+const MODULE_SHORT_CODE = {
+  basic: 'bs',
+  specialNeeds: 'sn',
+  budget: 'bg',
+  library: 'lb',
+  language: 'lg',
+  languageCert: 'lc',
+  awards: 'aw',
+  club: 'cl',
+  careSupport: 'cs',
+  land: 'ld',
+  building: 'bd',
+  inquiry: 'iq',
+  budgetbook: 'bb',
+  report: 'rp',
+  archive: 'ar',
+  settings: 'st',
+};
+
 /**
- * Re-verifies on the server against the centralized `ltps-accounts` database
- * that the caller is globally active and holds admin or scoped module access
- * for the `finance` app. Account CRUD and Auth blocking functions now live in
- * the dedicated `ltps-account-hub` repository (codebase: `ltps-accounts`).
+ * Verifies the caller's Firebase ID token claims (minted by the standalone
+ * `ltps-account-hub` project via Custom Token Broker, verified natively by
+ * Firebase Auth on `ltps-finance-budget` — no cross-project Firestore read needed).
  */
-async function requireModuleWriteAccess(request, moduleKey) {
+function requireModuleWriteAccess(request, moduleKey) {
   const callerUid = request.auth?.uid;
-  if (!callerUid) throw new HttpsError('unauthenticated', '請先登入');
-
-  const accountsDb = getFirestore(ACCOUNTS_DATABASE_ID);
-  const callerSnap = await accountsDb.collection('accounts').doc(callerUid).get();
-  const callerAccount = callerSnap.exists ? callerSnap.data() : null;
-
-  if (!callerAccount || callerAccount.globalStatus !== 'active') {
+  const token = request.auth?.token;
+  if (!callerUid || !token) throw new HttpsError('unauthenticated', '請先登入');
+  if (token.g !== 1) {
     throw new HttpsError('permission-denied', '此帳號尚未啟用或已全校停用');
   }
 
-  const isSuperAdmin = Boolean(callerAccount.isSuperAdmin);
-  const financeAccess = callerAccount.apps?.finance;
-  const financeActive = financeAccess?.status === 'active';
+  const isSuperAdmin = token.sa === 1;
+  const financeClaim = token.apps?.finance;
+  const shortCode = MODULE_SHORT_CODE[moduleKey] || moduleKey;
   const canEditModule = isSuperAdmin
+    || financeClaim?.r === 'a'
     || (
-      financeActive
-      && (
-        financeAccess.role === 'admin'
-        || (Array.isArray(financeAccess.modules) && financeAccess.modules.includes(moduleKey))
-      )
+      financeClaim?.r === 'e'
+      && Array.isArray(financeClaim.m)
+      && (financeClaim.m.includes(shortCode) || financeClaim.m.includes(moduleKey))
     );
 
   if (!canEditModule) {
     throw new HttpsError('permission-denied', '沒有此模組的編輯權限');
   }
-  return { callerUid, callerProfile: callerAccount };
+  return {
+    callerUid,
+    callerName: token.name || token.email || callerUid,
+  };
 }
 
 async function requireUnlockedYear(db, year) {
@@ -64,7 +79,7 @@ exports.uploadBudgetBookPdf = onCall({ timeoutSeconds: 60 }, async (request) => 
   const { year } = request.data || {};
   if (typeof year !== 'string' || !year) throw new HttpsError('invalid-argument', '缺少年度');
 
-  const { callerUid, callerProfile } = await requireModuleWriteAccess(request, 'budgetbook');
+  const { callerUid, callerName } = requireModuleWriteAccess(request, 'budgetbook');
   await requireUnlockedYear(db, year);
 
   const validation = validateUploadRequest(request.data);
@@ -102,7 +117,7 @@ exports.uploadBudgetBookPdf = onCall({ timeoutSeconds: 60 }, async (request) => 
     recordId: null,
     action: before?.pdfUrl ? 'pdf-replace' : 'pdf-upload',
     actorUid: callerUid,
-    actorName: callerProfile.name || callerProfile.email || callerUid,
+    actorName: callerName,
     before: { pdfUrl: before?.pdfUrl ?? null, pdfFileName: before?.pdfFileName ?? null },
     after: { pdfUrl, pdfFileName: validation.fileName },
     createdAt: now,

@@ -3,7 +3,7 @@ import * as XLSX from 'xlsx';
 import { createAccountHubClient } from '@ltps/account-sdk/core';
 import { LtpsAccountManager } from '@ltps/account-sdk/react';
 import '@ltps/account-sdk/styles.css';
-import { ACCOUNT_HUB_URL, functions, isFirebaseConfigured } from '../firebase';
+import { ACCOUNT_HUB_URL, hubFunctions, isFirebaseConfigured } from '../firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { runAuthorized } from '../lib/accessPolicy';
 import NoModuleAccess from '../components/NoModuleAccess';
@@ -41,8 +41,8 @@ export default function Settings() {
   const selfUid = selfDecision.allowed ? selfDecision.actor?.uid : null;
 
   const guardedClient = useMemo(() => {
-    if (!isFirebaseConfigured || !functions) return null;
-    return createGuardedAccountClient(createAccountHubClient(functions), authorizeAdmin);
+    if (!isFirebaseConfigured || !hubFunctions) return null;
+    return createGuardedAccountClient(createAccountHubClient(hubFunctions), authorizeAdmin);
   }, [authorizeAdmin]);
 
   if (!canEditModule('settings')) {

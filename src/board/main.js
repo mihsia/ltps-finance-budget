@@ -2,10 +2,18 @@
 // 與財務預算系統共用同一個 Firebase 專案、同一個網域與登入狀態，所以在財務系統登入過，
 // 打開這一頁就不必再登入。權限規則見 firestore.rules 的 principalBoard 段落。
 import './board.css';
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import { GoogleAuthProvider, onAuthStateChanged, signInWithCustomToken, signInWithPopup, signOut } from 'firebase/auth';
 import { collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
-import { evaluateAppAccessFromAccount } from '@ltps/account-sdk/core';
-import { accountsDb, auth, db, isFirebaseConfigured } from '../firebase.js';
+import { createAccountHubClient, evaluateAppAccessFromAccount } from '@ltps/account-sdk/core';
+import {
+  auth,
+  db,
+  hubAuth,
+  hubDb,
+  hubFunctions,
+  isAccountHubConfigured,
+  isFirebaseConfigured,
+} from '../firebase.js';
 import {
   TITLE, esc, headerTime, renderBand, renderCards, renderDetail, renderNotices,
 } from './render.js';
@@ -97,12 +105,19 @@ async function signIn() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
   try {
-    await signInWithPopup(auth, provider);
+    await signInWithPopup(hubAuth, provider);
   } catch (e) {
     if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
       $('#login-err').textContent = `登入失敗：${e.code || e.message}`;
     }
   }
+}
+
+async function signOutAll() {
+  await Promise.all([
+    hubAuth ? signOut(hubAuth) : Promise.resolve(),
+    auth && auth !== hubAuth ? signOut(auth) : Promise.resolve(),
+  ]);
 }
 
 function avatar(user, name) {
@@ -112,8 +127,8 @@ function avatar(user, name) {
 
 function wire() {
   $('#g-in').onclick = signIn;
-  $('#g-other').onclick = async () => { await signOut(auth); signIn(); };
-  $('#go-logout').onclick = () => signOut(auth);
+  $('#g-other').onclick = async () => { await signOutAll(); signIn(); };
+  $('#go-logout').onclick = () => signOutAll();
   $('#src-btn').onclick = () => openDrawer('src');
   $('#go-src').onclick = () => { $('#menu').classList.remove('open'); openDrawer('src'); };
   $('#me-btn').onclick = () => {
@@ -148,27 +163,26 @@ function wire() {
 
 function main() {
   wire();
-  if (!isFirebaseConfigured) {
+  if (!isFirebaseConfigured || !isAccountHubConfigured) {
     show('login');
-    $('#login-err').textContent = '此網站尚未設定 Firebase 連線。';
+    $('#login-err').textContent = '此網站尚未設定 Firebase 或校級帳號中心連線。';
     $('#g-in').disabled = true;
     return;
   }
-  onAuthStateChanged(auth, async (user) => {
+  const hubClient = hubFunctions ? createAccountHubClient(hubFunctions) : null;
+  onAuthStateChanged(hubAuth, async (user) => {
     stopListening();
     closeDrawer();
-    if (!user) { show('login'); return; }
+    if (!user) {
+      if (auth && auth !== hubAuth && auth.currentUser) await signOut(auth).catch(() => {});
+      show('login');
+      return;
+    }
     show('loading');
     let account = null;
     try {
-      const snap = await getDoc(doc(accountsDb, 'accounts', user.uid));
+      const snap = await getDoc(doc(hubDb, 'accounts', user.uid));
       account = snap.exists() ? { uid: user.uid, ...snap.data() } : null;
-      if (account && typeof user.getIdTokenResult === 'function') {
-        const tokenResult = await user.getIdTokenResult();
-        if (tokenResult?.claims?.v !== (account.claimsVersion || 1)) {
-          await user.getIdToken(true);
-        }
-      }
     } catch {
       account = null;
     }
@@ -176,6 +190,17 @@ function main() {
     if (!verdict.ok) {
       $('#denied-email').textContent = user.email || '';
       $('#denied-reason').textContent = verdict.reason;
+      show('denied');
+      return;
+    }
+    try {
+      if (auth && auth !== hubAuth && hubClient) {
+        const brokerRes = await hubClient.issueAppToken('board');
+        await signInWithCustomToken(auth, brokerRes.customToken);
+      }
+    } catch {
+      $('#denied-email').textContent = user.email || '';
+      $('#denied-reason').textContent = '無法向校級帳號中心換發儀表板憑證，請稍後再試或聯絡系統管理員。';
       show('denied');
       return;
     }

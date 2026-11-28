@@ -55,12 +55,17 @@ describe('Firebase named Firestore configuration', () => {
     vi.stubEnv('VITE_FIREBASE_PROJECT_ID', 'test-project');
     vi.stubEnv('VITE_FIREBASE_API_KEY', 'test-key');
     vi.stubEnv('VITE_FIREBASE_AUTH_DOMAIN', 'test-project.firebaseapp.com');
+    vi.stubEnv('VITE_ACCOUNT_HUB_PROJECT_ID', 'ltps-account-hub');
+    vi.stubEnv('VITE_ACCOUNT_HUB_API_KEY', 'hub-key');
+    vi.stubEnv('VITE_ACCOUNT_HUB_AUTH_DOMAIN', 'ltps-account-hub.firebaseapp.com');
 
     for (const mock of Object.values(firebaseMocks)) {
       if (typeof mock?.mockReset === 'function') mock.mockReset();
     }
     firebaseMocks.getApps.mockReturnValue([]);
-    firebaseMocks.initializeApp.mockReturnValue(firebaseMocks.app);
+    firebaseMocks.initializeApp
+      .mockReturnValueOnce(firebaseMocks.app)
+      .mockReturnValueOnce({ name: 'ltps-account-hub' });
     firebaseMocks.getAuth.mockReturnValue({ name: 'auth' });
     firebaseMocks.persistentMultipleTabManager.mockReturnValue(firebaseMocks.tabManager);
     firebaseMocks.persistentLocalCache.mockReturnValue(firebaseMocks.localCache);
@@ -70,13 +75,13 @@ describe('Firebase named Firestore configuration', () => {
     firebaseMocks.getFunctions.mockReturnValue({ name: 'functions' });
   });
 
-  it('initializes the web SDK Firestore client with the shared named database and a persistent, multi-tab local cache', async () => {
+  it('initializes the web SDK Firestore client with the shared named database and secondary Account Hub app', async () => {
     const firebase = await import('./firebase.js');
 
     expect(firebase.FIRESTORE_DATABASE_ID).toBe('ltps-finance-data');
-    expect(firebase.ACCOUNTS_DATABASE_ID).toBe('ltps-accounts');
     expect(firebase.db).toBe(firebaseMocks.db);
-    expect(firebase.accountsDb).toBe(firebaseMocks.accountsDb);
+    expect(firebase.hubDb).toBe(firebaseMocks.accountsDb);
+    expect(firebase.isAccountHubConfigured).toBe(true);
     expect(firebaseMocks.persistentMultipleTabManager).toHaveBeenCalledWith();
     expect(firebaseMocks.persistentLocalCache).toHaveBeenCalledWith({ tabManager: firebaseMocks.tabManager });
     expect(firebaseMocks.initializeFirestore).toHaveBeenCalledWith(
@@ -84,7 +89,11 @@ describe('Firebase named Firestore configuration', () => {
       { localCache: firebaseMocks.localCache },
       FIRESTORE_DATABASE_ID,
     );
-    expect(firebaseMocks.getFirestore).toHaveBeenCalledWith(firebaseMocks.app, 'ltps-accounts');
+    expect(firebaseMocks.initializeApp).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 'ltps-account-hub' }),
+      'ltps-account-hub',
+    );
+    expect(firebaseMocks.getFirestore).toHaveBeenCalledWith({ name: 'ltps-account-hub' });
   });
 
   it('passes the shared named database ID to Admin SDK Firestore accessors', async () => {
@@ -130,10 +139,12 @@ describe('Firebase named Firestore configuration', () => {
 
   it('treats itself as unconfigured when authDomain is missing, instead of hanging Auth later', async () => {
     vi.stubEnv('VITE_FIREBASE_AUTH_DOMAIN', '');
+    vi.stubEnv('VITE_ACCOUNT_HUB_AUTH_DOMAIN', '');
 
     const firebase = await import('./firebase.js');
 
     expect(firebase.isFirebaseConfigured).toBe(false);
+    expect(firebase.isAccountHubConfigured).toBe(false);
     expect(firebase.db).toBeNull();
     expect(firebaseMocks.initializeApp).not.toHaveBeenCalled();
   });
