@@ -8,7 +8,8 @@ import {
   signOut,
 } from 'firebase/auth';
 import { doc, onSnapshot } from 'firebase/firestore';
-import { auth, db, isFirebaseConfigured } from '../firebase';
+import { evaluateAppAccessFromAccount } from '@ltps/account-sdk/core';
+import { accountsDb, auth, isFirebaseConfigured } from '../firebase';
 import {
   createAuthorizationSource,
   evaluateProfileAccess,
@@ -35,9 +36,65 @@ function auditActor(user, profile) {
   };
 }
 
+/**
+ * 將校級帳號中心（`ltps-accounts/accounts/{uid}`）文件轉成財務系統既有相容格式，
+ * 讓其餘 15 個業務頁面無需修改即可沿用 `profile`、`isAdmin` 與 `canEditModule`。
+ */
+export function adaptHubAccountToFinance(accountDoc) {
+  if (!accountDoc) return { profile: null, access: evaluateProfileAccess({ profileState: 'missing' }) };
+
+  const hubAccess = evaluateAppAccessFromAccount({
+    profileState: 'ready',
+    account: accountDoc,
+    appId: 'finance',
+  });
+
+  const financeApp = accountDoc.apps?.finance || null;
+  const effectiveStatus = accountDoc.globalStatus !== 'active'
+    ? 'disabled'
+    : (accountDoc.isSuperAdmin ? 'active' : (financeApp?.status || 'disabled'));
+  const effectiveRole = accountDoc.isSuperAdmin ? 'admin' : (financeApp?.role || null);
+  const effectiveModules = accountDoc.isSuperAdmin
+    ? []
+    : (Array.isArray(financeApp?.modules) ? [...financeApp.modules] : []);
+
+  const profile = {
+    uid: accountDoc.uid,
+    name: accountDoc.name || '',
+    email: accountDoc.email || '',
+    dept: accountDoc.dept || '',
+    jobTitle: accountDoc.jobTitle || '',
+    status: effectiveStatus,
+    role: effectiveRole,
+    modules: effectiveModules,
+    globalStatus: accountDoc.globalStatus,
+    isSuperAdmin: Boolean(accountDoc.isSuperAdmin),
+    claimsVersion: accountDoc.claimsVersion || 1,
+  };
+
+  if (!hubAccess.allowed) {
+    const mappedCode = hubAccess.code === 'global-disabled' || hubAccess.code === 'app-disabled'
+      ? 'profile-disabled'
+      : hubAccess.code;
+    return {
+      profile,
+      access: {
+        allowed: false,
+        code: mappedCode,
+        reason: hubAccess.reason,
+      },
+    };
+  }
+
+  return {
+    profile,
+    access: evaluateProfileAccess({ profileState: 'ready', profile }),
+  };
+}
+
 export function listenToUserAccess({
   auth: authInstance,
-  db: dbInstance,
+  accountsDb: accountsDbInstance,
   authorization,
   onState,
   onAuthStateChangedImpl = onAuthStateChanged,
@@ -48,8 +105,8 @@ export function listenToUserAccess({
   let profileUnsubscribe = null;
   let stopped = false;
 
-  const publish = (user, profile, profileState) => {
-    const access = evaluateProfileAccess({ profileState, profile });
+  const publish = (user, profile, profileState, precomputedAccess = null) => {
+    const access = precomputedAccess || evaluateProfileAccess({ profileState, profile });
     authorization.replace(access, auditActor(user, profile));
     onState({
       user,
@@ -58,6 +115,20 @@ export function listenToUserAccess({
       access,
       loading: profileState === 'loading',
     });
+  };
+
+  const syncTokenIfNeeded = async (fbUser, expectedVersion) => {
+    if (typeof fbUser?.getIdTokenResult !== 'function' || typeof fbUser?.getIdToken !== 'function') {
+      return;
+    }
+    try {
+      const tokenResult = await fbUser.getIdTokenResult();
+      if (tokenResult?.claims?.v !== expectedVersion) {
+        await fbUser.getIdToken(true);
+      }
+    } catch {
+      // Token 刷新失敗不阻塞畫面，下一次請求仍由 Rules 與後端把關
+    }
   };
 
   const authUnsubscribe = onAuthStateChangedImpl(
@@ -74,13 +145,24 @@ export function listenToUserAccess({
       }
 
       publish(fbUser, null, 'loading');
-      const userRef = docImpl(dbInstance, 'users', fbUser.uid);
+      let lastClaimsVersion = null;
+      const accountRef = docImpl(accountsDbInstance, 'accounts', fbUser.uid);
       profileUnsubscribe = onSnapshotImpl(
-        userRef,
+        accountRef,
         (snap) => {
           if (stopped || listenerGeneration !== generation) return;
-          const exists = snap.exists();
-          publish(fbUser, exists ? snap.data() : null, exists ? 'ready' : 'missing');
+          if (!snap.exists()) {
+            publish(fbUser, null, 'missing');
+            return;
+          }
+          const rawAccount = { uid: fbUser.uid, ...snap.data() };
+          const nextVersion = rawAccount.claimsVersion || 1;
+          if (lastClaimsVersion === null || nextVersion !== lastClaimsVersion) {
+            lastClaimsVersion = nextVersion;
+            void syncTokenIfNeeded(fbUser, nextVersion);
+          }
+          const { profile, access } = adaptHubAccountToFinance(rawAccount);
+          publish(fbUser, profile, 'ready', access);
         },
         () => {
           if (stopped || listenerGeneration !== generation) return;
@@ -137,7 +219,7 @@ export function AuthProvider({ children }) {
     if (!isFirebaseConfigured) return;
     return listenToUserAccess({
       auth,
-      db,
+      accountsDb,
       authorization,
       onState: setAuthState,
     });
@@ -204,12 +286,13 @@ export function AuthProvider({ children }) {
 
   const { user, profile, access, loading } = authState;
   const isAdmin = access.allowed && access.role === 'admin';
+  const isSuperAdmin = Boolean(access.allowed && profile?.isSuperAdmin);
   const canEditModule = (moduleKey) => authorization.authorizeModule(moduleKey).allowed;
 
   return (
     <AuthContext.Provider value={{
       user, profile, loading, error, login, loginWithGoogle,
-      pendingGoogleEmail, cancelGoogleLink, logout, isAdmin, canEditModule,
+      pendingGoogleEmail, cancelGoogleLink, logout, isAdmin, isSuperAdmin, canEditModule,
       access, accessDeniedReason: access.reason,
       authorizeModule: authorization.authorizeModule,
       authorizeModuleActor: authorization.authorizeModuleActor,

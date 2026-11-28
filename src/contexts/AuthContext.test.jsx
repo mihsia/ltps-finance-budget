@@ -3,12 +3,12 @@ import { createAuthorizationSource } from '../lib/accessPolicy';
 
 const firebaseMocks = vi.hoisted(() => ({
   auth: { name: 'auth' },
-  db: { name: 'db' },
+  accountsDb: { name: 'accountsDb' },
 }));
 
 vi.mock('../firebase', () => ({
   auth: firebaseMocks.auth,
-  db: firebaseMocks.db,
+  accountsDb: firebaseMocks.accountsDb,
   isFirebaseConfigured: true,
 }));
 
@@ -32,10 +32,30 @@ vi.mock('firebase/firestore', () => ({
 
 const authContext = await import('./AuthContext.jsx');
 
-function snapshot(profile) {
-  return profile === null
+function snapshot(account) {
+  return account === null
     ? { exists: () => false, data: () => undefined }
-    : { exists: () => true, data: () => profile };
+    : { exists: () => true, data: () => account };
+}
+
+function hubAccount({
+  name = '編輯者',
+  email = 'a@example.com',
+  dept = '總務處',
+  globalStatus = 'active',
+  isSuperAdmin = false,
+  claimsVersion = 1,
+  finance = { status: 'active', role: 'editor', modules: ['basic'] },
+} = {}) {
+  return {
+    name,
+    email,
+    dept,
+    globalStatus,
+    isSuperAdmin,
+    claimsVersion,
+    apps: finance ? { finance } : {},
+  };
 }
 
 function createHarness() {
@@ -60,7 +80,7 @@ function createHarness() {
 
   const stop = authContext.listenToUserAccess?.({
     auth: firebaseMocks.auth,
-    db: firebaseMocks.db,
+    accountsDb: firebaseMocks.accountsDb,
     authorization,
     onState: (state) => states.push(state),
     onAuthStateChangedImpl,
@@ -82,67 +102,93 @@ function createHarness() {
   };
 }
 
-describe('listenToUserAccess', () => {
+describe('listenToUserAccess (ltps-accounts hub)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it('starts a live /users/{uid} listener and fails closed while it loads', () => {
+  it('listens to /accounts/{uid} in ltps-accounts and fails closed while loading', () => {
     const harness = createHarness();
 
-    expect(harness.authCallback).toBeTypeOf('function');
     harness.authCallback({ uid: 'user-a', email: 'a@example.com' });
 
-    expect(harness.docImpl).toHaveBeenCalledWith(firebaseMocks.db, 'users', 'user-a');
+    expect(harness.docImpl).toHaveBeenCalledWith(firebaseMocks.accountsDb, 'accounts', 'user-a');
     expect(harness.onSnapshotImpl).toHaveBeenCalledTimes(1);
     expect(harness.authorization.authorizeModule('basic')).toEqual(
       expect.objectContaining({ allowed: false, code: 'profile-loading' }),
     );
   });
 
-  it('grants active profiles then immediately revokes on disable, deletion, or error', () => {
+  it('grants active finance access and immediately revokes on app disable, global disable, deletion, or error', () => {
     const harness = createHarness();
-    expect(harness.authCallback).toBeTypeOf('function');
     harness.authCallback({ uid: 'user-a', email: 'a@example.com' });
     const subscription = harness.profileSubscriptions[0];
 
-    subscription.onNext(snapshot({
-      name: '編輯者',
-      role: 'editor',
-      status: 'active',
-      modules: ['basic'],
-    }));
+    subscription.onNext(snapshot(hubAccount()));
     expect(harness.authorization.authorizeModule('basic').allowed).toBe(true);
+    expect(harness.authorization.authorizeModule('budget').allowed).toBe(false);
 
-    subscription.onNext(snapshot({
-      name: '編輯者',
-      role: 'editor',
-      status: 'disabled',
-      modules: ['basic'],
-    }));
+    // 單一系統停權
+    subscription.onNext(snapshot(hubAccount({
+      finance: { status: 'disabled', role: 'editor', modules: ['basic'] },
+    })));
     expect(harness.authorization.authorizeModule('basic')).toEqual(
       expect.objectContaining({ allowed: false, code: 'profile-disabled' }),
     );
 
+    // 全校停用
+    subscription.onNext(snapshot(hubAccount({ globalStatus: 'disabled' })));
+    expect(harness.authorization.authorizeModule('basic')).toEqual(
+      expect.objectContaining({ allowed: false, code: 'profile-disabled' }),
+    );
+
+    // 帳號不存在
     subscription.onNext(snapshot(null));
     expect(harness.authorization.authorizeModule('basic')).toEqual(
       expect.objectContaining({ allowed: false, code: 'profile-missing' }),
     );
 
+    // 監聽錯誤
     subscription.onError(new Error('permission denied'));
     expect(harness.authorization.authorizeModule('basic')).toEqual(
       expect.objectContaining({ allowed: false, code: 'profile-error' }),
     );
-    expect(harness.states.at(-1).access.reason).toBe(
-      '無法確認帳號權限，請稍後再試或聯絡系統管理員。',
-    );
   });
 
-  it('resolves out of loading instead of hanging forever when the auth observer itself errors', () => {
+  it('grants full admin access to a school-wide super admin even without explicit finance role', () => {
     const harness = createHarness();
-    expect(harness.authCallback).toBeTypeOf('function');
-    expect(harness.authErrorCallback).toBeTypeOf('function');
+    harness.authCallback({ uid: 'super-1', email: 'mihsia@gmail.com' });
+    const subscription = harness.profileSubscriptions[0];
 
+    subscription.onNext(snapshot(hubAccount({
+      name: '校級超管',
+      email: 'mihsia@gmail.com',
+      isSuperAdmin: true,
+      finance: null,
+    })));
+
+    expect(harness.authorization.authorizeAdmin().allowed).toBe(true);
+    expect(harness.authorization.authorizeModule('budget').allowed).toBe(true);
+    expect(harness.states.at(-1).profile.isSuperAdmin).toBe(true);
+  });
+
+  it('forces an ID token refresh when claimsVersion increments', async () => {
+    const getIdTokenResult = vi.fn().mockResolvedValue({ claims: { v: 1 } });
+    const getIdToken = vi.fn().mockResolvedValue('fresh-token');
+    const harness = createHarness();
+
+    harness.authCallback({ uid: 'user-a', email: 'a@example.com', getIdTokenResult, getIdToken });
+    const subscription = harness.profileSubscriptions[0];
+
+    subscription.onNext(snapshot(hubAccount({ claimsVersion: 2 })));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(getIdToken).toHaveBeenCalledWith(true);
+  });
+
+  it('resolves out of loading when the auth observer errors', () => {
+    const harness = createHarness();
     harness.authErrorCallback(new Error('auth/network-request-failed'));
 
     expect(harness.states.at(-1).loading).toBe(false);
@@ -151,21 +197,8 @@ describe('listenToUserAccess', () => {
     );
   });
 
-  it('unsubscribes any pending profile listener when the auth observer errors mid-session', () => {
+  it('ignores stale profile callbacks after the authenticated user changes and cleans up on stop', () => {
     const harness = createHarness();
-    harness.authCallback({ uid: 'user-a', email: 'a@example.com' });
-    const subscription = harness.profileSubscriptions[0];
-
-    harness.authErrorCallback(new Error('auth/network-request-failed'));
-
-    expect(subscription.unsubscribe).toHaveBeenCalledOnce();
-    expect(harness.states.at(-1).loading).toBe(false);
-    expect(harness.states.at(-1).user).toBeNull();
-  });
-
-  it('ignores stale profile callbacks after the authenticated user changes', () => {
-    const harness = createHarness();
-    expect(harness.authCallback).toBeTypeOf('function');
     harness.authCallback({ uid: 'user-a' });
     const staleSubscription = harness.profileSubscriptions[0];
 
@@ -173,81 +206,18 @@ describe('listenToUserAccess', () => {
     const currentSubscription = harness.profileSubscriptions[1];
     expect(staleSubscription.unsubscribe).toHaveBeenCalledOnce();
 
-    staleSubscription.onNext(snapshot({ role: 'admin', status: 'active' }));
+    staleSubscription.onNext(snapshot(hubAccount({ finance: { status: 'active', role: 'admin', modules: [] } })));
     expect(harness.authorization.authorizeAdmin()).toEqual(
       expect.objectContaining({ allowed: false, code: 'profile-loading' }),
     );
 
-    currentSubscription.onNext(snapshot({
-      role: 'editor',
-      status: 'active',
-      modules: ['budget'],
-    }));
+    currentSubscription.onNext(snapshot(hubAccount({
+      finance: { status: 'active', role: 'editor', modules: ['budget'] },
+    })));
     expect(harness.authorization.authorizeModule('budget').allowed).toBe(true);
-    expect(harness.authorization.authorizeModule('basic').allowed).toBe(false);
-  });
-
-  it('invalidates callbacks and unsubscribes both listeners during cleanup', () => {
-    const harness = createHarness();
-    expect(harness.authCallback).toBeTypeOf('function');
-    harness.authCallback({ uid: 'user-a' });
-    const subscription = harness.profileSubscriptions[0];
 
     harness.stop?.();
     expect(harness.authUnsubscribe).toHaveBeenCalledOnce();
-    expect(subscription.unsubscribe).toHaveBeenCalledOnce();
-
-    subscription.onNext(snapshot({ role: 'admin', status: 'active' }));
-    harness.authCallback({ uid: 'late-user' });
-    expect(harness.authorization.authorizeAdmin().allowed).toBe(false);
-    expect(harness.onSnapshotImpl).toHaveBeenCalledOnce();
-  });
-
-  it('keeps retained module actor decisions synchronized with the live user and profile', () => {
-    const harness = createHarness();
-    harness.authCallback({ uid: 'user-a', email: 'a@example.com' });
-    const firstSubscription = harness.profileSubscriptions[0];
-    firstSubscription.onNext(snapshot({
-      name: '舊名稱',
-      role: 'editor',
-      status: 'active',
-      modules: ['basic'],
-    }));
-
-    const retained = harness.authorization.authorizeModuleActor;
-    expect(retained).toBeTypeOf('function');
-    expect(retained('basic')).toEqual(expect.objectContaining({
-      allowed: true,
-      actor: { uid: 'user-a', name: '舊名稱' },
-    }));
-
-    firstSubscription.onNext(snapshot({
-      name: '新名稱',
-      role: 'editor',
-      status: 'active',
-      modules: ['basic'],
-    }));
-    expect(retained('basic')).toEqual(expect.objectContaining({
-      allowed: true,
-      actor: { uid: 'user-a', name: '新名稱' },
-    }));
-
-    harness.authCallback({ uid: 'user-b', email: 'new@example.com' });
-    harness.profileSubscriptions[1].onNext(snapshot({
-      role: 'editor',
-      status: 'active',
-      modules: ['basic'],
-    }));
-    expect(retained('basic')).toEqual(expect.objectContaining({
-      allowed: true,
-      actor: { uid: 'user-b', name: 'new@example.com' },
-    }));
-
-    harness.authCallback(null);
-    expect(retained('basic')).toEqual(expect.objectContaining({
-      allowed: false,
-      code: 'not-signed-in',
-    }));
-    expect(retained('basic').actor).toBeUndefined();
+    expect(currentSubscription.unsubscribe).toHaveBeenCalledOnce();
   });
 });

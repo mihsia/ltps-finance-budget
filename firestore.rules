@@ -3,21 +3,111 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     function isSignedIn() { return request.auth != null; }
-    function userProfile() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
-    // A missing profile, or one whose status isn't the literal 'active',
-    // fails closed — mirrors evaluateProfileAccess in src/lib/accessPolicy.js.
-    function isActiveUser() { return isSignedIn() && userProfile().status == 'active'; }
-    function isActiveAdmin() { return isActiveUser() && userProfile().role == 'admin'; }
+
+    // 權限統一由校級獨立帳號中心（ltps-accounts）透過 Firebase Auth Custom Claims 同步：
+    //   g  : 1 (全校啟用) | 0 (全校停用)
+    //   sa : 1 (校級超級管理員) | 0 (一般)
+    //   apps.finance: { r: 'a' | 'e', m?: ['bs', 'bg', ...] }
+    //   apps.board  : { r: 'a' | 'v' }
+    function isGlobalActive() {
+      return isSignedIn() && request.auth.token.g == 1;
+    }
+
+    function isSuperAdmin() {
+      return isGlobalActive() && request.auth.token.sa == 1;
+    }
+
+    function hasFinanceApp() {
+      return isGlobalActive()
+        && 'apps' in request.auth.token
+        && request.auth.token.apps is map
+        && 'finance' in request.auth.token.apps
+        && request.auth.token.apps.finance is map;
+    }
+
+    function financeRole() {
+      return request.auth.token.apps.finance.r;
+    }
+
+    function isActiveUser() {
+      return isSuperAdmin() || hasFinanceApp();
+    }
+
+    function isActiveAdmin() {
+      return isSuperAdmin() || (hasFinanceApp() && financeRole() == 'a');
+    }
+
+    function financeModuleCode(moduleKey) {
+      return {
+        'basic': 'bs',
+        'specialNeeds': 'sn',
+        'budget': 'bg',
+        'library': 'lb',
+        'language': 'lg',
+        'languageCert': 'lc',
+        'awards': 'aw',
+        'club': 'cl',
+        'careSupport': 'cs',
+        'land': 'ld',
+        'building': 'bd',
+        'inquiry': 'iq',
+        'budgetbook': 'bb',
+        'report': 'rp',
+        'archive': 'ar',
+        'settings': 'st',
+      }[moduleKey];
+    }
+
+    function isKnownFinanceModule(moduleKey) {
+      return moduleKey in {
+        'basic': true,
+        'specialNeeds': true,
+        'budget': true,
+        'library': true,
+        'language': true,
+        'languageCert': true,
+        'awards': true,
+        'club': true,
+        'careSupport': true,
+        'land': true,
+        'building': true,
+        'inquiry': true,
+        'budgetbook': true,
+        'report': true,
+        'archive': true,
+        'settings': true,
+      };
+    }
+
     function canEditModule(moduleKey) {
       return isActiveAdmin()
-        || (isActiveUser() && userProfile().role == 'editor' && moduleKey in userProfile().modules);
+        || (
+          hasFinanceApp()
+          && financeRole() == 'e'
+          && 'm' in request.auth.token.apps.finance
+          && request.auth.token.apps.finance.m is list
+          && isKnownFinanceModule(moduleKey)
+          && financeModuleCode(moduleKey) in request.auth.token.apps.finance.m
+        );
     }
+
+    function canReadPrincipalBoard() {
+      return isActiveAdmin()
+        || (
+          isGlobalActive()
+          && 'apps' in request.auth.token
+          && request.auth.token.apps is map
+          && 'board' in request.auth.token.apps
+        );
+    }
+
     // Strict equality against the literal `false`, not a defaulting get() —
     // a missing/non-boolean `locked` field must read as locked, matching the
     // client's own "hides editing unless locked is exactly false" rule.
     function yearWritable(year) {
       return get(/databases/$(database)/documents/years/$(year)).data.locked == false;
     }
+
     function recordTypeUnchanged() {
       // `resource` is null on create (no prior document), so there is
       // nothing to preserve yet — nothing else here may dereference
@@ -28,30 +118,16 @@ service cloud.firestore {
         || request.resource.data.recordType == resource.data.recordType;
     }
 
-    // Staff profiles: any signed-in user may always read their own doc (the
-    // login flow's access check depends on it), and an admin or an editor
-    // carrying the 'settings' module (帳號管理) may read any profile for the
-    // account-management page — mirrors Settings.jsx's own canEditModule
-    // gate, so the UI's "無權限" screen isn't just cosmetic. Writable only by
-    // an active admin — accounts are actually created/edited/disabled via
-    // Cloud Functions using the Admin SDK (createAccount/updateAccount/
-    // setAccountStatus), which re-check this same rule server-side rather
-    // than relying on it.
+    // 舊版 /users 集合已遷移至獨立帳號庫 `ltps-accounts`，此處保留唯讀封存，禁止用戶端寫入。
     match /users/{uid} {
-      allow read: if isSignedIn()
-        && (request.auth.uid == uid || isActiveAdmin() || canEditModule('settings'));
-      allow write: if isActiveAdmin();
+      allow read: if isSignedIn() && (request.auth.uid == uid || isActiveAdmin());
+      allow write: if false;
     }
 
-    // 校長儀表板（/board.html）的彙整資料。只由兩支伺服器端程式寫入：辦公室電腦的
-    // 連線程式（服務帳戶 principal-board-connector，僅 Cloud Datastore User）與
-    // Google Apps Script（以校長本人帳號經 IAM 授權）。兩者都走 IAM，不受這份規則
-    // 管轄，所以任何網頁用戶端一律不可寫。讀取限 active admin，或帳號的 modules
-    // 含 'principalBoard'（日後開放給主任時，由帳號管理勾選）。文件只有班級層級的
-    // 統計數字，沒有學生姓名或座號（連線程式上傳前會再檢查一次）。
+    // 校長儀表板（/board.html）的彙整資料。只由伺服器端程式經 IAM 寫入，
+    // 網頁用戶端一律不可寫；讀取限校級超管、財務管理者或具備 board 系統權限者。
     match /principalBoard/{docId} {
-      allow read: if isActiveAdmin()
-        || (isActiveUser() && 'principalBoard' in userProfile().modules);
+      allow read: if canReadPrincipalBoard();
       allow write: if false;
     }
 

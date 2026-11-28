@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, connectAuthEmulator } from 'firebase/auth';
 import {
+  getFirestore,
   initializeFirestore,
   connectFirestoreEmulator,
   persistentLocalCache,
@@ -8,9 +9,11 @@ import {
 } from 'firebase/firestore';
 import { getStorage, connectStorageEmulator } from 'firebase/storage';
 import { getFunctions, connectFunctionsEmulator } from 'firebase/functions';
-import { FIRESTORE_DATABASE_ID } from './lib/firestoreConfig.js';
+import { ACCOUNTS_DATABASE_ID, FIRESTORE_DATABASE_ID } from './lib/firestoreConfig.js';
 
-export { FIRESTORE_DATABASE_ID };
+export { ACCOUNTS_DATABASE_ID, FIRESTORE_DATABASE_ID };
+
+export const ACCOUNT_HUB_URL = import.meta.env.VITE_ACCOUNT_HUB_URL || 'https://ltps-accounts.web.app';
 
 const useEmulator = import.meta.env.VITE_USE_FIREBASE_EMULATOR === 'true';
 
@@ -58,12 +61,16 @@ export const db = app
     FIRESTORE_DATABASE_ID,
   )
   : null;
+
+// 獨立的校級帳號管理資料庫（ltps-accounts），用於即時監聽登入者本人的權限與 claimsVersion。
+export const accountsDb = app ? getFirestore(app, ACCOUNTS_DATABASE_ID) : null;
 export const storage = app ? getStorage(app) : null;
 export const functions = app ? getFunctions(app) : null;
 
 if (app && useEmulator) {
   connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true });
   connectFirestoreEmulator(db, '127.0.0.1', 8080);
+  if (accountsDb) connectFirestoreEmulator(accountsDb, '127.0.0.1', 8080);
   connectStorageEmulator(storage, '127.0.0.1', 9199);
   connectFunctionsEmulator(functions, '127.0.0.1', 5001);
 }
