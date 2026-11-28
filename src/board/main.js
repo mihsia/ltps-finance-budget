@@ -2,17 +2,25 @@
 // 與財務預算系統共用同一個 Firebase 專案、同一個網域與登入狀態，所以在財務系統登入過，
 // 打開這一頁就不必再登入。權限規則見 firestore.rules 的 principalBoard 段落。
 import './board.css';
-import { GoogleAuthProvider, onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
+import { GoogleAuthProvider, onAuthStateChanged, signInWithCustomToken, signInWithPopup, signOut } from 'firebase/auth';
 import { collection, doc, getDoc, onSnapshot } from 'firebase/firestore';
-import { auth, db, isFirebaseConfigured } from '../firebase.js';
-import { evaluateProfileAccess } from '../lib/accessPolicy.js';
+import { createAccountHubClient, evaluateAppAccessFromAccount } from '@ltps/account-sdk/core';
+import {
+  auth,
+  db,
+  hubAuth,
+  hubDb,
+  hubFunctions,
+  isAccountHubConfigured,
+  isFirebaseConfigured,
+} from '../firebase.js';
 import {
   TITLE, esc, headerTime, renderBand, renderCards, renderDetail, renderNotices,
 } from './render.js';
 
 const $ = (s) => document.querySelector(s);
 const ORDER = ['sch', 'att', 'fill', 'stu', 'menu', 'lib'];
-const ROLE_LABEL = { admin: '管理者', editor: '主任' };
+const ROLE_LABEL = { admin: '管理者', viewer: '主任', editor: '主任' };
 
 let data = {};
 let openId = null;
@@ -22,12 +30,26 @@ function show(view) {
   for (const v of ['loading', 'login', 'denied', 'dash']) $(`#v-${v}`).hidden = v !== view;
 }
 
-/** 讀者是否可看儀表板：與 firestore.rules 相同 —— active 的管理者，或 modules 含 principalBoard。 */
-function canViewBoard(profile) {
-  const access = evaluateProfileAccess({ profileState: profile ? 'ready' : 'missing', profile });
-  if (!access.allowed) return { ok: false, reason: access.reason };
-  if (access.role === 'admin' || access.modules.includes('principalBoard')) return { ok: true };
-  return { ok: false, reason: '此帳號沒有「校長儀表板」的檢視權限，請聯絡系統管理員。' };
+/** 讀者是否可看儀表板：校級超管、財務管理者，或具備 board 系統存取權。 */
+function canViewBoard(account) {
+  const boardAccess = evaluateAppAccessFromAccount({
+    profileState: account ? 'ready' : 'missing',
+    account,
+    appId: 'board',
+  });
+  if (boardAccess.allowed) return { ok: true, role: boardAccess.role };
+  const financeAccess = evaluateAppAccessFromAccount({
+    profileState: account ? 'ready' : 'missing',
+    account,
+    appId: 'finance',
+  });
+  if (financeAccess.allowed && financeAccess.isAppAdmin) return { ok: true, role: 'admin' };
+  return {
+    ok: false,
+    reason: account?.globalStatus === 'disabled'
+      ? '此帳號已全校停用，請聯絡系統管理員。'
+      : '此帳號沒有「校長儀表板」的檢視權限，請聯絡系統管理員。',
+  };
 }
 
 function render() {
@@ -83,12 +105,19 @@ async function signIn() {
   const provider = new GoogleAuthProvider();
   provider.setCustomParameters({ prompt: 'select_account' });
   try {
-    await signInWithPopup(auth, provider);
+    await signInWithPopup(hubAuth, provider);
   } catch (e) {
     if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
       $('#login-err').textContent = `登入失敗：${e.code || e.message}`;
     }
   }
+}
+
+async function signOutAll() {
+  await Promise.all([
+    hubAuth ? signOut(hubAuth) : Promise.resolve(),
+    auth && auth !== hubAuth ? signOut(auth) : Promise.resolve(),
+  ]);
 }
 
 function avatar(user, name) {
@@ -98,8 +127,8 @@ function avatar(user, name) {
 
 function wire() {
   $('#g-in').onclick = signIn;
-  $('#g-other').onclick = async () => { await signOut(auth); signIn(); };
-  $('#go-logout').onclick = () => signOut(auth);
+  $('#g-other').onclick = async () => { await signOutAll(); signIn(); };
+  $('#go-logout').onclick = () => signOutAll();
   $('#src-btn').onclick = () => openDrawer('src');
   $('#go-src').onclick = () => { $('#menu').classList.remove('open'); openDrawer('src'); };
   $('#me-btn').onclick = () => {
@@ -134,33 +163,49 @@ function wire() {
 
 function main() {
   wire();
-  if (!isFirebaseConfigured) {
+  if (!isFirebaseConfigured || !isAccountHubConfigured) {
     show('login');
-    $('#login-err').textContent = '此網站尚未設定 Firebase 連線。';
+    $('#login-err').textContent = '此網站尚未設定 Firebase 或校級帳號中心連線。';
     $('#g-in').disabled = true;
     return;
   }
-  onAuthStateChanged(auth, async (user) => {
+  const hubClient = hubFunctions ? createAccountHubClient(hubFunctions) : null;
+  onAuthStateChanged(hubAuth, async (user) => {
     stopListening();
     closeDrawer();
-    if (!user) { show('login'); return; }
-    show('loading');
-    let profile = null;
-    try {
-      const snap = await getDoc(doc(db, 'users', user.uid));
-      profile = snap.exists() ? snap.data() : null;
-    } catch {
-      profile = null;
+    if (!user) {
+      if (auth && auth !== hubAuth && auth.currentUser) await signOut(auth).catch(() => {});
+      show('login');
+      return;
     }
-    const verdict = canViewBoard(profile);
+    show('loading');
+    let account = null;
+    try {
+      const snap = await getDoc(doc(hubDb, 'accounts', user.uid));
+      account = snap.exists() ? { uid: user.uid, ...snap.data() } : null;
+    } catch {
+      account = null;
+    }
+    const verdict = canViewBoard(account);
     if (!verdict.ok) {
       $('#denied-email').textContent = user.email || '';
       $('#denied-reason').textContent = verdict.reason;
       show('denied');
       return;
     }
-    const name = profile.name || user.displayName || user.email;
-    const role = ROLE_LABEL[profile.role] || profile.role;
+    try {
+      if (auth && auth !== hubAuth && hubClient) {
+        const brokerRes = await hubClient.issueAppToken('board');
+        await signInWithCustomToken(auth, brokerRes.customToken);
+      }
+    } catch {
+      $('#denied-email').textContent = user.email || '';
+      $('#denied-reason').textContent = '無法向校級帳號中心換發儀表板憑證，請稍後再試或聯絡系統管理員。';
+      show('denied');
+      return;
+    }
+    const name = account.name || user.displayName || user.email;
+    const role = ROLE_LABEL[verdict.role] || verdict.role;
     $('#me-av').innerHTML = avatar(user, name);
     $('#menu-av').innerHTML = avatar(user, name);
     $('#me-name').innerHTML = `${esc(name)}<small>${esc(role)}</small>`;

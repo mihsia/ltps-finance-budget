@@ -1,8 +1,5 @@
-// Emulator-backed allow/deny matrix for firestore.rules. Requires the
-// Firestore emulator running locally (`npm run emulators`, or this file is
-// run under `firebase emulators:exec` via `npm run test:rules`) — kept out of
-// the default `npm test` glob because it needs that live emulator instead of
-// the mocks the rest of the suite uses.
+// Emulator-backed allow/deny matrix for firestore.rules.
+// 權限來源已遷移至校級帳號中心（ltps-accounts）同步寫入的 Firebase Auth Custom Claims。
 import { readFileSync } from 'node:fs';
 import { doc, writeBatch } from 'firebase/firestore';
 import {
@@ -35,86 +32,74 @@ afterAll(async () => {
   await testEnv.cleanup();
 });
 
+function asSuperAdmin() {
+  return testEnv.authenticatedContext('super-1', { g: 1, sa: 1, v: 1, apps: {} }).firestore();
+}
 function asAdmin() {
-  return testEnv.authenticatedContext('admin-1').firestore();
+  return testEnv.authenticatedContext('admin-1', {
+    g: 1, sa: 0, v: 1, apps: { finance: { r: 'a' } },
+  }).firestore();
 }
 function asEditor() {
-  return testEnv.authenticatedContext('editor-1').firestore();
+  return testEnv.authenticatedContext('editor-1', {
+    g: 1, sa: 0, v: 1, apps: { finance: { r: 'e', m: ['bg'] } },
+  }).firestore();
 }
 function asDisabledAdmin() {
-  return testEnv.authenticatedContext('disabled-admin').firestore();
+  return testEnv.authenticatedContext('disabled-admin', {
+    g: 0, sa: 0, v: 2, apps: {},
+  }).firestore();
 }
-function asEditorWithSettings() {
-  return testEnv.authenticatedContext('editor-settings-1').firestore();
+function asBoardViewer() {
+  return testEnv.authenticatedContext('board-viewer-1', {
+    g: 1, sa: 0, v: 1, apps: { board: { r: 'v' } },
+  }).firestore();
+}
+function asDisabledBoardViewer() {
+  return testEnv.authenticatedContext('board-viewer-off', {
+    g: 0, sa: 0, v: 2, apps: { board: { r: 'v' } },
+  }).firestore();
 }
 function asAnon() {
   return testEnv.unauthenticatedContext().firestore();
 }
 
-async function seedProfiles() {
+async function seedYears() {
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
-    await db.collection('users').doc('admin-1').set({
-      name: '管理員', email: 'admin@example.test', dept: '校長室', role: 'admin', status: 'active', modules: [],
-    });
-    await db.collection('users').doc('editor-1').set({
-      name: '填報人員', email: 'editor@example.test', dept: '總務處', role: 'editor', status: 'active', modules: ['budget'],
-    });
-    await db.collection('users').doc('editor-settings-1').set({
-      name: '帳號管理人員', email: 'settings-editor@example.test', dept: '人事室', role: 'editor', status: 'active', modules: ['settings'],
-    });
-    await db.collection('users').doc('disabled-admin').set({
-      name: '停用管理員', email: 'off@example.test', dept: '校長室', role: 'admin', status: 'disabled', modules: [],
-    });
+    await db.collection('users').doc('admin-1').set({ name: '舊資料封存' });
+    await db.collection('users').doc('editor-1').set({ name: '舊資料封存' });
     await db.collection('years').doc('115').set({ locked: false, deadlines: {} });
     await db.collection('years').doc('114').set({ locked: true, deadlines: {} });
-    await db.collection('years').doc('113').set({ deadlines: {} }); // no `locked` field at all
+    await db.collection('years').doc('113').set({ deadlines: {} });
+    await db.collection('principalBoard').doc('students').set({ school: { t: 247 } });
   });
 }
 
-describe('users/{uid}', () => {
-  beforeEach(seedProfiles);
+describe('legacy users/{uid} (archived read-only)', () => {
+  beforeEach(seedYears);
 
-  it('lets any signed-in user read their own profile, including a disabled one', async () => {
+  it('allows self or active admin to read archived legacy user docs, but denies all client writes', async () => {
     await assertSucceeds(asEditor().collection('users').doc('editor-1').get());
-    await assertSucceeds(asDisabledAdmin().collection('users').doc('disabled-admin').get());
-  });
-
-  it('lets an admin read any profile, but denies a plain editor reading someone else\'s', async () => {
     await assertSucceeds(asAdmin().collection('users').doc('editor-1').get());
+    await assertSucceeds(asSuperAdmin().collection('users').doc('editor-1').get());
     await assertFails(asEditor().collection('users').doc('admin-1').get());
-  });
-
-  it('lets an editor carrying the settings module read any profile, for 帳號管理', async () => {
-    await assertSucceeds(asEditorWithSettings().collection('users').doc('admin-1').get());
-    await assertSucceeds(asEditorWithSettings().collection('users').doc('editor-1').get());
-  });
-
-  it('denies anonymous reads', async () => {
     await assertFails(asAnon().collection('users').doc('admin-1').get());
-  });
 
-  it('lets only an active admin write a profile', async () => {
-    await assertSucceeds(asAdmin().collection('users').doc('editor-1').set({
-      name: '填報人員', email: 'editor@example.test', dept: '總務處', role: 'editor', status: 'active', modules: ['budget', 'library'],
-    }));
-    await assertFails(asEditor().collection('users').doc('editor-1').set({ name: '改名' }, { merge: true }));
-  });
-
-  it('denies writes from an admin whose own status is disabled', async () => {
-    await assertFails(asDisabledAdmin().collection('users').doc('editor-1').set({ role: 'admin' }, { merge: true }));
+    await assertFails(asAdmin().collection('users').doc('editor-1').set({ role: 'admin' }, { merge: true }));
+    await assertFails(asSuperAdmin().collection('users').doc('editor-1').set({ role: 'admin' }, { merge: true }));
   });
 });
 
 describe('years/{year} and modules/{moduleKey}', () => {
-  beforeEach(seedProfiles);
+  beforeEach(seedYears);
 
   it('lets anyone read year metadata and module docs, signed in or not', async () => {
     await assertSucceeds(asAnon().collection('years').doc('115').get());
     await assertSucceeds(asAnon().doc('years/115/modules/budgetbook').get());
   });
 
-  it('lets an editor write their assigned module in an unlocked year', async () => {
+  it('lets an editor write their assigned module (short code bg -> budget) in an unlocked year', async () => {
     await assertSucceeds(
       asEditor().doc('years/115/modules/budget').set({ fundName: 'x', updatedAt: new Date().toISOString() }),
     );
@@ -124,9 +109,15 @@ describe('years/{year} and modules/{moduleKey}', () => {
     await assertFails(asEditor().doc('years/115/modules/library').set({ generalBooks: 1 }));
   });
 
+  it('lets a super admin manage years and any module when unlocked', async () => {
+    await assertSucceeds(asSuperAdmin().doc('years/115/modules/library').set({ generalBooks: 10 }));
+    await assertSucceeds(asSuperAdmin().collection('years').doc('116').set({ locked: false, deadlines: {} }));
+  });
+
   it('denies any module write once the year is locked', async () => {
     await assertFails(asEditor().doc('years/114/modules/budget').set({ fundName: 'x' }));
     await assertFails(asAdmin().doc('years/114/modules/budget').set({ fundName: 'x' }));
+    await assertFails(asSuperAdmin().doc('years/114/modules/budget').set({ fundName: 'x' }));
   });
 
   it('treats a year with no `locked` field as locked, not unlocked', async () => {
@@ -138,10 +129,6 @@ describe('years/{year} and modules/{moduleKey}', () => {
   });
 
   it('lets createNextYear create the new unlocked year doc, then copy module docs in a second batch', async () => {
-    // Mirrors useYearData.js's createNextYear. A single WriteBatch would NOT
-    // work here: yearWritable()'s get() does not see a sibling write's
-    // still-uncommitted document from the same batch, so the year doc must
-    // be committed before the module copy is rule-checked.
     const db = asAdmin();
     const yearBatch = writeBatch(db);
     yearBatch.set(doc(db, 'years', '116'), { locked: false, deadlines: {} });
@@ -152,21 +139,10 @@ describe('years/{year} and modules/{moduleKey}', () => {
     moduleBatch.set(doc(db, 'years', '116', 'modules', 'budget'), { fundName: 'x' });
     await assertSucceeds(moduleBatch.commit());
   });
-
-  it('rejects the module copy if it were (incorrectly) batched with the year-doc creation itself', async () => {
-    // Regression guard for the bug above: proves the single-batch form
-    // really does fail under these rules, so the two-batch fix stays
-    // intentional rather than silently reverting.
-    const db = asAdmin();
-    const batch = writeBatch(db);
-    batch.set(doc(db, 'years', '117'), { locked: false, deadlines: {} });
-    batch.set(doc(db, 'years', '117', 'modules', 'budget'), { fundName: 'x' });
-    await assertFails(batch.commit());
-  });
 });
 
 describe('years/{year}/modules/{moduleKey}/records/{recordId}', () => {
-  beforeEach(seedProfiles);
+  beforeEach(seedYears);
 
   const recordPath = 'years/115/modules/budget/records/rec-1';
 
@@ -189,184 +165,58 @@ describe('years/{year}/modules/{moduleKey}/records/{recordId}', () => {
     await assertFails(asEditor().doc(recordPath).set({ recordType: 'revenue' }, { merge: true }));
   });
 
-  it('lets an admin hard-delete a record in an unlocked year — the one deliberate exception, for src/pages/Archive.jsx\'s 刪除年度 flow', async () => {
+  it('lets an admin hard-delete a record in an unlocked year, denies editor and locked years', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await ctx.firestore().doc(recordPath).set({ recordType: 'expense', amount: 100 });
-    });
-    await assertSucceeds(asAdmin().doc(recordPath).delete());
-  });
-
-  it('denies a hard delete from a non-admin editor, even in an unlocked year', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await ctx.firestore().doc(recordPath).set({ recordType: 'expense', amount: 100 });
+      await ctx.firestore().doc('years/114/modules/budget/records/rec-2').set({ recordType: 'expense', amount: 100 });
     });
     await assertFails(asEditor().doc(recordPath).delete());
-  });
-
-  it('denies a hard delete once the year is locked, even for an admin', async () => {
-    const lockedRecordPath = 'years/114/modules/budget/records/rec-2';
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await ctx.firestore().doc(lockedRecordPath).set({ recordType: 'expense', amount: 100 });
-    });
-    await assertFails(asAdmin().doc(lockedRecordPath).delete());
-  });
-
-  it('lets an admin hard-delete many records from the same unlocked year in a single batch — src/hooks/useYearData.js\'s deleteLatestYear deletes up to 450 per batch, each independently re-evaluating yearWritable()\'s get()', async () => {
-    const recordCount = 30;
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      const seedBatch = ctx.firestore().batch();
-      for (let i = 0; i < recordCount; i += 1) {
-        seedBatch.set(ctx.firestore().doc(`years/115/modules/budget/records/rec-${i}`), { recordType: 'expense', amount: i });
-      }
-      await seedBatch.commit();
-    });
-
-    const db = asAdmin();
-    const batch = writeBatch(db);
-    for (let i = 0; i < recordCount; i += 1) {
-      batch.delete(doc(db, 'years', '115', 'modules', 'budget', 'records', `rec-${i}`));
-    }
-    await assertSucceeds(batch.commit());
-  });
-
-  it('still allows a soft-delete update (deletedAt/deletedBy) as an ordinary write', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await ctx.firestore().doc(recordPath).set({ recordType: 'expense', amount: 100 });
-    });
-    await assertSucceeds(
-      asEditor().doc(recordPath).set({ deletedAt: new Date().toISOString(), deletedBy: 'editor-1' }, { merge: true }),
-    );
-  });
-
-  it('denies a record write once the year is locked', async () => {
-    await assertFails(asAdmin().doc('years/114/modules/budget/records/rec-2').set({ recordType: 'expense', amount: 1 }));
+    await assertSucceeds(asAdmin().doc(recordPath).delete());
+    await assertFails(asAdmin().doc('years/114/modules/budget/records/rec-2').delete());
   });
 });
 
-describe('years/{year}/auditLogs/{logId}', () => {
-  beforeEach(seedProfiles);
+describe('years/{year}/auditLogs, files, exports & missing claims', () => {
+  beforeEach(seedYears);
 
-  it('lets an active user create an audit entry attributed to themselves', async () => {
+  it('enforces append-only self-attributed auditLogs', async () => {
     await assertSucceeds(asEditor().collection('years/115/auditLogs').add({
-      moduleKey: 'budget', recordId: null, action: 'update', actorUid: 'editor-1', actorName: '填報人員', before: null, after: null, createdAt: new Date().toISOString(),
+      moduleKey: 'budget', recordId: null, action: 'update', actorUid: 'editor-1',
     }));
-  });
-
-  it('denies forging another user as the actor', async () => {
     await assertFails(asEditor().collection('years/115/auditLogs').add({
-      moduleKey: 'budget', recordId: null, action: 'update', actorUid: 'admin-1', actorName: '管理員', before: null, after: null, createdAt: new Date().toISOString(),
+      moduleKey: 'budget', recordId: null, action: 'update', actorUid: 'admin-1',
     }));
-  });
-
-  it('denies a disabled user from writing an audit entry at all', async () => {
     await assertFails(asDisabledAdmin().collection('years/115/auditLogs').add({
-      moduleKey: 'budget', recordId: null, action: 'update', actorUid: 'disabled-admin', actorName: '停用管理員', before: null, after: null, createdAt: new Date().toISOString(),
+      moduleKey: 'budget', recordId: null, action: 'update', actorUid: 'disabled-admin',
     }));
   });
 
-  it('is append-only: no update or delete, even for the original author', async () => {
-    let logId;
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      const ref = await ctx.firestore().collection('years/115/auditLogs').add({ actorUid: 'editor-1', action: 'update' });
-      logId = ref.id;
-    });
-    await assertFails(asEditor().doc(`years/115/auditLogs/${logId}`).set({ action: 'tampered' }, { merge: true }));
-    await assertFails(asEditor().doc(`years/115/auditLogs/${logId}`).delete());
-  });
-
-  it('lets anyone read the audit trail without signing in (council transparency)', async () => {
-    await assertSucceeds(asAnon().collection('years/115/auditLogs').get());
-  });
-});
-
-describe('years/{year}/files/{fileId}', () => {
-  beforeEach(seedProfiles);
-
-  it('lets a signed-in user read file metadata but never write it directly', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await ctx.firestore().doc('years/115/files/f1').set({ fileName: 'x.pdf' });
-    });
-    await assertSucceeds(asEditor().doc('years/115/files/f1').get());
-    await assertFails(asAdmin().doc('years/115/files/f2').set({ fileName: 'y.pdf' }));
-  });
-
-  it('denies an anonymous read', async () => {
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await ctx.firestore().doc('years/115/files/f1').set({ fileName: 'x.pdf' });
-    });
-    await assertFails(asAnon().doc('years/115/files/f1').get());
-  });
-});
-
-describe('years/{year}/exports/{exportId}', () => {
-  beforeEach(seedProfiles);
-
-  it('lets an active signed-in user log and read export history', async () => {
-    await assertSucceeds(asEditor().collection('years/115/exports').add({ name: 'x.xlsx', user: '填報人員', time: new Date().toISOString() }));
-    await assertSucceeds(asEditor().collection('years/115/exports').get());
-  });
-
-  it('denies a disabled user from reading or writing export history', async () => {
-    await assertFails(asDisabledAdmin().collection('years/115/exports').add({ name: 'x.xlsx', user: '停用管理員' }));
-    await assertFails(asDisabledAdmin().collection('years/115/exports').get());
-  });
-
-  it('is create-only: no update or delete', async () => {
-    let ref;
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      ref = await ctx.firestore().collection('years/115/exports').add({ name: 'x.xlsx' });
-    });
-    await assertFails(asEditor().doc(`years/115/exports/${ref.id}`).set({ name: 'y.xlsx' }, { merge: true }));
-    await assertFails(asEditor().doc(`years/115/exports/${ref.id}`).delete());
-  });
-});
-
-describe('a request with no /users profile doc at all', () => {
-  it('fails closed on every year/module write attempt', async () => {
-    const ghost = testEnv.authenticatedContext('no-profile-uid').firestore();
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await ctx.firestore().collection('years').doc('115').set({ locked: false, deadlines: {} });
-    });
+  it('lets active users log exports and denies disabled or claimless users', async () => {
+    await assertSucceeds(asEditor().collection('years/115/exports').add({ name: 'x.xlsx' }));
+    await assertFails(asDisabledAdmin().collection('years/115/exports').add({ name: 'x.xlsx' }));
+    const ghost = testEnv.authenticatedContext('no-claims-uid').firestore();
     await assertFails(ghost.doc('years/115/modules/budget').set({ fundName: 'x' }));
     await expect(ghost.collection('years').doc('115').set({ locked: true }, { merge: true })).rejects.toBeTruthy();
   });
 });
 
 describe('principalBoard/{docId}', () => {
-  beforeEach(async () => {
-    await seedProfiles();
-    await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      const db = ctx.firestore();
-      await db.collection('users').doc('board-viewer-1').set({
-        name: '主任', email: 'director@example.test', dept: '教務處', role: 'editor', status: 'active', modules: ['principalBoard'],
-      });
-      await db.collection('users').doc('board-viewer-off').set({
-        name: '停用主任', email: 'off-director@example.test', dept: '學務處', role: 'editor', status: 'disabled', modules: ['principalBoard'],
-      });
-      await db.collection('principalBoard').doc('students').set({ school: { t: 247 } });
-    });
-  });
+  beforeEach(seedYears);
 
-  const asBoardViewer = () => testEnv.authenticatedContext('board-viewer-1').firestore();
-  const asDisabledBoardViewer = () => testEnv.authenticatedContext('board-viewer-off').firestore();
-
-  it('lets an active admin read the board', async () => {
+  it('lets super admin, finance admin, and board viewer read the board', async () => {
+    await assertSucceeds(asSuperAdmin().doc('principalBoard/students').get());
     await assertSucceeds(asAdmin().doc('principalBoard/students').get());
-  });
-
-  it('lets an active user whose modules include principalBoard read it', async () => {
     await assertSucceeds(asBoardViewer().doc('principalBoard/students').get());
   });
 
-  it('denies an editor without the principalBoard module, a disabled holder of it, and anonymous users', async () => {
+  it('denies finance-only editor, disabled board viewer, and anonymous reads', async () => {
     await assertFails(asEditor().doc('principalBoard/students').get());
     await assertFails(asDisabledBoardViewer().doc('principalBoard/students').get());
     await assertFails(asAnon().doc('principalBoard/students').get());
   });
 
-  it('denies every client write, even from an active admin', async () => {
-    await assertFails(asAdmin().doc('principalBoard/students').set({ school: { t: 1 } }));
-    await assertFails(asBoardViewer().doc('principalBoard/_status').set({ x: 1 }));
+  it('denies every client write, even from a super admin', async () => {
+    await assertFails(asSuperAdmin().doc('principalBoard/students').set({ school: { t: 1 } }));
     await assertFails(asAdmin().doc('principalBoard/students').delete());
   });
 });

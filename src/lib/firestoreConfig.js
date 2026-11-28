@@ -5,3 +5,4 @@
 // "does not provide an export named 'default'" at runtime in `npm run dev`
 // specifically. src/lib/firestoreConfig.test.js asserts these stay in sync.
 export const FIRESTORE_DATABASE_ID = 'ltps-finance-data';
+export const ACCOUNTS_DATABASE_ID = 'ltps-accounts';

@@ -1,110 +1,62 @@
 const { onCall, HttpsError } = require('firebase-functions/v2/https');
-const { beforeUserCreated, beforeUserSignedIn, HttpsError: IdentityHttpsError } = require('firebase-functions/v2/identity');
 const { initializeApp } = require('firebase-admin/app');
-const { getAuth } = require('firebase-admin/auth');
 const { getFirestore } = require('firebase-admin/firestore');
 const { getStorage } = require('firebase-admin/storage');
 const { getNamedFirestore } = require('./firestore');
-const {
-  validateAccountProfile,
-  buildCreatedProfile,
-  buildUpdatedProfile,
-  validateStatusRequest,
-  buildStatusChange,
-  describeSignInDenial,
-  normalizeImportRow,
-} = require('./accountAdmin.cjs');
 const { validateUploadRequest } = require('./pdfStorage.cjs');
 
 initializeApp();
 
-/**
- * Looks up the /users profile matching a sign-in attempt's email (not uid —
- * a brand new Google sign-in has no uid in our system yet, only an email).
- * Firestore only auto-indexes this kind of single-field equality query, so
- * no index.json change is needed.
- */
-async function findProfileByEmail(db, email) {
-  const normalized = typeof email === 'string' ? email.trim().toLowerCase() : '';
-  if (!normalized) return null;
-  const snap = await db.collection('users').where('email', '==', normalized).limit(1).get();
-  return snap.empty ? null : snap.docs[0].data();
-}
+const MODULE_SHORT_CODE = {
+  basic: 'bs',
+  specialNeeds: 'sn',
+  budget: 'bg',
+  library: 'lb',
+  language: 'lg',
+  languageCert: 'lc',
+  awards: 'aw',
+  club: 'cl',
+  careSupport: 'cs',
+  land: 'ld',
+  building: 'bd',
+  inquiry: 'iq',
+  budgetbook: 'bb',
+  report: 'rp',
+  archive: 'ar',
+  settings: 'st',
+};
 
 /**
- * Rejects the sign-in (or, from beforeCreate, the underlying Auth account
- * creation itself) unless the email already has an active /users profile —
- * i.e. an account an admin created through this system. Without this, any
- * Google account could sign in and reach the app's own (client-side, after
- * the fact) access-denied screen; this blocks it before a session, or even
- * an Auth user record, is ever created. Admin-SDK account creation (this
- * file's own createAccount/importAccounts) is unaffected — blocking
- * functions only fire for client-SDK sign-up/sign-in, never Admin SDK calls.
+ * Verifies the caller's Firebase ID token claims (minted by the standalone
+ * `ltps-account-hub` project via Custom Token Broker, verified natively by
+ * Firebase Auth on `ltps-finance-budget` — no cross-project Firestore read needed).
  */
-async function assertListedActiveAccount(event) {
-  const db = getNamedFirestore(getFirestore);
-  const profile = await findProfileByEmail(db, event.data.email);
-  const denial = describeSignInDenial(profile);
-  if (denial) throw new IdentityHttpsError('permission-denied', denial);
-}
-
-exports.beforeAccountCreate = beforeUserCreated(async (event) => {
-  await assertListedActiveAccount(event);
-});
-
-exports.beforeAccountSignIn = beforeUserSignedIn(async (event) => {
-  await assertListedActiveAccount(event);
-});
-
-/**
- * Re-verifies on the server that the caller is a signed-in, active admin.
- * The client hides these controls too, but that is presentation only — an
- * admin whose role was revoked (or whose account was disabled) mid-session
- * still holds a valid ID token, so authority is decided here.
- */
-async function requireActiveAdmin(request) {
+function requireModuleWriteAccess(request, moduleKey) {
   const callerUid = request.auth?.uid;
-  if (!callerUid) throw new HttpsError('unauthenticated', '請先登入');
-
-  const db = getNamedFirestore(getFirestore);
-  const callerProfile = (await db.collection('users').doc(callerUid).get()).data();
-  if (callerProfile?.status !== 'active') {
-    throw new HttpsError('permission-denied', '此帳號已停用');
+  const token = request.auth?.token;
+  if (!callerUid || !token) throw new HttpsError('unauthenticated', '請先登入');
+  if (token.g !== 1) {
+    throw new HttpsError('permission-denied', '此帳號尚未啟用或已全校停用');
   }
-  if (callerProfile.role !== 'admin') {
-    throw new HttpsError('permission-denied', '僅管理者可管理帳號');
-  }
-  return { db, callerUid, callerProfile };
-}
 
-/** Append-only record of who changed which account, and how. */
-function writeAccountLog(db, entry) {
-  return db.collection('accountLogs').add({
-    ...entry,
-    createdAt: new Date().toISOString(),
-  });
-}
+  const isSuperAdmin = token.sa === 1;
+  const financeClaim = token.apps?.finance;
+  const shortCode = MODULE_SHORT_CODE[moduleKey] || moduleKey;
+  const canEditModule = isSuperAdmin
+    || financeClaim?.r === 'a'
+    || (
+      financeClaim?.r === 'e'
+      && Array.isArray(financeClaim.m)
+      && (financeClaim.m.includes(shortCode) || financeClaim.m.includes(moduleKey))
+    );
 
-/**
- * Re-verifies on the server that the caller is a signed-in, active admin or
- * an active editor scoped to `moduleKey` — the same rule the client enforces
- * client-side (for presentation only), re-checked here because a revoked
- * role or disabled account can still carry a valid ID token mid-session.
- */
-async function requireModuleWriteAccess(db, request, moduleKey) {
-  const callerUid = request.auth?.uid;
-  if (!callerUid) throw new HttpsError('unauthenticated', '請先登入');
-
-  const callerProfile = (await db.collection('users').doc(callerUid).get()).data();
-  if (callerProfile?.status !== 'active') {
-    throw new HttpsError('permission-denied', '此帳號已停用');
-  }
-  const canEditModule = callerProfile.role === 'admin'
-    || (Array.isArray(callerProfile.modules) && callerProfile.modules.includes(moduleKey));
   if (!canEditModule) {
     throw new HttpsError('permission-denied', '沒有此模組的編輯權限');
   }
-  return { callerUid, callerProfile };
+  return {
+    callerUid,
+    callerName: token.name || token.email || callerUid,
+  };
 }
 
 async function requireUnlockedYear(db, year) {
@@ -114,196 +66,6 @@ async function requireUnlockedYear(db, year) {
     throw new HttpsError('failed-precondition', '此年度未開放編輯');
   }
 }
-
-/**
- * Admin-only: creates a Firebase Auth account + /users profile doc for a new
- * department staff member. Deliberately created with no password — these
- * accounts are Google-sign-in only. `auth.createUser({email, ...})` with no
- * `password` makes a "shell" Auth record with no credential attached yet; the
- * first time that person signs in with Google using the same email, Firebase
- * attaches the Google credential to this existing uid instead of creating a
- * new one (beforeAccountSignIn then finds this /users profile and allows it
- * straight through — see the blocking functions above).
- */
-exports.createAccount = onCall(async (request) => {
-  const { db, callerUid } = await requireActiveAdmin(request);
-
-  const validation = validateAccountProfile(request.data);
-  if (!validation.valid) throw new HttpsError('invalid-argument', validation.error);
-
-  const auth = getAuth();
-  const now = new Date().toISOString();
-
-  let userRecord;
-  try {
-    userRecord = await auth.createUser({
-      email: validation.value.email,
-      emailVerified: true,
-      displayName: validation.value.name,
-    });
-  } catch (err) {
-    if (err.code === 'auth/email-already-exists') {
-      throw new HttpsError('already-exists', '此 Email 已有帳號');
-    }
-    throw new HttpsError('internal', '建立帳號失敗，請稍後再試');
-  }
-
-  const profile = buildCreatedProfile({ value: validation.value, callerUid, now });
-  await db.collection('users').doc(userRecord.uid).set(profile);
-  await writeAccountLog(db, {
-    action: 'create',
-    targetUid: userRecord.uid,
-    actorUid: callerUid,
-    before: null,
-    after: profile,
-  });
-
-  return { uid: userRecord.uid };
-});
-
-/**
- * Admin-only: updates an existing account's name, department, role and module
- * scope. Email is intentionally not updatable — it is the Auth identity, and
- * changing it here would silently desynchronize the profile from the login.
- */
-exports.updateAccount = onCall(async (request) => {
-  const { db, callerUid } = await requireActiveAdmin(request);
-
-  const { uid } = request.data || {};
-  if (typeof uid !== 'string' || !uid.trim()) {
-    throw new HttpsError('invalid-argument', '缺少帳號識別碼');
-  }
-
-  const targetRef = db.collection('users').doc(uid);
-  const targetSnap = await targetRef.get();
-  if (!targetSnap.exists) throw new HttpsError('not-found', '找不到此帳號');
-  const before = targetSnap.data();
-
-  // Validation needs an email to check, but the stored one is authoritative.
-  const validation = validateAccountProfile({ ...request.data, email: before.email });
-  if (!validation.valid) throw new HttpsError('invalid-argument', validation.error);
-
-  // Without this, the last admin could demote themselves and leave the system
-  // with no one able to manage accounts.
-  if (uid === callerUid && validation.value.role !== 'admin') {
-    throw new HttpsError('failed-precondition', '無法移除自己的管理者權限，請由其他管理者操作');
-  }
-
-  const update = buildUpdatedProfile({ value: validation.value, callerUid, now: new Date().toISOString() });
-  await targetRef.set(update, { merge: true });
-  await writeAccountLog(db, {
-    action: 'update',
-    targetUid: uid,
-    actorUid: callerUid,
-    before,
-    after: { ...before, ...update },
-  });
-
-  return { uid };
-});
-
-/**
- * Admin-only: disables or reactivates an account. Accounts are never hard
- * deleted, so their audit history stays attributable.
- */
-exports.setAccountStatus = onCall(async (request) => {
-  const { db, callerUid } = await requireActiveAdmin(request);
-
-  const { uid, status } = request.data || {};
-  const validation = validateStatusRequest({ uid, status, callerUid });
-  if (!validation.valid) throw new HttpsError('failed-precondition', validation.error);
-
-  const targetRef = db.collection('users').doc(uid);
-  const targetSnap = await targetRef.get();
-  if (!targetSnap.exists) throw new HttpsError('not-found', '找不到此帳號');
-  const before = targetSnap.data();
-
-  const change = buildStatusChange({ status, callerUid, now: new Date().toISOString() });
-
-  // Revoke the Auth session first: if the Firestore write then fails, the user
-  // is locked out but still shown as active — safe in the direction that
-  // matters. The reverse order could leave a "disabled" account still able to
-  // act on its existing token.
-  await getAuth().updateUser(uid, { disabled: change.authDisabled });
-  if (change.authDisabled) await getAuth().revokeRefreshTokens(uid);
-
-  await targetRef.set(change.profile, { merge: true });
-  await writeAccountLog(db, {
-    action: status === 'disabled' ? 'disable' : 'reactivate',
-    targetUid: uid,
-    actorUid: callerUid,
-    before,
-    after: { ...before, ...change.profile },
-  });
-
-  return { uid, status };
-});
-
-const MAX_IMPORT_ROWS = 200;
-
-/**
- * Admin-only: creates many accounts at once from a parsed xlsx (src/lib/
- * accountImport.js does the client-side sheet reading; this only ever sees
- * plain row objects). Each row is independent — one bad row (duplicate
- * email, missing department, unknown module, ...) is reported back without
- * aborting the rest of the batch, since an admin re-uploading the same file
- * after fixing one row's typo shouldn't have to wait on an all-or-nothing
- * transaction across unrelated Auth account creations.
- */
-exports.importAccounts = onCall({ timeoutSeconds: 120 }, async (request) => {
-  const { db, callerUid } = await requireActiveAdmin(request);
-
-  const { rows } = request.data || {};
-  if (!Array.isArray(rows) || rows.length === 0) {
-    throw new HttpsError('invalid-argument', '請提供至少一筆帳號資料');
-  }
-  if (rows.length > MAX_IMPORT_ROWS) {
-    throw new HttpsError('invalid-argument', `單次匯入最多 ${MAX_IMPORT_ROWS} 筆，請分批匯入`);
-  }
-
-  const auth = getAuth();
-  const now = new Date().toISOString();
-  const results = [];
-
-  for (let i = 0; i < rows.length; i += 1) {
-    const rowNumber = i + 2; // row 1 is the header in the source spreadsheet
-    const normalized = normalizeImportRow(rows[i]);
-    const validation = validateAccountProfile(normalized);
-    if (!validation.valid) {
-      results.push({
-        row: rowNumber, name: normalized.name, email: normalized.email, ok: false, error: validation.error,
-      });
-      continue;
-    }
-
-    // No password — same Google-sign-in-only shell account as createAccount.
-    let userRecord;
-    try {
-      userRecord = await auth.createUser({
-        email: validation.value.email,
-        emailVerified: true,
-        displayName: validation.value.name,
-      });
-    } catch (err) {
-      const message = err.code === 'auth/email-already-exists' ? '此 Email 已有帳號' : '建立帳號失敗，請稍後再試';
-      results.push({
-        row: rowNumber, name: validation.value.name, email: validation.value.email, ok: false, error: message,
-      });
-      continue;
-    }
-
-    const profile = buildCreatedProfile({ value: validation.value, callerUid, now });
-    await db.collection('users').doc(userRecord.uid).set(profile);
-    await writeAccountLog(db, {
-      action: 'create', targetUid: userRecord.uid, actorUid: callerUid, before: null, after: profile,
-    });
-    results.push({
-      row: rowNumber, name: validation.value.name, email: validation.value.email, ok: true, uid: userRecord.uid,
-    });
-  }
-
-  return { results };
-});
 
 /**
  * Admin or budgetbook-module editor: uploads (or replaces) the archived
@@ -317,7 +79,7 @@ exports.uploadBudgetBookPdf = onCall({ timeoutSeconds: 60 }, async (request) => 
   const { year } = request.data || {};
   if (typeof year !== 'string' || !year) throw new HttpsError('invalid-argument', '缺少年度');
 
-  const { callerUid, callerProfile } = await requireModuleWriteAccess(db, request, 'budgetbook');
+  const { callerUid, callerName } = requireModuleWriteAccess(request, 'budgetbook');
   await requireUnlockedYear(db, year);
 
   const validation = validateUploadRequest(request.data);
@@ -355,7 +117,7 @@ exports.uploadBudgetBookPdf = onCall({ timeoutSeconds: 60 }, async (request) => 
     recordId: null,
     action: before?.pdfUrl ? 'pdf-replace' : 'pdf-upload',
     actorUid: callerUid,
-    actorName: callerProfile.name || callerProfile.email || callerUid,
+    actorName: callerName,
     before: { pdfUrl: before?.pdfUrl ?? null, pdfFileName: before?.pdfFileName ?? null },
     after: { pdfUrl, pdfFileName: validation.fileName },
     createdAt: now,

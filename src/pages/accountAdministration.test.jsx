@@ -1,58 +1,61 @@
 import TestRenderer, { act } from 'react-test-renderer';
-import * as XLSX from 'xlsx';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAuthorizationSource } from '../lib/accessPolicy';
-import { ACCOUNT_IMPORT_HEADERS } from '../lib/accountImport';
-
-const firestoreMocks = vi.hoisted(() => ({
-  users: [],
-  emitError: null,
-  listeners: new Set(),
-}));
 
 const callableMocks = vi.hoisted(() => ({
   calls: [],
-  impl: vi.fn(async () => ({ data: {} })),
+  accounts: [],
+  canManage: true,
+  isSuperAdmin: true,
+  overrideImpl: null,
 }));
 
 const authMocks = vi.hoisted(() => ({
-  decision: { allowed: true, code: 'access-granted', reason: null, role: 'admin', modules: [] },
-  actor: { uid: 'admin-1', name: '系統管理員' },
   authorization: null,
   value: null,
 }));
 
-vi.mock('firebase/firestore', () => ({
-  collection: (...args) => ({ path: args.slice(1).join('/') }),
-  onSnapshot: (_ref, onNext, onError) => {
-    const listener = { onNext, onError };
-    firestoreMocks.listeners.add(listener);
-    if (firestoreMocks.emitError) onError?.(firestoreMocks.emitError);
-    else {
-      onNext({
-        docs: firestoreMocks.users.map((user) => ({
-          id: user.uid,
-          data: () => {
-            const { uid: _uid, ...rest } = user;
-            return rest;
-          },
-        })),
-      });
-    }
-    return () => firestoreMocks.listeners.delete(listener);
-  },
-}));
-
-vi.mock('firebase/functions', () => ({
-  httpsCallable: (_functions, name) => async (payload) => {
+vi.mock('@ltps/account-sdk/core', async (importOriginal) => {
+  const actual = await importOriginal();
+  const invoke = (name) => async (payload) => {
     callableMocks.calls.push({ name, payload });
-    return callableMocks.impl(name, payload);
-  },
-}));
+    if (callableMocks.overrideImpl) {
+      return (await callableMocks.overrideImpl(name, payload)).data;
+    }
+    if (name === 'accounts_list') {
+      return {
+        mode: 'app',
+        appId: 'finance',
+        canManage: callableMocks.canManage,
+        isSuperAdmin: callableMocks.isSuperAdmin,
+        appConfig: actual.DEFAULT_APPS.finance,
+        accounts: callableMocks.accounts,
+      };
+    }
+    return { uid: payload?.uid || 'new-uid', attachedExisting: false };
+  };
+  return {
+    ...actual,
+    createAccountHubClient: () => ({
+      getMyAccess: invoke('accounts_getMyAccess'),
+      listAppAccounts: (appId) => invoke('accounts_list')({ mode: 'app', appId }),
+      listHubAccounts: () => invoke('accounts_list')({ mode: 'hub' }),
+      createAccount: invoke('accounts_create'),
+      updateAccount: invoke('accounts_update'),
+      setAppStatus: invoke('accounts_setAppStatus'),
+      setGlobalStatus: invoke('accounts_setGlobalStatus'),
+      setSuperAdmin: invoke('accounts_setSuperAdmin'),
+      importAccounts: invoke('accounts_import'),
+      listApps: invoke('accounts_listApps'),
+      upsertApp: invoke('accounts_upsertApp'),
+      listLogs: invoke('accounts_listLogs'),
+    }),
+  };
+});
 
 vi.mock('../firebase', () => ({
-  db: {},
-  functions: {},
+  ACCOUNT_HUB_URL: 'https://ltps-account-hub.web.app',
+  hubFunctions: {},
   isFirebaseConfigured: true,
 }));
 
@@ -61,13 +64,6 @@ vi.mock('../contexts/AuthContext', () => ({
 }));
 
 const { default: Settings } = await import('./Settings.jsx');
-
-function deferred() {
-  let resolve;
-  let reject;
-  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
-  return { promise, resolve, reject };
-}
 
 function textOf(node) {
   if (typeof node === 'string' || typeof node === 'number') return String(node);
@@ -78,26 +74,10 @@ function pageText(renderer) {
   return textOf(renderer.root);
 }
 
-function control(renderer, text) {
+function findButton(renderer, label) {
   return renderer.root.findAll(
-    (node) => typeof node.props.onClick === 'function' && textOf(node).trim() === text,
-  )[0];
-}
-
-function field(renderer, ariaLabel) {
-  return renderer.root.findAll((node) => node.props['aria-label'] === ariaLabel)[0];
-}
-
-function fileInput(renderer) {
-  return renderer.root.findAll((node) => node.type === 'input' && node.props.type === 'file')[0];
-}
-
-/** A File-like object (arrayBuffer() only, matching what Settings.jsx reads) built from plain rows, so import tests never touch the real filesystem. */
-function fakeXlsxFile(rows) {
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'Sheet1');
-  const buffer = XLSX.write(wb, { type: 'array', bookType: 'xlsx' });
-  return { name: 'import.xlsx', arrayBuffer: async () => buffer };
+    (node) => node.type === 'button' && textOf(node).trim() === label,
+  );
 }
 
 function setAuth({ role = 'admin', modules = [], actor = { uid: 'admin-1', name: '系統管理員' } } = {}) {
@@ -122,315 +102,114 @@ async function render() {
 }
 
 beforeEach(() => {
-  firestoreMocks.users = [
-    { uid: 'admin-1', name: '系統管理員', email: 'admin@example.com', dept: '校長室', role: 'admin', modules: [], status: 'active' },
-    { uid: 'user-2', name: '王小明', email: 'staff@example.com', dept: '總務處', role: 'editor', modules: ['budget'], status: 'active' },
-    { uid: 'user-3', name: '李小華', email: 'off@example.com', dept: '總務處', role: 'editor', modules: [], status: 'disabled' },
-  ];
-  firestoreMocks.emitError = null;
-  firestoreMocks.listeners.clear();
   callableMocks.calls = [];
-  callableMocks.impl = vi.fn(async () => ({ data: {} }));
+  callableMocks.overrideImpl = null;
+  callableMocks.canManage = true;
+  callableMocks.isSuperAdmin = true;
+  callableMocks.accounts = [
+    {
+      uid: 'admin-1',
+      name: '系統管理員',
+      email: 'mihsia@gmail.com',
+      dept: '校長室',
+      jobTitle: '管理者',
+      globalStatus: 'active',
+      isSuperAdmin: true,
+      isBootstrap: true,
+      claimsVersion: 1,
+      appAccess: { status: 'active', role: 'admin', modules: [] },
+    },
+    {
+      uid: 'user-2',
+      name: '王小明',
+      email: 'staff@tmail.ilc.edu.tw',
+      dept: '總務處',
+      jobTitle: '出納組長',
+      globalStatus: 'active',
+      isSuperAdmin: false,
+      claimsVersion: 1,
+      appAccess: { status: 'active', role: 'editor', modules: ['budget', 'library'] },
+    },
+    {
+      uid: 'user-3',
+      name: '李小華',
+      email: 'off@tmail.ilc.edu.tw',
+      dept: '總務處',
+      jobTitle: '',
+      globalStatus: 'active',
+      isSuperAdmin: false,
+      claimsVersion: 1,
+      appAccess: { status: 'disabled', role: 'editor', modules: [] },
+    },
+  ];
   setAuth();
 });
 
-describe('Settings account administration', () => {
-  it('caps the visible 負責模組 pills and folds the rest into a hoverable +N badge', async () => {
-    firestoreMocks.users.push({
-      uid: 'user-4', name: '林秋月', email: 'lin@example.com', dept: '教務處', role: 'editor', modules: ['awards', 'language', 'inquiry', 'library', 'specialNeeds'], status: 'active',
-    });
+describe('Settings 嵌入全校統一帳號管理元件（@ltps/account-sdk）', () => {
+  it('透過 accounts_list 載入 finance 系統帳號並提供全校帳號管理後台入口', async () => {
     const renderer = await render();
+
+    expect(callableMocks.calls[0]).toEqual({
+      name: 'accounts_list',
+      payload: { mode: 'app', appId: 'finance' },
+    });
 
     const text = pageText(renderer);
-    expect(text).toContain('獲獎紀錄');
-    expect(text).toContain('族語開班');
-    expect(text).toContain('質詢答詢');
-    expect(text).not.toContain('圖書藏書');
-    expect(text).not.toContain('特生統計');
-    expect(text).toContain('+2');
-
-    const overflowBadge = renderer.root.findAll((node) => node.props.title === '圖書藏書、特生統計')[0];
-    expect(overflowBadge).toBeTruthy();
+    expect(text).toContain('帳號管理');
+    expect(text).toContain('王小明');
+    expect(text).toContain('歲入歲出');
+    expect(text).toContain('本系統已停權');
+    expect(text).toContain('開啟全校帳號管理後台');
   });
 
-  it('shows each account status so a disabled account is not mistaken for a working one', async () => {
-    const renderer = await render();
-    expect(pageText(renderer)).toContain('已停用');
-  });
-
-  it('lets an admin edit an existing account and sends only the allowed fields', async () => {
+  it('單系統停用與啟用呼叫 accounts_setAppStatus 而非全校停用', async () => {
     const renderer = await render();
 
-    await act(async () => { control(renderer, '編輯').props.onClick(); });
-    await act(async () => { field(renderer, '姓名').props.onChange({ target: { value: '王大明' } }); });
-    await act(async () => { control(renderer, '儲存').props.onClick(); });
-
-    const call = callableMocks.calls.find((c) => c.name === 'updateAccount');
-    expect(call).toBeTruthy();
-    expect(call.payload.uid).toBe('user-2');
-    expect(call.payload.name).toBe('王大明');
-    expect(call.payload.email).toBeUndefined();
-    expect(call.payload.status).toBeUndefined();
-  });
-
-  it('lets an admin change an account role and module scope', async () => {
-    const renderer = await render();
-
-    await act(async () => { control(renderer, '編輯').props.onClick(); });
-    await act(async () => { control(renderer, '圖書藏書').props.onClick(); });
-    await act(async () => { control(renderer, '儲存').props.onClick(); });
-
-    const call = callableMocks.calls.find((c) => c.name === 'updateAccount');
-    expect(call.payload.modules).toContain('budget');
-    expect(call.payload.modules).toContain('library');
-  });
-
-  it('disables an account through the callable rather than deleting it', async () => {
-    const renderer = await render();
-
-    await act(async () => { control(renderer, '停用').props.onClick(); });
-
-    const call = callableMocks.calls.find((c) => c.name === 'setAccountStatus');
-    expect(call.payload).toEqual({ uid: 'user-2', status: 'disabled' });
-  });
-
-  it('reactivates a disabled account', async () => {
-    const renderer = await render();
-
-    await act(async () => { control(renderer, '重新啟用').props.onClick(); });
-
-    const call = callableMocks.calls.find((c) => c.name === 'setAccountStatus');
-    expect(call.payload).toEqual({ uid: 'user-3', status: 'active' });
-  });
-
-  it('does not offer to disable the signed-in admin their own account', async () => {
-    const renderer = await render();
-    const disableControls = renderer.root.findAll(
-      (node) => typeof node.props.onClick === 'function' && textOf(node).trim() === '停用',
-    );
-    // Only the other active account (user-2) is disable-able; admin-1 is self.
-    expect(disableControls).toHaveLength(1);
-  });
-
-  it('rejects a save issued after the admin role was revoked mid-session', async () => {
-    const renderer = await render();
-    await act(async () => { control(renderer, '編輯').props.onClick(); });
-    const save = control(renderer, '儲存');
-
-    authMocks.authorization.replace(
-      { allowed: true, code: 'access-granted', reason: null, role: 'editor', modules: ['settings'] },
-      { uid: 'admin-1', name: '系統管理員' },
-    );
-
-    await act(async () => { save.props.onClick(); });
-
-    expect(callableMocks.calls.some((c) => c.name === 'updateAccount')).toBe(false);
-    expect(pageText(renderer)).toContain('此功能僅限系統管理員使用');
-  });
-
-  it('rejects a status change issued after the account was disabled mid-session', async () => {
-    const renderer = await render();
-    const disable = control(renderer, '停用');
-
-    authMocks.authorization.replace(
-      { allowed: false, code: 'profile-disabled', reason: '此帳號已停用，請聯絡系統管理員。' },
-      { uid: 'admin-1', name: '系統管理員' },
-    );
-
-    await act(async () => { disable.props.onClick(); });
-
-    // A disabled account now also fails canEditModule('settings')'s own
-    // check, so the whole page swaps to the no-access view rather than
-    // showing the retained callback's rejection message inline — still
-    // "no form, no write", just via the same friendlier screen every other
-    // module page already uses for a mid-session revocation.
-    expect(callableMocks.calls.some((c) => c.name === 'setAccountStatus')).toBe(false);
-    expect(pageText(renderer)).toContain('無權限');
-  });
-
-  it('freezes the controls while a change is in flight so it cannot be submitted twice', async () => {
-    const pending = deferred();
-    callableMocks.impl = vi.fn(() => pending.promise);
-    const renderer = await render();
-
-    await act(async () => { control(renderer, '停用').props.onClick(); });
-    expect(callableMocks.calls).toHaveLength(1);
-
-    await act(async () => { control(renderer, '停用')?.props.onClick(); });
-    expect(callableMocks.calls).toHaveLength(1);
+    const activeDisableBtn = findButton(renderer, '停用本系統').find((b) => !b.props.disabled);
+    expect(activeDisableBtn).toBeTruthy();
 
     await act(async () => {
-      pending.resolve({ data: {} });
-      await pending.promise;
+      activeDisableBtn.props.onClick();
     });
+
+    const call = callableMocks.calls.find((c) => c.name === 'accounts_setAppStatus');
+    expect(call?.payload).toEqual({ uid: 'user-2', appId: 'finance', status: 'disabled' });
+    expect(callableMocks.calls.some((c) => c.name === 'accounts_setGlobalStatus')).toBe(false);
   });
 
-  it('surfaces a failed change instead of appearing to succeed', async () => {
-    callableMocks.impl = vi.fn(async () => { throw new Error('權限不足'); });
+  it('工作階段中途被撤銷管理者權限時，前端防衛層會立即攔截寫入不呼叫後端', async () => {
     const renderer = await render();
-
-    await act(async () => { control(renderer, '停用').props.onClick(); });
-
-    expect(pageText(renderer)).toContain('權限不足');
-  });
-
-  it('surfaces a failed account listing instead of showing an empty roster', async () => {
-    firestoreMocks.emitError = new Error('permission denied');
-    const renderer = await render();
-
-    expect(pageText(renderer)).toContain('無法載入帳號資料');
-    expect(pageText(renderer)).not.toContain('尚無帳號資料');
-  });
-
-  it('hides every management control from a non-admin who still has the settings module', async () => {
-    setAuth({ role: 'editor', modules: ['settings'], actor: { uid: 'user-2', name: '王小明' } });
-    const renderer = await render();
-
-    expect(control(renderer, '編輯')).toBeUndefined();
-    expect(control(renderer, '停用')).toBeUndefined();
-    expect(control(renderer, '＋ 新增帳號')).toBeUndefined();
-    expect(control(renderer, '⬇ 下載帳號範例檔')).toBeUndefined();
-    expect(fileInput(renderer)).toBeUndefined();
-  });
-
-  it('shows the no-access screen, not the account roster, for a non-admin without the settings module', async () => {
-    setAuth({ role: 'editor', modules: ['budget'], actor: { uid: 'user-2', name: '王小明' } });
-    const renderer = await render();
-
-    expect(pageText(renderer)).toContain('無權限');
-    expect(pageText(renderer)).not.toContain('admin@example.com');
-    expect(pageText(renderer)).not.toContain('staff@example.com');
-  });
-
-  it('offers the template download and xlsx import controls to an admin', async () => {
-    const renderer = await render();
-    expect(control(renderer, '⬇ 下載帳號範例檔')).toBeTruthy();
-    expect(fileInput(renderer)).toBeTruthy();
-  });
-});
-
-describe('Settings account xlsx import', () => {
-  it('imports every row and shows a per-row success/failure summary', async () => {
-    callableMocks.impl = vi.fn(async () => ({
-      data: {
-        results: [
-          { row: 2, name: '王小明', email: 'wang.xm@tmail.ilc.edu.tw', ok: true, uid: 'new-1' },
-          { row: 3, name: '陳小華', email: 'chen.xh@example.com', ok: false, error: '此 Email 已有帳號' },
-        ],
-      },
-    }));
-    const renderer = await render();
-    const file = fakeXlsxFile([
-      ACCOUNT_IMPORT_HEADERS,
-      ['王小明', 'wang.xm', '總務處', '填報人員', '歲入歲出'],
-      ['陳小華', 'chen.xh@example.com', '教務處', '管理者', ''],
-    ]);
-
-    await act(async () => { await fileInput(renderer).props.onChange({ target: { files: [file], value: '' } }); });
-
-    const call = callableMocks.calls.find((c) => c.name === 'importAccounts');
-    expect(call.payload.rows).toEqual([
-      { name: '王小明', account: 'wang.xm', dept: '總務處', role: '填報人員', modules: '歲入歲出' },
-      { name: '陳小華', account: 'chen.xh@example.com', dept: '教務處', role: '管理者', modules: '' },
-    ]);
-
-    const text = pageText(renderer);
-    expect(text).toContain('成功 1 筆／失敗 1 筆');
-    expect(text).toContain('王小明');
-    expect(text).toContain('此 Email 已有帳號');
-  });
-
-  it('rejects an obviously malformed file without ever calling the server', async () => {
-    const renderer = await render();
-    const file = fakeXlsxFile([
-      ['Name', 'Account'],
-      ['王小明', 'wang.xm'],
-    ]);
-
-    await act(async () => { await fileInput(renderer).props.onChange({ target: { files: [file], value: '' } }); });
-
-    expect(callableMocks.calls.some((c) => c.name === 'importAccounts')).toBe(false);
-    expect(pageText(renderer)).toContain('範本格式');
-  });
-
-  it('rejects an import issued after the admin role was revoked mid-session', async () => {
-    const renderer = await render();
-    const file = fakeXlsxFile([
-      ACCOUNT_IMPORT_HEADERS,
-      ['王小明', 'wang.xm', '總務處', '填報人員', ''],
-    ]);
+    const activeDisableBtn = findButton(renderer, '停用本系統').find((b) => !b.props.disabled);
 
     authMocks.authorization.replace(
       { allowed: true, code: 'access-granted', reason: null, role: 'editor', modules: ['settings'] },
       { uid: 'admin-1', name: '系統管理員' },
     );
 
-    await act(async () => { await fileInput(renderer).props.onChange({ target: { files: [file], value: '' } }); });
+    await act(async () => {
+      activeDisableBtn.props.onClick();
+    });
 
-    expect(callableMocks.calls.some((c) => c.name === 'importAccounts')).toBe(false);
+    expect(callableMocks.calls.some((c) => c.name === 'accounts_setAppStatus')).toBe(false);
     expect(pageText(renderer)).toContain('此功能僅限系統管理員使用');
   });
-});
 
-describe('Settings single account creation', () => {
-  it('composes the email from the account name and the selected domain, with no password or reset link', async () => {
-    callableMocks.impl = vi.fn(async () => ({ data: { uid: 'new-uid' } }));
+  it('僅具 settings 檢視權的非管理者呈現唯讀模式且不顯示異動按鈕', async () => {
+    callableMocks.canManage = false;
+    callableMocks.isSuperAdmin = false;
+    setAuth({ role: 'editor', modules: ['settings'], actor: { uid: 'user-2', name: '王小明' } });
+
     const renderer = await render();
-
-    await act(async () => { control(renderer, '＋ 新增帳號').props.onClick(); });
-    await act(async () => { field(renderer, '姓名').props.onChange({ target: { value: '謝孟君' } }); });
-    await act(async () => { field(renderer, '帳號名稱').props.onChange({ target: { value: 'meng29' } }); });
-    await act(async () => { control(renderer, '人事室').props.onClick(); });
-    await act(async () => { control(renderer, '獲獎紀錄').props.onClick(); });
-    await act(async () => { control(renderer, '建立帳號').props.onClick(); });
-
-    const call = callableMocks.calls.find((c) => c.name === 'createAccount');
-    expect(call.payload).toEqual({
-      name: '謝孟君', email: 'meng29@tmail.ilc.edu.tw', dept: '人事室', role: 'editor', modules: ['awards'],
-    });
-    expect(call.payload).not.toHaveProperty('password');
-    const text = pageText(renderer);
-    expect(text).toContain('現在可以使用 Google 帳號登入系統');
-    expect(text).not.toContain('設定密碼連結');
+    expect(pageText(renderer)).toContain('唯讀檢視模式');
+    expect(findButton(renderer, '＋ 新增帳號')).toHaveLength(0);
+    expect(findButton(renderer, '停用本系統')).toHaveLength(0);
   });
 
-  it('lets a custom domain be chosen so a full email can be typed directly', async () => {
-    callableMocks.impl = vi.fn(async () => ({ data: { uid: 'new-uid' } }));
+  it('無 settings 模組權限的一般填報人員顯示無權限畫面且不呼叫 accounts_list', async () => {
+    setAuth({ role: 'editor', modules: ['budget'], actor: { uid: 'user-2', name: '王小明' } });
+
     const renderer = await render();
-
-    await act(async () => { control(renderer, '＋ 新增帳號').props.onClick(); });
-    await act(async () => { field(renderer, '姓名').props.onChange({ target: { value: '謝孟君' } }); });
-    await act(async () => { field(renderer, '網域').props.onChange({ target: { value: '__custom__' } }); });
-    await act(async () => { field(renderer, '帳號名稱').props.onChange({ target: { value: 'meng29@other-school.edu.tw' } }); });
-    await act(async () => { control(renderer, '建立帳號').props.onClick(); });
-
-    const call = callableMocks.calls.find((c) => c.name === 'createAccount');
-    expect(call.payload.email).toBe('meng29@other-school.edu.tw');
-  });
-
-  it('shows a module description only once that module is clicked, in both the create and edit forms', async () => {
-    const renderer = await render();
-
-    await act(async () => { control(renderer, '＋ 新增帳號').props.onClick(); });
-    expect(pageText(renderer)).not.toContain('年度歲入歲出預算與決算金額');
-    await act(async () => { control(renderer, '歲入歲出').props.onClick(); });
-    expect(pageText(renderer)).toContain('年度歲入歲出預算與決算金額');
-
-    await act(async () => { control(renderer, '取消').props.onClick(); });
-    await act(async () => { control(renderer, '編輯').props.onClick(); });
-    expect(pageText(renderer)).not.toContain('圖書館藏書量統計');
-    await act(async () => { control(renderer, '圖書藏書').props.onClick(); });
-    expect(pageText(renderer)).toContain('圖書館藏書量統計');
-  });
-
-  it('does not offer 更新日誌 or 操作手冊 as assignable 負責模組, since every signed-in user can already see them', async () => {
-    const renderer = await render();
-
-    await act(async () => { control(renderer, '＋ 新增帳號').props.onClick(); });
-    expect(control(renderer, '更新日誌')).toBeUndefined();
-    expect(control(renderer, '操作手冊')).toBeUndefined();
-    // A real assignable module is still offered, confirming the module list
-    // itself rendered rather than being empty for an unrelated reason.
-    expect(control(renderer, '歲入歲出')).toBeDefined();
+    expect(pageText(renderer)).toContain('無權限');
+    expect(callableMocks.calls).toHaveLength(0);
   });
 });
